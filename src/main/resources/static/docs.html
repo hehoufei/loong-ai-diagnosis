@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WCS 智能诊断 - 知识库管理</title>
+<link rel="stylesheet" href="common.css">
+<style>
+    .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+    /* -- Topbar -- */
+    .topbar-logo {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 16px; font-weight: 700; color: var(--color-primary);
+        white-space: nowrap; flex-shrink: 0;
+    }
+    .topbar-logo svg { width: 24px; height: 24px; flex-shrink: 0; }
+    .topbar-center { flex: 1; display: flex; justify-content: center; position: relative; min-width: 0; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
+    .topbar-link {
+        text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+        padding: 5px 14px; border-radius: var(--radius-tag); font-size: 13px; font-weight: 500;
+        color: var(--color-primary); border: 1.5px solid rgba(99,102,241,0.25);
+        transition: var(--transition); white-space: nowrap;
+    }
+    .topbar-link:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); }
+    .topbar-link.active { background: rgba(99,102,241,0.1); border-color: var(--color-primary); font-weight: 700; }
+
+    /* -- Env & Model badges in topbar -- */
+    .env-badge {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+        background: rgba(99,102,241,0.08); color: var(--color-primary);
+        border: 1px solid rgba(99,102,241,0.15); cursor: pointer;
+        transition: var(--transition); user-select: none;
+    }
+    .env-badge:hover { background: rgba(99,102,241,0.14); }
+    .env-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-success); flex-shrink: 0; }
+    .env-url-hint { font-size: 11px; color: var(--color-text-muted); margin-left: 4px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .model-tag {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+        background: rgba(139,92,246,0.08); color: #8b5cf6;
+        border: 1px solid rgba(139,92,246,0.15); cursor: default;
+        transition: var(--transition); user-select: none;
+    }
+
+    /* -- Stats Overview -- */
+    .stats-overview {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px;
+        margin-bottom: 24px;
+    }
+    .stat-card {
+        padding: 18px 16px; text-align: center;
+    }
+    .stat-card:hover { transform: translateY(-3px); }
+    .stat-value {
+        font-size: 26px; font-weight: 800;
+        background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .stat-label { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+
+    /* -- Section Card -- */
+    .section-card { padding: 24px; margin-bottom: 24px; }
+    .section-card:hover { transform: none; }
+    .section-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 16px;
+    }
+    .section-title {
+        font-size: 16px; font-weight: 700; color: var(--color-text);
+        display: flex; align-items: center; gap: 8px;
+    }
+    .refresh-btn {
+        background: none; border: 1.5px solid rgba(99,102,241,0.2); border-radius: var(--radius-tag);
+        padding: 4px 12px; font-size: 12px; color: var(--color-primary); cursor: pointer;
+        transition: var(--transition);
+    }
+    .refresh-btn:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); }
+
+    /* -- Import Section -- */
+    .drop-zone {
+        border: 2px dashed rgba(99,102,241,0.3); border-radius: var(--radius-card);
+        padding: 36px 20px; text-align: center; cursor: pointer;
+        transition: var(--transition); background: rgba(99,102,241,0.02);
+        position: relative;
+    }
+    .drop-zone:hover { border-color: var(--color-primary); background: rgba(99,102,241,0.05); }
+    .drop-zone.dragover { border-color: var(--color-primary); background: rgba(99,102,241,0.1); box-shadow: 0 0 0 4px rgba(99,102,241,0.08); }
+    .drop-zone-icon { font-size: 36px; margin-bottom: 8px; display: block; }
+    .drop-zone-text { font-size: 14px; color: var(--color-text-secondary); font-weight: 500; }
+    .drop-zone-hint { font-size: 12px; color: var(--color-text-muted); margin-top: 6px; }
+    .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .file-list { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+    .file-item {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 14px; border-radius: 10px;
+        background: rgba(99,102,241,0.04); border: 1px solid rgba(99,102,241,0.1);
+        font-size: 13px; color: var(--color-text); animation: fadeIn .2s ease;
+    }
+    .file-item-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+    .file-item-size { color: var(--color-text-muted); font-size: 12px; margin: 0 12px; flex-shrink: 0; }
+    .file-item-remove {
+        background: none; border: none; color: var(--color-text-muted); cursor: pointer;
+        font-size: 16px; padding: 0 4px; transition: var(--transition); flex-shrink: 0; line-height: 1;
+    }
+    .file-item-remove:hover { color: var(--color-error); }
+    .import-actions { margin-top: 14px; display: flex; align-items: center; gap: 10px; }
+    #importProgress { display: none; margin-top: 14px; }
+    .progress-text { font-size: 12px; color: var(--color-text-muted); margin-top: 6px; }
+    .progress-done { color: var(--color-success); font-weight: 600; }
+    .progress-fail { color: var(--color-error); font-weight: 600; }
+
+    /* -- Category Cards -- */
+    .category-grid {
+        display: flex; flex-wrap: wrap; gap: 10px;
+    }
+    .cat-card {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 10px 18px; border-radius: 12px;
+        background: rgba(255,255,255,0.5); backdrop-filter: blur(12px);
+        border: 1px solid rgba(99,102,241,0.1);
+        font-size: 14px; font-weight: 500; color: var(--color-text);
+        cursor: pointer; transition: var(--transition); user-select: none;
+    }
+    .cat-card:hover { background: rgba(99,102,241,0.08); border-color: rgba(99,102,241,0.2); transform: translateY(-2px); }
+    .cat-card.active { background: rgba(99,102,241,0.12); border-color: var(--color-primary); color: var(--color-primary); font-weight: 700; }
+    .cat-count {
+        background: rgba(99,102,241,0.12); color: var(--color-primary);
+        padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 700;
+    }
+
+    /* -- Table wrapper -- */
+    .table-wrapper { overflow-x: auto; }
+    .glass-table th:first-child { border-radius: 8px 0 0 0; }
+    .glass-table th:last-child { border-radius: 0 8px 0 0; }
+    .glass-table tr:nth-child(even) td { background: rgba(99,102,241,0.015); }
+
+    /* -- Toolbar -- */
+    .toolbar {
+        display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+    }
+    .toolbar select {
+        height: 36px; padding: 0 12px; border: 1.5px solid rgba(99,102,241,0.12);
+        border-radius: var(--radius-input); font-size: 13px; background: rgba(255,255,255,0.6);
+        color: var(--color-text); outline: none; transition: var(--transition); cursor: pointer;
+    }
+    .toolbar select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(99,102,241,0.1); }
+
+    /* -- Edit Button -- */
+    .edit-btn {
+        padding: 4px 12px; background: rgba(99,102,241,0.08); color: var(--color-primary);
+        border: 1px solid rgba(99,102,241,0.15); border-radius: 8px;
+        font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);
+    }
+    .edit-btn:hover { background: rgba(99,102,241,0.18); }
+
+    /* -- Empty state -- */
+    .empty-state {
+        text-align: center; padding: 40px 16px; color: var(--color-text-muted); font-size: 14px;
+    }
+    .empty-state-icon { font-size: 48px; margin-bottom: 10px; display: block; }
+    .empty-state-sub { font-size: 12px; margin-top: 6px; color: var(--color-text-muted); }
+
+    /* -- Modal -- */
+    .meta-modal-overlay {
+        display: none; position: fixed; inset: 0; background: rgba(30,27,75,0.3);
+        backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center;
+    }
+    .meta-modal-overlay.visible { display: flex; animation: fadeIn .2s ease; }
+    .meta-modal {
+        background: rgba(255,255,255,0.92); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255,255,255,0.4); border-radius: var(--radius-card);
+        padding: 28px 32px; width: 440px; max-width: calc(100vw - 32px);
+        box-shadow: 0 24px 64px rgba(99,102,241,0.15); animation: popoverIn .2s ease-out;
+    }
+    .meta-modal-title {
+        font-size: 16px; font-weight: 700; color: var(--color-text); margin-bottom: 20px;
+        display: flex; align-items: center; justify-content: space-between;
+    }
+    .meta-modal-close {
+        background: none; border: none; font-size: 18px; cursor: pointer;
+        color: var(--color-text-muted); transition: var(--transition);
+    }
+    .meta-modal-close:hover { color: var(--color-error); }
+    .meta-field { margin-bottom: 16px; }
+    .meta-field label {
+        display: block; font-size: 13px; font-weight: 600;
+        color: var(--color-text-secondary); margin-bottom: 6px;
+    }
+    .meta-field input {
+        width: 100%; height: 40px; padding: 0 14px; box-sizing: border-box;
+        background: rgba(255,255,255,0.6); border: 1.5px solid rgba(99,102,241,0.12);
+        border-radius: var(--radius-input); font-size: 14px; color: var(--color-text);
+        outline: none; transition: var(--transition);
+    }
+    .meta-field input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(99,102,241,0.1); }
+    .meta-actions {
+        display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px;
+    }
+    .meta-cancel {
+        height: 38px; padding: 0 20px; background: rgba(156,163,175,0.1);
+        color: var(--color-text-secondary); border: 1px solid rgba(156,163,175,0.2);
+        border-radius: var(--radius-btn); font-size: 14px; font-weight: 600;
+        cursor: pointer; transition: var(--transition);
+    }
+    .meta-cancel:hover { background: rgba(156,163,175,0.2); }
+    .meta-save {
+        height: 38px; padding: 0 20px; background: var(--gradient-btn); color: #fff;
+        border: none; border-radius: var(--radius-btn); font-size: 14px; font-weight: 600;
+        cursor: pointer; transition: var(--transition);
+    }
+    .meta-save:hover { box-shadow: 0 2px 8px rgba(99,102,241,0.3); }
+    .meta-save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* -- Toast -- */
+    .toast {
+        position: fixed; top: 64px; right: 24px; z-index: 2000;
+        padding: 12px 20px; border-radius: var(--radius-card);
+        font-size: 14px; font-weight: 500; animation: fadeIn 0.3s ease;
+        backdrop-filter: blur(16px); box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        transition: opacity 0.3s ease;
+    }
+    .toast-success { background: rgba(16,185,129,0.15); color: var(--color-success); border: 1px solid rgba(16,185,129,0.3); }
+    .toast-error { background: rgba(239,68,68,0.15); color: var(--color-error); border: 1px solid rgba(239,68,68,0.3); }
+
+    /* -- Loading Spinner -- */
+    .spinner { width: 18px; height: 18px; border: 2.5px solid rgba(99,102,241,0.15); border-top-color: var(--color-primary); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; vertical-align: middle; }
+    .loading-row { text-align: center; padding: 24px; color: var(--color-text-muted); font-size: 14px; }
+
+    /* -- Responsive -- */
+    @media (max-width: 768px) {
+        .stats-overview { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 480px) {
+        .stats-overview { grid-template-columns: 1fr; }
+    }
+</style>
+</head>
+<body>
+
+<!-- ========== Top Bar ========== -->
+<nav class="glass-topbar">
+    <div class="topbar-logo">
+        <span style="font-size:20px">📚</span>
+        <span>知识库管理</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+        <span class="env-badge" id="envBadge" title="当前环境">
+            <span class="env-dot"></span>
+            <span id="envName">-</span>
+        </span>
+        <span class="model-tag" id="modelBadge" title="当前模型">
+            <span style="width:8px;height:8px;border-radius:50%;background:#8b5cf6;display:inline-block;"></span>
+            <span id="modelName">-</span>
+        </span>
+    </div>
+    <div class="topbar-right">
+        <a href="index.html" class="topbar-link">📊 诊断模式</a>
+        <a href="chat.html" class="topbar-link">💬 Agent 对话</a>
+        <a href="rules.html" class="topbar-link">📋 规则管理</a>
+        <a href="docs.html" class="topbar-link active">📚 知识库管理</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <!-- ========== Stats Overview ========== -->
+    <div class="stats-overview" id="statsOverview">
+        <div class="glass-card stat-card animate-fadeIn">
+            <div class="stat-value" id="statTotalDocs">-</div>
+            <div class="stat-label">总文档数</div>
+        </div>
+        <div class="glass-card stat-card animate-fadeIn" style="animation-delay:.1s">
+            <div class="stat-value" id="statTotalChunks">-</div>
+            <div class="stat-label">总分块数</div>
+        </div>
+        <div class="glass-card stat-card animate-fadeIn" style="animation-delay:.2s">
+            <div class="stat-value" id="statFileSize">-</div>
+            <div class="stat-label">存储大小(KB)</div>
+        </div>
+        <div class="glass-card stat-card animate-fadeIn" style="animation-delay:.3s">
+            <div class="stat-value" id="statCategories">-</div>
+            <div class="stat-label">分类数</div>
+        </div>
+    </div>
+
+    <!-- ========== Document Import ========== -->
+    <div class="glass-card section-card animate-slideUp">
+        <div class="section-header">
+            <div class="section-title">📥 文档导入</div>
+        </div>
+        <div class="drop-zone" id="dropZone">
+            <input type="file" id="fileInput" multiple accept=".pdf,.md,.markdown,.txt">
+            <span class="drop-zone-icon">📄</span>
+            <div class="drop-zone-text">点击选择或拖拽文件到此处</div>
+            <div class="drop-zone-hint">支持 PDF、Markdown、TXT 格式，可多选</div>
+        </div>
+        <div class="file-list" id="fileList"></div>
+        <div class="import-actions">
+            <button class="glass-btn" id="importBtn" onclick="startImport()" style="height:42px;white-space:nowrap" disabled>📥 开始导入</button>
+            <span id="fileCount" style="font-size:13px;color:var(--color-text-muted)"></span>
+        </div>
+        <div id="importProgress">
+            <div class="glass-progress"><div class="glass-progress-bar" id="progressBar" style="width:0%"></div></div>
+            <div class="progress-text" id="progressText">准备导入...</div>
+        </div>
+    </div>
+
+    <!-- ========== Category Stats ========== -->
+    <div class="glass-card section-card animate-slideUp" style="animation-delay:.1s">
+        <div class="section-header">
+            <div class="section-title">📁 文档分类</div>
+            <button class="refresh-btn" onclick="refreshAll()">🔄 刷新</button>
+        </div>
+        <div class="category-grid" id="categoryGrid">
+            <div class="loading-row"><span class="spinner"></span> 加载中...</div>
+        </div>
+    </div>
+
+    <!-- ========== Document Table ========== -->
+    <div class="glass-card section-card animate-slideUp" style="animation-delay:.2s">
+        <div class="section-header">
+            <div class="section-title">📄 文档列表</div>
+        </div>
+        <div class="toolbar">
+            <label style="font-size:13px;color:var(--color-text-secondary);font-weight:500;">分类筛选:</label>
+            <select id="categoryFilter" onchange="filterByCategory(this.value)">
+                <option value="">全部</option>
+            </select>
+        </div>
+        <div class="table-wrapper" id="docTableWrap">
+            <div class="loading-row"><span class="spinner"></span> 加载中...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== Metadata Edit Modal ========== -->
+<div class="meta-modal-overlay" id="modalOverlay">
+    <div class="meta-modal">
+        <div class="meta-modal-title">
+            <span id="modalTitle">编辑文档元数据</span>
+            <button class="meta-modal-close" onclick="closeModal()">✕</button>
+        </div>
+        <input type="hidden" id="modalDocId">
+        <div class="meta-field">
+            <label>分类</label>
+            <input type="text" id="modalCategory" placeholder="如 maintenance, troubleshooting" list="categoryDatalist">
+            <datalist id="categoryDatalist"></datalist>
+        </div>
+        <div class="meta-field">
+            <label>关键词（逗号分隔）</label>
+            <input type="text" id="modalKeywords" placeholder="如 PLC, 通信, 安装">
+        </div>
+        <div class="meta-actions">
+            <button class="meta-cancel" onclick="closeModal()">取消</button>
+            <button class="meta-save" id="modalSaveBtn" onclick="saveMetadata()">💾 保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ---- State ---- */
+var _allDocs = [];
+var _categories = {};
+var _currentFilter = '';
+var importPollingTimer = null;
+
+/* ---- Init ---- */
+loadEnvInfo();
+loadModelInfo();
+loadCategoryStats();
+loadDocumentMetadata();
+
+/* ---- Environment & Model Info ---- */
+function loadEnvInfo() {
+    fetch('/api/v1/env/list').then(function(r) { return r.json(); }).then(function(data) {
+        var activeUrl = '';
+        (data.envs || []).forEach(function(e) { if (e.name === data.active) activeUrl = e.wcsUrl; });
+        document.getElementById('envName').textContent = data.active || '-';
+    }).catch(function() {});
+}
+
+function loadModelInfo() {
+    fetch('/api/v2/diagnosis/model-info').then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success && resp.data) {
+            document.getElementById('modelName').textContent = resp.data.displayName || resp.data.model || '-';
+        }
+    }).catch(function() {});
+}
+
+/* ---- Category Stats ---- */
+function loadCategoryStats() {
+    Promise.all([
+        fetch('/api/v2/documents/categories').then(function(r) { return r.json(); }),
+        fetch('/api/v2/documents/stats').then(function(r) { return r.json(); })
+    ]).then(function(results) {
+        var catResp = results[0];
+        var statsResp = results[1];
+        var cats = (catResp.success && catResp.data) ? catResp.data : {};
+        var stats = (statsResp.success && statsResp.data) ? statsResp.data : {};
+        _categories = cats;
+
+        // Update stats cards
+        document.getElementById('statTotalDocs').textContent = stats.totalDocuments || 0;
+        document.getElementById('statTotalChunks').textContent = stats.chunkCount || 0;
+        document.getElementById('statFileSize').textContent = stats.fileSizeKb || 0;
+        var catKeys = Object.keys(cats);
+        document.getElementById('statCategories').textContent = catKeys.length;
+
+        // Render category cards
+        var grid = document.getElementById('categoryGrid');
+        if (catKeys.length === 0) {
+            grid.innerHTML = '<div class="empty-state"><span class="empty-state-icon">📂</span>暂无文档分类数据<div class="empty-state-sub">导入文档后将自动显示分类</div></div>';
+        } else {
+            var html = '<div class="cat-card' + (_currentFilter === '' ? ' active' : '') + '" onclick="filterByCategory(\'\')">' +
+                '全部</div>';
+            catKeys.sort();
+            catKeys.forEach(function(k) {
+                var isActive = _currentFilter === k;
+                html += '<div class="cat-card' + (isActive ? ' active' : '') + '" onclick="filterByCategory(\'' + esc(k) + '\')">' +
+                    esc(k) + ' <span class="cat-count">' + cats[k] + '</span></div>';
+            });
+            grid.innerHTML = html;
+        }
+
+        // Update filter select
+        var select = document.getElementById('categoryFilter');
+        var oldVal = select.value;
+        select.innerHTML = '<option value="">全部</option>';
+        catKeys.forEach(function(k) {
+            select.innerHTML += '<option value="' + esc(k) + '"' + (oldVal === k ? ' selected' : '') + '>' + esc(k) + '</option>';
+        });
+
+        // Update datalist
+        var dl = document.getElementById('categoryDatalist');
+        dl.innerHTML = '';
+        catKeys.forEach(function(k) {
+            dl.innerHTML += '<option value="' + esc(k) + '">';
+        });
+    }).catch(function(err) {
+        console.error('加载分类统计失败', err);
+        document.getElementById('categoryGrid').innerHTML = '<div class="empty-state">加载分类统计失败</div>';
+    });
+}
+
+/* ---- Document Metadata ---- */
+function loadDocumentMetadata() {
+    fetch('/api/v2/documents/metadata').then(function(r) { return r.json(); }).then(function(resp) {
+        if (!resp.success) {
+            document.getElementById('docTableWrap').innerHTML = '<div class="empty-state">加载失败: ' + esc(resp.message || '未知错误') + '</div>';
+            return;
+        }
+        _allDocs = resp.data || [];
+        renderDocumentTable();
+    }).catch(function(err) {
+        console.error('加载文档列表失败', err);
+        document.getElementById('docTableWrap').innerHTML = '<div class="empty-state">加载文档列表失败</div>';
+    });
+}
+
+function renderDocumentTable() {
+    var wrap = document.getElementById('docTableWrap');
+    var docs = _allDocs;
+
+    if (_currentFilter) {
+        docs = docs.filter(function(d) { return d.category === _currentFilter; });
+    }
+
+    if (docs.length === 0) {
+        if (_allDocs.length === 0) {
+            wrap.innerHTML = '<div class="empty-state"><span class="empty-state-icon">📚</span>知识库暂无文档<div class="empty-state-sub">请通过上方导入功能添加运维文档</div></div>';
+        } else {
+            wrap.innerHTML = '<div class="empty-state">该分类下暂无文档</div>';
+        }
+        return;
+    }
+
+    var html = '<table class="glass-table"><thead><tr>' +
+        '<th style="width:22%">文档名称</th>' +
+        '<th style="width:8%">类型</th>' +
+        '<th style="width:14%">分类</th>' +
+        '<th style="width:8%">分块数</th>' +
+        '<th style="width:16%">导入时间</th>' +
+        '<th style="width:9%">语言</th>' +
+        '<th style="width:16%">关键词</th>' +
+        '<th style="width:7%">操作</th>' +
+        '</tr></thead><tbody>';
+
+    docs.forEach(function(d) {
+        var kw = (d.keywords || '').replace(/,/g, ', ');
+        html += '<tr>' +
+            '<td title="' + esc(d.docTitle || d.title || d.docId) + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(d.docTitle || d.title || d.docId) + '</td>' +
+            '<td>' + esc(d.type || '-') + '</td>' +
+            '<td>' + (d.category ? '<span class="cat-card" style="padding:3px 10px;font-size:11px;cursor:default;display:inline-flex;">' + esc(d.category) + '</span>' : '<span style="color:var(--color-text-muted)">-</span>') + '</td>' +
+            '<td>' + (d.chunkCount || 0) + '</td>' +
+            '<td>' + fmtTime(d.importTime) + '</td>' +
+            '<td>' + esc(d.language || '-') + '</td>' +
+            '<td title="' + esc(kw) + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(kw || '-') + '</td>' +
+            '<td><button class="edit-btn" onclick="openModal(\'' + esc(d.docId) + '\', \'' + esc((d.docTitle || d.title || d.docId).replace(/'/g, "\\'")) + '\', \'' + esc((d.category || '').replace(/'/g, "\\'")) + '\', \'' + esc((d.keywords || '').replace(/'/g, "\\'")) + '\')">✏️ 编辑</button></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+}
+
+/* ---- Filter ---- */
+function filterByCategory(category) {
+    _currentFilter = category || '';
+    document.getElementById('categoryFilter').value = _currentFilter;
+    // Update card active states
+    var cards = document.getElementById('categoryGrid').querySelectorAll('.cat-card');
+    cards.forEach(function(c) { c.classList.remove('active'); });
+    cards.forEach(function(c) {
+        var txt = c.textContent.trim();
+        if (_currentFilter === '' && txt === '全部') c.classList.add('active');
+        else if (_currentFilter && txt.indexOf(_currentFilter) === 0) c.classList.add('active');
+    });
+    renderDocumentTable();
+}
+
+/* ---- File Selection & Drag-Drop ---- */
+var _selectedFiles = [];
+
+var dropZone = document.getElementById('dropZone');
+var fileInput = document.getElementById('fileInput');
+
+['dragenter', 'dragover'].forEach(function(evt) {
+    dropZone.addEventListener(evt, function(e) { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('dragover'); });
+});
+['dragleave', 'drop'].forEach(function(evt) {
+    dropZone.addEventListener(evt, function(e) { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('dragover'); });
+});
+dropZone.addEventListener('drop', function(e) {
+    var files = Array.prototype.slice.call(e.dataTransfer.files);
+    addFiles(files);
+});
+fileInput.addEventListener('change', function() {
+    addFiles(Array.prototype.slice.call(fileInput.files));
+    fileInput.value = '';
+});
+
+var ALLOWED_EXT = ['.pdf', '.md', '.markdown', '.txt'];
+function addFiles(files) {
+    files.forEach(function(f) {
+        var ext = f.name.substring(f.name.lastIndexOf('.')).toLowerCase();
+        if (ALLOWED_EXT.indexOf(ext) === -1) { showToast('不支持的文件类型: ' + f.name, 'error'); return; }
+        var dup = _selectedFiles.some(function(s) { return s.name === f.name && s.size === f.size; });
+        if (!dup) _selectedFiles.push(f);
+    });
+    renderFileList();
+}
+
+function removeFile(idx) {
+    _selectedFiles.splice(idx, 1);
+    renderFileList();
+}
+
+function renderFileList() {
+    var wrap = document.getElementById('fileList');
+    var btn = document.getElementById('importBtn');
+    var countEl = document.getElementById('fileCount');
+    if (_selectedFiles.length === 0) {
+        wrap.innerHTML = '';
+        btn.disabled = true;
+        countEl.textContent = '';
+        return;
+    }
+    btn.disabled = false;
+    countEl.textContent = '已选择 ' + _selectedFiles.length + ' 个文件';
+    var html = '';
+    _selectedFiles.forEach(function(f, i) {
+        html += '<div class="file-item">' +
+            '<span class="file-item-name" title="' + esc(f.name) + '">' + esc(f.name) + '</span>' +
+            '<span class="file-item-size">' + formatSize(f.size) + '</span>' +
+            '<button class="file-item-remove" onclick="removeFile(' + i + ')" title="移除">✕</button>' +
+            '</div>';
+    });
+    wrap.innerHTML = html;
+}
+
+function formatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+/* ---- Import ---- */
+function startImport() {
+    if (_selectedFiles.length === 0) { showToast('请先选择文件', 'error'); return; }
+
+    var btn = document.getElementById('importBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ 上传中...';
+    document.getElementById('importProgress').style.display = 'block';
+    document.getElementById('progressText').textContent = '正在上传文件...';
+    document.getElementById('progressText').className = 'progress-text';
+    document.getElementById('progressBar').style.width = '0%';
+
+    var formData = new FormData();
+    _selectedFiles.forEach(function(f) { formData.append('files', f); });
+
+    fetch('/api/v2/documents/upload', { method: 'POST', body: formData })
+        .then(function(r) { return r.json(); })
+        .then(function(resp) {
+            if (!resp.success) {
+                document.getElementById('progressText').textContent = '❌ ' + (resp.message || '上传失败');
+                document.getElementById('progressText').className = 'progress-text progress-fail';
+                btn.disabled = false;
+                btn.innerHTML = '📥 开始导入';
+                return;
+            }
+            var importId = resp.data;
+            _selectedFiles = [];
+            renderFileList();
+            document.getElementById('progressText').textContent = '上传完成，导入中...';
+            btn.innerHTML = '📥 开始导入';
+            pollProgress(importId);
+        })
+        .catch(function(err) {
+            document.getElementById('progressText').textContent = '❌ 上传失败: ' + err.message;
+            document.getElementById('progressText').className = 'progress-text progress-fail';
+            btn.disabled = false;
+            btn.innerHTML = '📥 开始导入';
+        });
+}
+
+function pollProgress(importId) {
+    if (importPollingTimer) clearInterval(importPollingTimer);
+    importPollingTimer = setInterval(function() {
+        fetch('/api/v2/documents/progress/' + importId)
+            .then(function(r) { return r.json(); })
+            .then(function(resp) {
+                if (!resp.success || !resp.data) return;
+                var p = resp.data;
+                var pct = p.totalFiles > 0 ? Math.round(p.processedFiles / p.totalFiles * 100) : 0;
+                document.getElementById('progressBar').style.width = pct + '%';
+
+                if (p.status === 'COMPLETED') {
+                    clearInterval(importPollingTimer); importPollingTimer = null;
+                    document.getElementById('progressBar').style.width = '100%';
+                    var msg = '✅ 导入完成！共处理 ' + p.totalFiles + ' 个文件';
+                    if (p.errorMessage) msg += ' ⚠️ ' + p.errorMessage;
+                    document.getElementById('progressText').textContent = msg;
+                    document.getElementById('progressText').className = 'progress-text progress-done';
+                    document.getElementById('importBtn').disabled = false;
+                    showToast('文档导入完成', 'success');
+                    // Refresh data
+                    refreshAll();
+                } else if (p.status === 'FAILED') {
+                    clearInterval(importPollingTimer); importPollingTimer = null;
+                    document.getElementById('progressText').textContent = '❌ 导入失败: ' + (p.errorMessage || '未知错误');
+                    document.getElementById('progressText').className = 'progress-text progress-fail';
+                    document.getElementById('importBtn').disabled = false;
+                } else {
+                    document.getElementById('progressText').textContent =
+                        '导入中... ' + p.processedFiles + '/' + p.totalFiles +
+                        (p.currentFile ? ' - ' + p.currentFile : '');
+                }
+            })
+            .catch(function() {});
+    }, 1500);
+}
+
+/* ---- Modal ---- */
+function openModal(docId, docTitle, currentCategory, currentKeywords) {
+    document.getElementById('modalDocId').value = docId;
+    document.getElementById('modalTitle').textContent = '编辑元数据 - ' + docTitle;
+    document.getElementById('modalCategory').value = currentCategory || '';
+    document.getElementById('modalKeywords').value = currentKeywords || '';
+    document.getElementById('modalOverlay').classList.add('visible');
+}
+
+function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('visible');
+}
+
+function saveMetadata() {
+    var docId = document.getElementById('modalDocId').value;
+    var category = document.getElementById('modalCategory').value.trim();
+    var keywords = document.getElementById('modalKeywords').value.trim();
+    var btn = document.getElementById('modalSaveBtn');
+
+    if (!docId) return;
+    btn.disabled = true;
+    btn.textContent = '保存中...';
+
+    fetch('/api/v2/documents/' + encodeURIComponent(docId) + '/metadata', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doc_category: category, keywords: keywords })
+    }).then(function(r) { return r.json(); }).then(function(resp) {
+        btn.disabled = false;
+        btn.innerHTML = '💾 保存';
+        if (resp.success) {
+            closeModal();
+            showToast('元数据已保存', 'success');
+            refreshAll();
+        } else {
+            showToast('保存失败: ' + (resp.message || '未知错误'), 'error');
+        }
+    }).catch(function(err) {
+        btn.disabled = false;
+        btn.innerHTML = '💾 保存';
+        showToast('保存异常: ' + err.message, 'error');
+    });
+}
+
+// Click overlay to close
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
+/* ---- Refresh All ---- */
+function refreshAll() {
+    loadCategoryStats();
+    loadDocumentMetadata();
+}
+
+/* ---- Toast ---- */
+function showToast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + (type || 'success');
+    el.textContent = (type === 'error' ? '❌ ' : '✅ ') + msg;
+    document.body.appendChild(el);
+    setTimeout(function() { el.style.opacity = '0'; setTimeout(function() { el.remove(); }, 300); }, 2500);
+}
+
+/* ---- Utils ---- */
+function esc(s) {
+    if (s == null) return '';
+    var d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+}
+
+function fmtTime(t) {
+    if (!t) return '-';
+    if (Array.isArray(t)) {
+        var y = t[0], mo = pad(t[1]), d = pad(t[2]);
+        var h = t.length > 3 ? pad(t[3]) : '00';
+        var mi = t.length > 4 ? pad(t[4]) : '00';
+        return y + '-' + mo + '-' + d + ' ' + h + ':' + mi;
+    }
+    var s = String(t).replace('T', ' ');
+    return s.length > 16 ? s.substring(0, 16) : s;
+}
+
+function pad(n) { return n < 10 ? '0' + n : '' + n; }
+</script>
+</body>
+</html>

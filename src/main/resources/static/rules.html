@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WCS 智能诊断 - 规则引擎管理</title>
+<link rel="stylesheet" href="common.css">
+<style>
+    .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+    /* -- Topbar -- */
+    .topbar-logo {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 16px; font-weight: 700; color: var(--color-primary);
+        white-space: nowrap; flex-shrink: 0;
+    }
+    .topbar-logo svg { width: 24px; height: 24px; flex-shrink: 0; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
+    .topbar-link {
+        text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+        padding: 5px 14px; border-radius: var(--radius-tag); font-size: 13px; font-weight: 500;
+        color: var(--color-primary); border: 1.5px solid rgba(99,102,241,0.25);
+        transition: var(--transition); white-space: nowrap;
+    }
+    .topbar-link:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); }
+
+    /* -- Stats Overview -- */
+    .stats-overview {
+        display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+        margin-bottom: 24px;
+    }
+    .stat-card { padding: 20px; text-align: center; }
+    .stat-card:hover { transform: translateY(-3px); }
+    .stat-value {
+        font-size: 28px; font-weight: 800;
+        background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .stat-label { font-size: 13px; color: var(--color-text-secondary); margin-top: 4px; }
+
+    /* -- Section Card -- */
+    .section-card { padding: 24px; margin-bottom: 24px; }
+    .section-card:hover { transform: none; }
+    .section-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 16px;
+    }
+    .section-title {
+        font-size: 16px; font-weight: 700; color: var(--color-text);
+        display: flex; align-items: center; gap: 8px;
+    }
+    .refresh-btn {
+        background: none; border: 1.5px solid rgba(99,102,241,0.2); border-radius: var(--radius-tag);
+        padding: 4px 12px; font-size: 12px; color: var(--color-primary); cursor: pointer;
+        transition: var(--transition);
+    }
+    .refresh-btn:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); }
+
+    /* -- Table wrapper -- */
+    .table-wrapper { overflow-x: auto; }
+    .glass-table th:first-child { border-radius: 8px 0 0 0; }
+    .glass-table th:last-child { border-radius: 0 8px 0 0; }
+    .glass-table tr:nth-child(even) td { background: rgba(99,102,241,0.015); }
+
+    /* -- Toggle Switch -- */
+    .toggle { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+        position: absolute; cursor: pointer; inset: 0;
+        background: rgba(156,163,175,0.3); border-radius: 22px;
+        transition: var(--transition);
+    }
+    .toggle-slider::before {
+        content: ''; position: absolute; height: 16px; width: 16px;
+        left: 3px; bottom: 3px; background: #fff; border-radius: 50%;
+        transition: var(--transition); box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    }
+    .toggle input:checked + .toggle-slider { background: var(--color-success); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
+
+    /* -- Inline Priority Edit -- */
+    .priority-display {
+        cursor: pointer; padding: 2px 8px; border-radius: 6px; font-weight: 600;
+        color: var(--color-primary); background: rgba(99,102,241,0.08);
+        display: inline-block; min-width: 40px; text-align: center;
+        transition: var(--transition);
+    }
+    .priority-display:hover { background: rgba(99,102,241,0.15); }
+    .priority-input {
+        width: 60px; padding: 2px 6px; border: 1.5px solid var(--color-primary);
+        border-radius: 6px; font-size: 13px; text-align: center; outline: none;
+        background: rgba(255,255,255,0.8); color: var(--color-text);
+    }
+
+    /* -- Params Button -- */
+    .params-btn {
+        background: rgba(139,92,246,0.08); color: var(--color-secondary);
+        border: 1px solid rgba(139,92,246,0.2); border-radius: 6px;
+        padding: 3px 10px; font-size: 12px; cursor: pointer; font-weight: 500;
+        transition: var(--transition);
+    }
+    .params-btn:hover { background: rgba(139,92,246,0.15); }
+
+    /* -- Type Badge -- */
+    .type-badge {
+        display: inline-block; padding: 2px 8px; border-radius: 10px;
+        font-size: 11px; font-weight: 600; margin-left: 6px; vertical-align: middle;
+    }
+    .type-badge-builtin { background: rgba(59,130,246,0.15); color: #3b82f6; }
+    .type-badge-expression { background: rgba(16,185,129,0.15); color: #10b981; }
+
+    /* -- Description Cell -- */
+    .desc-cell {
+        max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-size: 13px; color: var(--color-text-secondary);
+    }
+
+    /* -- Edit/Delete Buttons -- */
+    .edit-btn {
+        background: rgba(99,102,241,0.08); color: var(--color-primary);
+        border: 1px solid rgba(99,102,241,0.2); border-radius: 6px;
+        padding: 3px 10px; font-size: 12px; cursor: pointer; font-weight: 500;
+        transition: var(--transition);
+    }
+    .edit-btn:hover { background: rgba(99,102,241,0.15); }
+    .delete-btn {
+        background: rgba(239,68,68,0.08); color: var(--color-error);
+        border: 1px solid rgba(239,68,68,0.2); border-radius: 6px;
+        padding: 3px 10px; font-size: 12px; cursor: pointer; font-weight: 500;
+        transition: var(--transition);
+    }
+    .delete-btn:hover { background: rgba(239,68,68,0.15); }
+
+    /* -- Create Rule Button -- */
+    .create-rule-btn {
+        background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+        color: #fff; border: none; border-radius: var(--radius-tag);
+        padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+        transition: var(--transition);
+    }
+    .create-rule-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+
+    /* -- Config Form -- */
+    .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .config-item { display: flex; flex-direction: column; gap: 6px; }
+    .config-label { font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
+    .config-row { display: flex; align-items: center; gap: 10px; }
+    .config-input {
+        width: 80px; padding: 8px 12px; border: 1.5px solid rgba(99,102,241,0.15);
+        border-radius: var(--radius-input); font-size: 14px; outline: none;
+        background: rgba(255,255,255,0.6); color: var(--color-text); transition: var(--transition);
+    }
+    .config-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+    .slider-wrap { flex: 1; display: flex; align-items: center; gap: 10px; }
+    .slider-wrap input[type="range"] {
+        flex: 1; -webkit-appearance: none; height: 6px; border-radius: 3px;
+        background: rgba(99,102,241,0.15); outline: none;
+    }
+    .slider-wrap input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+        background: var(--gradient-btn); cursor: pointer; box-shadow: 0 2px 6px rgba(99,102,241,0.3);
+    }
+    .slider-value {
+        min-width: 36px; text-align: center; font-size: 13px; font-weight: 600;
+        color: var(--color-primary);
+    }
+
+    /* -- Action buttons area -- */
+    .actions-row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+    /* -- Experiment Section -- */
+    .experiment-form-row {
+        display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 20px;
+    }
+    .experiment-form-row .config-item { flex: 1; min-width: 160px; }
+    .experiment-input {
+        width: 100%; padding: 8px 12px; border: 1.5px solid rgba(99,102,241,0.15);
+        border-radius: var(--radius-input); font-size: 14px; outline: none;
+        background: rgba(255,255,255,0.6); color: var(--color-text); transition: var(--transition);
+    }
+    .experiment-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+    .experiment-input::placeholder { color: var(--color-text-muted); }
+    .compare-row {
+        display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+        padding-top: 16px; border-top: 1px solid rgba(99,102,241,0.08);
+    }
+    .compare-row label { font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
+    .compare-select {
+        padding: 8px 12px; border: 1.5px solid rgba(99,102,241,0.15);
+        border-radius: var(--radius-input); font-size: 13px; outline: none;
+        background: rgba(255,255,255,0.6); color: var(--color-text); transition: var(--transition);
+        min-width: 160px;
+    }
+    .compare-select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+    .compare-vs { font-weight: 700; color: var(--color-text-muted); font-size: 15px; }
+    .exp-action-btn {
+        background: none; border: 1px solid rgba(99,102,241,0.2); border-radius: 6px;
+        padding: 3px 10px; font-size: 12px; cursor: pointer; font-weight: 500;
+        transition: var(--transition); color: var(--color-primary);
+    }
+    .exp-action-btn:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); }
+    .exp-action-btn.danger { color: var(--color-error); border-color: rgba(239,68,68,0.2); }
+    .exp-action-btn.danger:hover { background: rgba(239,68,68,0.08); border-color: var(--color-error); }
+
+    /* -- Comparison Panel -- */
+    .comparison-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .comparison-profile-card {
+        padding: 16px; border-radius: var(--radius-card);
+        background: var(--glass-bg); border: 1px solid var(--glass-border);
+        backdrop-filter: blur(8px);
+    }
+    .comparison-profile-title {
+        font-size: 14px; font-weight: 700; color: var(--color-text); margin-bottom: 12px;
+        display: flex; align-items: center; gap: 6px;
+    }
+    .comparison-stat-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 6px 0; font-size: 13px;
+    }
+    .comparison-stat-label { color: var(--color-text-secondary); }
+    .comparison-stat-value { font-weight: 700; color: var(--color-text); }
+    .change-up { color: #4ade80; font-weight: 600; font-size: 12px; margin-left: 6px; }
+    .change-down { color: #f87171; font-weight: 600; font-size: 12px; margin-left: 6px; }
+    .change-neutral { color: var(--color-text-muted); font-weight: 600; font-size: 12px; margin-left: 6px; }
+
+    /* -- Modal -- */
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--color-text); }
+    .param-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+    .param-key { min-width: 120px; font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
+    .param-value-input {
+        flex: 1; padding: 8px 12px; border: 1.5px solid rgba(99,102,241,0.15);
+        border-radius: var(--radius-input); font-size: 13px; outline: none;
+        background: rgba(255,255,255,0.6); color: var(--color-text); transition: var(--transition);
+    }
+    .param-value-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+    /* -- Edit Rule Modal -- */
+    .edit-modal .glass-modal {
+        width: 700px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+    }
+    .edit-section { margin-bottom: 20px; }
+    .edit-section-title {
+        font-size: 14px; font-weight: 700; color: var(--color-text);
+        margin-bottom: 12px; padding-bottom: 6px;
+        border-bottom: 1px solid rgba(99,102,241,0.1);
+    }
+    .edit-form-group { margin-bottom: 14px; }
+    .edit-form-label {
+        display: block; font-size: 13px; font-weight: 600;
+        color: var(--color-text-secondary); margin-bottom: 5px;
+    }
+    .edit-form-input {
+        width: 100%; padding: 8px 12px; border: 1.5px solid rgba(99,102,241,0.15);
+        border-radius: var(--radius-input); font-size: 13px; outline: none;
+        background: rgba(255,255,255,0.6); color: var(--color-text); transition: var(--transition);
+        box-sizing: border-box;
+    }
+    .edit-form-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+    .edit-form-textarea {
+        width: 100%; padding: 8px 12px; border: 1.5px solid rgba(99,102,241,0.15);
+        border-radius: var(--radius-input); font-size: 13px; outline: none;
+        background: rgba(255,255,255,0.6); color: var(--color-text); transition: var(--transition);
+        box-sizing: border-box; resize: vertical; min-height: 60px;
+    }
+    .edit-form-textarea:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+    .edit-form-textarea.mono { font-family: 'Consolas', 'Monaco', monospace; }
+    .edit-form-readonly {
+        padding: 8px 12px; border-radius: var(--radius-input); font-size: 13px;
+        background: rgba(99,102,241,0.04); color: var(--color-text-secondary);
+        border: 1px dashed rgba(99,102,241,0.15);
+    }
+    .list-item-row {
+        display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px;
+    }
+    .list-item-row .edit-form-input,
+    .list-item-row .edit-form-textarea { flex: 1; }
+    .list-remove-btn {
+        background: rgba(239,68,68,0.08); color: var(--color-error); border: none;
+        border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+        transition: var(--transition); flex-shrink: 0;
+    }
+    .list-remove-btn:hover { background: rgba(239,68,68,0.2); }
+    .list-add-btn {
+        background: rgba(99,102,241,0.08); color: var(--color-primary); border: 1px dashed rgba(99,102,241,0.3);
+        border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer;
+        transition: var(--transition); font-weight: 500;
+    }
+    .list-add-btn:hover { background: rgba(99,102,241,0.15); }
+
+    /* -- Collapsible Panel -- */
+    .collapsible-header {
+        cursor: pointer; padding: 8px 12px; background: rgba(99,102,241,0.04);
+        border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--color-text-secondary);
+        display: flex; align-items: center; gap: 6px; user-select: none;
+        transition: var(--transition);
+    }
+    .collapsible-header:hover { background: rgba(99,102,241,0.08); }
+    .collapsible-header .arrow { transition: transform 0.2s; }
+    .collapsible-header.open .arrow { transform: rotate(90deg); }
+    .collapsible-body {
+        display: none; padding: 12px; margin-top: 8px;
+        background: rgba(99,102,241,0.02); border-radius: 6px;
+        font-size: 12px; line-height: 1.8;
+    }
+    .collapsible-body.open { display: block; }
+    .ref-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .ref-table th { text-align: left; padding: 4px 8px; color: var(--color-text-secondary); font-weight: 600; border-bottom: 1px solid rgba(99,102,241,0.1); }
+    .ref-table td { padding: 4px 8px; color: var(--color-text); }
+    .ref-table code { background: rgba(99,102,241,0.08); padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 11px; }
+
+    /* -- Toast -- */
+    .toast {
+        position: fixed; top: 64px; right: 24px; z-index: 2000;
+        padding: 12px 20px; border-radius: var(--radius-card);
+        font-size: 14px; font-weight: 500; animation: fadeIn 0.3s ease;
+        backdrop-filter: blur(16px); box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        transition: opacity 0.3s ease;
+    }
+    .toast-success { background: rgba(16,185,129,0.15); color: var(--color-success); border: 1px solid rgba(16,185,129,0.3); }
+    .toast-error { background: rgba(239,68,68,0.15); color: var(--color-error); border: 1px solid rgba(239,68,68,0.3); }
+
+    /* -- Loading Spinner -- */
+    .spinner { width: 18px; height: 18px; border: 2.5px solid rgba(99,102,241,0.15); border-top-color: var(--color-primary); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; vertical-align: middle; }
+    .loading-row { text-align: center; padding: 24px; color: var(--color-text-muted); font-size: 14px; }
+
+    /* -- Responsive -- */
+    @media (max-width: 768px) {
+        .stats-overview { grid-template-columns: repeat(2, 1fr); }
+        .config-grid { grid-template-columns: 1fr; }
+        .edit-modal .glass-modal { width: 100vw; max-width: 100vw; height: 100vh; max-height: 100vh; border-radius: 0; }
+    }
+    @media (max-width: 480px) {
+        .stats-overview { grid-template-columns: 1fr; }
+    }
+
+    /* -- Condition Builder -- */
+    .condition-builder {
+        background: rgba(99,102,241,0.02); border: 1px solid rgba(99,102,241,0.1);
+        border-radius: var(--radius-card); padding: 16px; margin-top: 8px;
+    }
+    .condition-row {
+        display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .condition-row select, .condition-row input {
+        padding: 7px 10px; border: 1.5px solid rgba(99,102,241,0.15);
+        border-radius: var(--radius-input); font-size: 13px; outline: none;
+        background: rgba(255,255,255,0.6); color: var(--color-text);
+        transition: var(--transition); box-sizing: border-box;
+    }
+    .condition-row select:focus, .condition-row input:focus {
+        border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+    }
+    .condition-row .cond-var { flex: 2; min-width: 130px; }
+    .condition-row .cond-op { flex: 1.2; min-width: 100px; }
+    .condition-row .cond-val { flex: 2; min-width: 100px; }
+        .condition-row .cond-val-wrap { flex: 2; min-width: 100px; }
+    .condition-row .cond-remove {
+        background: rgba(239,68,68,0.08); color: var(--color-error); border: none;
+        border-radius: 6px; width: 30px; height: 30px; font-size: 16px; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: var(--transition); flex-shrink: 0;
+    }
+    .condition-row .cond-remove:hover { background: rgba(239,68,68,0.2); }
+    .multi-select {
+        position: relative; min-width: 200px; min-height: 36px;
+        padding: 4px 8px; border: 1px solid rgba(99,102,241,0.2); border-radius: 8px;
+        background: rgba(255,255,255,0.6); cursor: pointer;
+        display: flex; align-items: center; flex: 2;
+    }
+    .multi-select-tags {
+        display: flex; flex-wrap: wrap; gap: 4px; flex: 1; align-items: center;
+    }
+    .multi-tag {
+        display: inline-flex; align-items: center; gap: 2px;
+        padding: 2px 8px; border-radius: 12px;
+        background: rgba(99,102,241,0.15); color: var(--color-primary);
+        font-size: 12px; font-weight: 500;
+    }
+    .multi-tag-remove {
+        cursor: pointer; margin-left: 2px; font-size: 14px; opacity: 0.6;
+    }
+    .multi-tag-remove:hover { opacity: 1; }
+    .multi-select-placeholder { color: #999; font-size: 13px; }
+    .multi-select-dropdown {
+        position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px;
+        background: white; border: 1px solid rgba(99,102,241,0.2); border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 1000;
+        max-height: 200px; overflow-y: auto;
+    }
+    .multi-option {
+        display: flex; align-items: center; gap: 6px;
+        padding: 8px 12px; cursor: pointer; font-size: 13px;
+        transition: background 0.15s;
+    }
+    .multi-option:hover { background: rgba(99,102,241,0.08); }
+    .multi-option input[type="checkbox"] { accent-color: var(--color-primary); }
+    .condition-connector {
+        display: flex; justify-content: center; padding: 4px 0;
+    }
+    .condition-connector button {
+        background: rgba(99,102,241,0.08); color: var(--color-primary);
+        border: 1px solid rgba(99,102,241,0.2); border-radius: 12px;
+        padding: 2px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+        transition: var(--transition);
+    }
+    .condition-connector button:hover { background: rgba(99,102,241,0.15); }
+    .condition-preview {
+        margin-top: 12px; padding: 10px 14px;
+        background: rgba(15,23,42,0.04); border: 1px dashed rgba(99,102,241,0.2);
+        border-radius: var(--radius-input);
+        font-family: 'Consolas','Monaco',monospace; font-size: 12px;
+        color: var(--color-text-secondary); min-height: 20px;
+        word-break: break-all; line-height: 1.6;
+    }
+    .condition-preview:empty::before {
+        content: '选择条件后自动生成 SpEL 表达式'; color: var(--color-text-muted);
+    }
+    .mode-switch {
+        display: inline-flex; border: 1.5px solid rgba(99,102,241,0.2);
+        border-radius: var(--radius-tag); overflow: hidden; margin-bottom: 12px;
+    }
+    .mode-switch button {
+        background: none; border: none; padding: 5px 16px;
+        font-size: 12px; font-weight: 600; cursor: pointer;
+        color: var(--color-text-secondary); transition: var(--transition);
+    }
+    .mode-switch button.active {
+        background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+        color: #fff;
+    }
+    .mode-switch button:not(.active):hover { background: rgba(99,102,241,0.06); }
+    .cond-add-btn {
+        background: none; color: var(--color-primary);
+        border: 1.5px dashed rgba(99,102,241,0.3); border-radius: 6px;
+        padding: 6px 14px; font-size: 12px; cursor: pointer;
+        font-weight: 500; transition: var(--transition); margin-top: 8px;
+    }
+    .cond-add-btn:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); }
+</style>
+</head>
+<body>
+
+<!-- ========== Top Bar ========== -->
+<nav class="glass-topbar">
+    <div class="topbar-logo">
+        <span style="font-size:20px">🤖</span>
+        <span>规则引擎管理</span>
+    </div>
+    <div class="topbar-right">
+        <a href="index.html" class="topbar-link">📊 诊断模式</a>
+        <a href="chat.html" class="topbar-link">💬 Agent 对话</a>
+        <a href="docs.html" class="topbar-link">📚 知识库管理</a>
+    </div>
+</nav>
+
+<div class="container">
+
+    <!-- ========== Stats Overview ========== -->
+    <div class="stats-overview" id="statsOverview">
+        <div class="glass-card stat-card animate-fadeIn">
+            <div class="stat-value" id="statActive">-</div>
+            <div class="stat-label">活跃规则数</div>
+        </div>
+        <div class="glass-card stat-card animate-fadeIn" style="animation-delay:.1s">
+            <div class="stat-value" id="statTotal">-</div>
+            <div class="stat-label">总诊断次数</div>
+        </div>
+        <div class="glass-card stat-card animate-fadeIn" style="animation-delay:.2s">
+            <div class="stat-value" id="statAvgTime">-</div>
+            <div class="stat-label">平均耗时(ms)</div>
+        </div>
+        <div class="glass-card stat-card animate-fadeIn" style="animation-delay:.3s">
+            <div class="stat-value" id="statLastHit">-</div>
+            <div class="stat-label">最近命中</div>
+        </div>
+    </div>
+
+    <!-- ========== Rules Table ========== -->
+    <div class="glass-card section-card animate-slideUp">
+        <div class="section-header">
+            <div class="section-title">📋 诊断规则</div>
+            <div style="display:flex;gap:8px;align-items:center">
+                <button class="create-rule-btn" onclick="openCreateModal()">＋ 新建规则</button>
+                <button class="refresh-btn" onclick="loadRules()">🔄 刷新</button>
+            </div>
+        </div>
+        <div class="table-wrapper">
+            <table class="glass-table" id="rulesTable">
+                <thead>
+                    <tr>
+                        <th>规则名称</th>
+                        <th>描述</th>
+                        <th>优先级</th>
+                        <th>状态</th>
+                        <th>命中次数</th>
+                        <th>平均耗时</th>
+                        <th>最后命中</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="rulesBody">
+                    <tr><td colspan="8" class="loading-row"><span class="spinner"></span> 加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ========== Doc Search Config ========== -->
+    <div class="glass-card section-card animate-slideUp" style="animation-delay:.15s">
+        <div class="section-header">
+            <div class="section-title">🔍 文档检索配置</div>
+        </div>
+        <div class="config-grid" id="docSearchForm">
+            <div class="config-item">
+                <div class="config-label">TopK (返回文档数)</div>
+                <div class="config-row">
+                    <input type="number" class="config-input" id="cfgTopK" min="1" max="20" value="3">
+                </div>
+            </div>
+            <div class="config-item">
+                <div class="config-label">相似度阈值</div>
+                <div class="slider-wrap">
+                    <input type="range" id="cfgThreshold" min="0" max="1" step="0.05" value="0.6"
+                        oninput="document.getElementById('cfgThresholdVal').textContent=this.value">
+                    <span class="slider-value" id="cfgThresholdVal">0.6</span>
+                </div>
+            </div>
+            <div class="config-item">
+                <div class="config-label">预检索</div>
+                <div class="config-row">
+                    <label class="toggle">
+                        <input type="checkbox" id="cfgPreSearch" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size:13px;color:var(--color-text-secondary)" id="cfgPreSearchLabel">已启用</span>
+                </div>
+            </div>
+            <div class="config-item">
+                <div class="config-label">混合检索</div>
+                <div class="config-row">
+                    <label class="toggle">
+                        <input type="checkbox" id="cfgHybrid" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size:13px;color:var(--color-text-secondary)" id="cfgHybridLabel">已启用</span>
+                </div>
+            </div>
+            <div class="config-item">
+                <div class="config-label">向量权重</div>
+                <div class="slider-wrap">
+                    <input type="range" id="cfgVectorWeight" min="0" max="1" step="0.1" value="0.6"
+                        oninput="document.getElementById('cfgVectorWeightVal').textContent=this.value">
+                    <span class="slider-value" id="cfgVectorWeightVal">0.6</span>
+                </div>
+            </div>
+            <div class="config-item">
+                <div class="config-label">关键词权重</div>
+                <div class="slider-wrap">
+                    <input type="range" id="cfgKeywordWeight" min="0" max="1" step="0.1" value="0.4"
+                        oninput="document.getElementById('cfgKeywordWeightVal').textContent=this.value">
+                    <span class="slider-value" id="cfgKeywordWeightVal">0.4</span>
+                </div>
+            </div>
+        </div>
+        <div style="margin-top:20px;text-align:right">
+            <button class="glass-btn" onclick="saveDocSearchConfig()">💾 保存配置</button>
+        </div>
+    </div>
+
+    <!-- ========== Actions ========== -->
+    <div class="glass-card section-card animate-slideUp" style="animation-delay:.25s">
+        <div class="section-header">
+            <div class="section-title">⚙️ 操作</div>
+        </div>
+        <div class="actions-row">
+            <button class="glass-btn" onclick="reloadRules()">🔄 重载规则</button>
+            <button class="glass-btn-outline" onclick="resetStatistics()" style="padding:10px 24px;font-size:15px">📊 重置统计</button>
+        </div>
+    </div>
+
+    <!-- ========== Experiment Management ========== -->
+    <div class="glass-card section-card animate-slideUp" style="animation-delay:.35s">
+        <div class="section-header">
+            <div class="section-title">🧪 实验方案管理 (A/B 测试)</div>
+            <button class="refresh-btn" onclick="loadExperiments()">🔄 刷新</button>
+        </div>
+        <div class="experiment-form-row">
+            <div class="config-item">
+                <div class="config-label">方案名称</div>
+                <input type="text" class="experiment-input" id="expName" placeholder="输入方案名称">
+            </div>
+            <div class="config-item">
+                <div class="config-label">方案描述</div>
+                <input type="text" class="experiment-input" id="expDesc" placeholder="输入方案描述（可选）">
+            </div>
+            <div style="flex-shrink:0;padding-bottom:1px">
+                <button class="glass-btn" onclick="saveExperiment()" style="white-space:nowrap">💾 保存当前配置为方案</button>
+            </div>
+        </div>
+        <div class="table-wrapper">
+            <table class="glass-table" id="experimentsTable">
+                <thead>
+                    <tr>
+                        <th>名称</th>
+                        <th>描述</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="experimentsBody">
+                    <tr><td colspan="4" class="loading-row">暂无实验方案</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="compare-row">
+            <label>对比方案:</label>
+            <select class="compare-select" id="compareA"><option value="">-- 选择方案 A --</option></select>
+            <span class="compare-vs">vs</span>
+            <select class="compare-select" id="compareB"><option value="">-- 选择方案 B --</option></select>
+            <button class="glass-btn" onclick="compareExperiments()">📊 对比</button>
+        </div>
+    </div>
+
+    <!-- ========== Comparison Result Panel ========== -->
+    <div class="glass-card section-card animate-slideUp" id="comparisonPanel" style="display:none">
+        <div class="section-header">
+            <div class="section-title">📊 方案对比结果</div>
+            <button class="refresh-btn" onclick="document.getElementById('comparisonPanel').style.display='none'">✕ 关闭</button>
+        </div>
+        <div id="comparisonContent"></div>
+    </div>
+</div>
+
+<!-- ========== Params Modal ========== -->
+<div class="glass-modal-overlay" id="paramsModal" style="display:none" onclick="if(event.target===this)closeParamsModal()">
+    <div class="glass-modal">
+        <div class="modal-title" id="paramsModalTitle">编辑规则参数</div>
+        <div id="paramsModalBody"></div>
+        <div class="modal-actions">
+            <button class="glass-btn-outline" onclick="closeParamsModal()" style="padding:8px 20px">取消</button>
+            <button class="glass-btn" onclick="saveParams()" style="padding:8px 20px">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== Edit Rule Modal ========== -->
+<div class="glass-modal-overlay edit-modal" id="editRuleModal" style="display:none" onclick="if(event.target===this)closeEditModal()">
+    <div class="glass-modal">
+        <div class="modal-title" id="editModalTitle">编辑规则</div>
+        <div id="editModalBody"></div>
+        <div class="modal-actions">
+            <button class="glass-btn-outline" onclick="closeEditModal()" style="padding:8px 20px">取消</button>
+            <button class="glass-btn" onclick="saveEditRule()" style="padding:8px 20px" id="editSaveBtn">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== Create Rule Modal ========== -->
+<div class="glass-modal-overlay edit-modal" id="createRuleModal" style="display:none" onclick="if(event.target===this)closeCreateModal()">
+    <div class="glass-modal">
+        <div class="modal-title">新建表达式规则</div>
+        <div id="createModalBody"></div>
+        <div class="modal-actions">
+            <button class="glass-btn-outline" onclick="closeCreateModal()" style="padding:8px 20px">取消</button>
+            <button class="glass-btn" onclick="submitCreateRule()" style="padding:8px 20px" id="createSaveBtn">创建</button>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ---- State ---- */
+var rulesData = [];
+var editingParamsRule = null;
+var editingRule = null;
+var experimentsData = [];
+
+/* ---- Init ---- */
+loadRules();
+loadDocSearchConfig();
+loadExperiments();
+
+/* ---- Toggle label sync ---- */
+document.getElementById('cfgPreSearch').addEventListener('change', function() {
+    document.getElementById('cfgPreSearchLabel').textContent = this.checked ? '已启用' : '已禁用';
+});
+document.getElementById('cfgHybrid').addEventListener('change', function() {
+    document.getElementById('cfgHybridLabel').textContent = this.checked ? '已启用' : '已禁用';
+});
+
+/* ---- SpEL Reference HTML ---- */
+function getSpelReferenceHtml() {
+    return '<div style="margin-top:12px">' +
+        '<div class="collapsible-header" onclick="toggleCollapsible(this)"><span class="arrow">▶</span> SpEL 变量参考</div>' +
+        '<div class="collapsible-body">' +
+        '<table class="ref-table"><thead><tr><th>变量</th><th>类型</th><th>说明</th></tr></thead><tbody>' +
+        '<tr><td><code>#handleState</code></td><td>String</td><td>任务处理阶段(INIT/KEY_PLANNING/PATH_PLANNING等)</td></tr>' +
+        '<tr><td><code>#taskItems</code></td><td>List</td><td>子任务列表</td></tr>' +
+        '<tr><td><code>#taskItemCount</code></td><td>int</td><td>子任务数量</td></tr>' +
+        '<tr><td><code>#completedCount</code></td><td>int</td><td>已完成子任务数</td></tr>' +
+        '<tr><td><code>#runningCount</code></td><td>int</td><td>运行中子任务数</td></tr>' +
+        '<tr><td><code>#initCount</code></td><td>int</td><td>初始状态子任务数</td></tr>' +
+        '<tr><td><code>#cancelledCount</code></td><td>int</td><td>已取消子任务数</td></tr>' +
+        '<tr><td><code>#tickets</code></td><td>List</td><td>执行单列表</td></tr>' +
+        '<tr><td><code>#hasConflicts</code></td><td>boolean</td><td>是否有点位冲突</td></tr>' +
+        '<tr><td><code>#conflicts</code></td><td>List</td><td>点位冲突列表</td></tr>' +
+        '<tr><td><code>#errorMessage</code></td><td>String</td><td>错误信息</td></tr>' +
+        '<tr><td><code>#logs</code></td><td>List</td><td>系统日志列表</td></tr>' +
+        '<tr><td><code>#hasRelevantDocs</code></td><td>boolean</td><td>是否有相关文档</td></tr>' +
+                '<tr><td><code>#taskState</code></td><td>String</td><td>大任务状态(如RUNNING/COMPLETED等)</td></tr>' +
+                '<tr><td><code>#taskItemStates</code></td><td>List&lt;String&gt;</td><td>所有子任务状态列表</td></tr>' +
+                '<tr><td><code>#ticketStates</code></td><td>List&lt;String&gt;</td><td>所有执行单状态列表</td></tr>' +
+        '</tbody></table>' +
+        '<div style="margin-top:10px;font-weight:600;color:var(--color-text-secondary)">示例表达式：</div>' +
+        '<div style="margin-top:4px"><code>#handleState == \'INIT\'</code> — 任务在初始化阶段</div>' +
+        '<div><code>#taskItemCount == 0</code> — 无子任务</div>' +
+        '<div><code>#hasConflicts && #runningCount > 0</code> — 有冲突且有运行中的子任务</div>' +
+        '<div><code>#errorMessage != null && #errorMessage.contains(\'timeout\')</code> — 错误信息包含timeout</div>' +
+                '<div><code>#taskState == \'RUNNING\'</code> — 大任务处于运行中</div>' +
+                '<div><code>#taskItemStates.contains(\'CANCEL\')</code> — 存在被取消的子任务</div>' +
+                '<div><code>#ticketStates.contains(\'RUNNING\')</code> — 存在运行中的执行单</div>' +
+        '<div style="margin-top:10px;font-weight:600;color:var(--color-text-secondary)">输出模板变量（用于summary等字段）：</div>' +
+        '<div style="margin-top:4px"><code>{handleState}</code>, <code>{errorMessage}</code>, <code>{taskState}</code>, <code>{taskItemCount}</code>, <code>{completedCount}</code>, <code>{runningCount}</code>, <code>{initCount}</code>, <code>{cancelledCount}</code></div>' +
+        '</div></div>';
+}
+
+function toggleCollapsible(el) {
+    el.classList.toggle('open');
+    var body = el.nextElementSibling;
+    body.classList.toggle('open');
+}
+
+/* ---- Load Rules ---- */
+function loadRules() {
+    var tbody = document.getElementById('rulesBody');
+    tbody.innerHTML = '<tr><td colspan="8" class="loading-row"><span class="spinner"></span> 加载中...</td></tr>';
+    fetch('/api/v1/rules').then(function(r) { return r.json(); }).then(function(resp) {
+        if (!resp.success) { showToast('加载规则失败: ' + (resp.message || ''), 'error'); return; }
+        rulesData = resp.data || [];
+        renderRules();
+        renderStats();
+    }).catch(function(err) {
+        tbody.innerHTML = '<tr><td colspan="8" class="loading-row" style="color:var(--color-error)">加载失败: ' + esc(err.message) + '</td></tr>';
+    });
+}
+
+function renderRules() {
+    var tbody = document.getElementById('rulesBody');
+    if (rulesData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="loading-row">暂无规则数据</td></tr>';
+        return;
+    }
+    var html = '';
+    rulesData.forEach(function(rule) {
+        var hasParams = rule.params && Object.keys(rule.params).length > 0;
+        var isExpression = rule.type === 'expression';
+        var typeBadge = isExpression
+            ? '<span class="type-badge type-badge-expression">表达式</span>'
+            : '<span class="type-badge type-badge-builtin">内置</span>';
+        html += '<tr>';
+        html += '<td style="font-weight:600">' + esc(rule.name) + typeBadge + '</td>';
+        html += '<td class="desc-cell" title="' + esc(rule.description || '') + '">' + esc(rule.description || '-') + '</td>';
+        html += '<td><span class="priority-display" onclick="startEditPriority(this,\'' + esc(rule.name) + '\',' + rule.priority + ')">' + rule.priority + '</span></td>';
+        html += '<td><label class="toggle"><input type="checkbox"' + (rule.enabled ? ' checked' : '') + ' onchange="toggleEnabled(\'' + esc(rule.name) + '\',this.checked)"><span class="toggle-slider"></span></label></td>';
+        html += '<td>' + rule.hitCount + '</td>';
+        html += '<td>' + rule.avgDiagnoseTimeMs.toFixed(1) + ' ms</td>';
+        html += '<td style="font-size:12px;color:var(--color-text-secondary)">' + formatTime(rule.lastHitTime) + '</td>';
+        html += '<td style="white-space:nowrap">';
+        html += '<button class="edit-btn" onclick="openEditModal(\'' + esc(rule.name) + '\')">✏ 编辑</button> ';
+        if (hasParams) {
+            html += '<button class="params-btn" onclick="openParamsModal(\'' + esc(rule.name) + '\')">⚙ 参数</button> ';
+        }
+        if (isExpression) {
+            html += '<button class="delete-btn" onclick="deleteRule(\'' + esc(rule.name) + '\')">🗑 删除</button>';
+        }
+        html += '</td>';
+        html += '</tr>';
+    });
+    tbody.innerHTML = html;
+}
+
+function renderStats() {
+    var activeCount = 0, totalHits = 0, totalTime = 0, hitRules = 0;
+    var lastHitTime = null;
+    rulesData.forEach(function(r) {
+        if (r.enabled) activeCount++;
+        totalHits += r.hitCount;
+        if (r.hitCount > 0) {
+            totalTime += r.avgDiagnoseTimeMs * r.hitCount;
+            hitRules += r.hitCount;
+        }
+        if (r.lastHitTime) {
+            if (!lastHitTime || r.lastHitTime > lastHitTime) lastHitTime = r.lastHitTime;
+        }
+    });
+    var avgTime = hitRules > 0 ? (totalTime / hitRules).toFixed(1) : '-';
+    document.getElementById('statActive').textContent = activeCount;
+    document.getElementById('statTotal').textContent = totalHits;
+    document.getElementById('statAvgTime').textContent = avgTime;
+    document.getElementById('statLastHit').textContent = lastHitTime ? formatTimeShort(lastHitTime) : '-';
+}
+
+/* ---- Toggle Enabled ---- */
+function toggleEnabled(ruleName, enabled) {
+    fetch('/api/v1/rules/' + encodeURIComponent(ruleName) + '/enabled', {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({enabled: enabled})
+    }).then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) {
+            showToast(ruleName + ' 已' + (enabled ? '启用' : '禁用'), 'success');
+            rulesData.forEach(function(r) { if (r.name === ruleName) r.enabled = enabled; });
+            renderStats();
+        } else {
+            showToast('操作失败: ' + (resp.message || ''), 'error');
+            loadRules();
+        }
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); loadRules(); });
+}
+
+/* ---- Edit Priority ---- */
+function startEditPriority(el, ruleName, current) {
+    var input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'priority-input';
+    input.value = current;
+    el.replaceWith(input);
+    input.focus();
+    input.select();
+    function commit() {
+        var val = parseInt(input.value);
+        if (isNaN(val)) { loadRules(); return; }
+        if (val === current) { loadRules(); return; }
+        fetch('/api/v1/rules/' + encodeURIComponent(ruleName) + '/priority', {
+            method: 'PUT', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({priority: val})
+        }).then(function(r) { return r.json(); }).then(function(resp) {
+            if (resp.success) { showToast('优先级已更新为 ' + val, 'success'); }
+            else { showToast('更新失败: ' + (resp.message || ''), 'error'); }
+            loadRules();
+        }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); loadRules(); });
+    }
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { input.removeEventListener('blur', commit); commit(); }
+        if (e.key === 'Escape') { loadRules(); }
+    });
+}
+
+/* ---- Delete Rule ---- */
+function deleteRule(ruleName) {
+    if (!confirm('确定要删除规则「' + ruleName + '」？此操作不可恢复。')) return;
+    fetch('/api/v1/rules/' + encodeURIComponent(ruleName), {
+        method: 'DELETE'
+    }).then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) { showToast('规则已删除: ' + ruleName, 'success'); loadRules(); }
+        else { showToast('删除失败: ' + (resp.message || ''), 'error'); }
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); });
+}
+
+/* ---- Edit Rule Modal ---- */
+function openEditModal(ruleName) {
+    var rule = rulesData.find(function(r) { return r.name === ruleName; });
+    if (!rule) return;
+    editingRule = rule;
+    document.getElementById('editModalTitle').textContent = '编辑规则 - ' + ruleName;
+    var isExpression = rule.type === 'expression';
+    var output = rule.output || {};
+    var rootCauses = output.rootCauses || [];
+    var actions = output.actions || [];
+
+    var html = '';
+    // Basic Info
+    html += '<div class="edit-section"><div class="edit-section-title">📌 基础信息</div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">规则名称</label><div class="edit-form-readonly">' + esc(rule.name) + '</div></div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">类型</label><div class="edit-form-readonly">' + (isExpression ? '<span class="type-badge type-badge-expression">表达式</span>' : '<span class="type-badge type-badge-builtin">内置</span>') + '</div></div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">描述</label><textarea class="edit-form-textarea" id="editDescription" rows="2">' + esc(rule.description || '') + '</textarea></div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">优先级</label><input type="number" class="edit-form-input" id="editPriority" value="' + rule.priority + '" style="width:120px"></div>';
+    html += '</div>';
+
+    // Condition (expression only)
+    if (isExpression) {
+        html += '<div class="edit-section"><div class="edit-section-title">🔗 条件配置</div>';
+        html += '<div class="mode-switch"><button type="button" id="editModeBtnSimple" class="active" onclick="toggleConditionMode(\'simple\',\'edit\')">简单模式</button><button type="button" id="editModeBtnAdvanced" onclick="toggleConditionMode(\'advanced\',\'edit\')">高级模式</button></div>';
+        html += '<div id="editConditionSimple"><div class="condition-builder"><div id="editConditionRows"></div>';
+        html += '<button type="button" class="cond-add-btn" onclick="addConditionRow(\'editConditionRows\')">＋ 添加条件</button>';
+        html += '<div class="condition-preview" id="editConditionPreview"></div></div></div>';
+        html += '<div id="editConditionAdvanced" style="display:none"><div class="edit-form-group"><label class="edit-form-label">SpEL 条件表达式</label><textarea class="edit-form-textarea mono" id="editCondition" rows="3" oninput="var p=document.getElementById(\'editConditionPreview\');if(p)p.textContent=this.value">' + esc(rule.condition || '') + '</textarea></div>';
+        html += getSpelReferenceHtml();
+        html += '</div>';
+        html += '</div>';
+    }
+
+    // Output
+    html += '<div class="edit-section"><div class="edit-section-title">📝 输出配置</div>';
+    html += '<div style="background:#eef4fb;border:1px solid #d0e2f2;border-radius:6px;padding:6px 10px;margin-bottom:10px;font-size:12px;color:#4a6a8a;line-height:1.6">';
+    html += '💡 在文本中使用 <code style="background:#d8e8f8;padding:1px 4px;border-radius:3px">{变量名}</code> 可自动替换为实际值：<br>';
+    html += '<code>{handleState}</code> 任务处理阶段 | <code>{taskState}</code> 大任务状态 | <code>{taskItemCount}</code> 子任务数量 | <code>{completedCount}</code> 已完成数 | <code>{runningCount}</code> 运行中数 | <code>{initCount}</code> 初始状态数 | <code>{cancelledCount}</code> 已取消数 | <code>{errorMessage}</code> 错误信息';
+    html += '</div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">诊断摘要</label><textarea class="edit-form-textarea" id="editSummary" rows="3">' + esc(output.summary || '') + '</textarea></div>';
+    // Root Causes
+    html += '<div class="edit-form-group"><label class="edit-form-label">根因列表</label><div id="editRootCauses">';
+    rootCauses.forEach(function(rc, i) {
+        html += renderRootCauseRow(i, rc.title, rc.description);
+    });
+    html += '</div><button type="button" class="list-add-btn" onclick="addRootCause()">＋ 添加根因</button></div>';
+    // Actions
+    html += '<div class="edit-form-group"><label class="edit-form-label">处理建议列表</label><div id="editActions">';
+    actions.forEach(function(a, i) {
+        html += renderActionRow(i, a);
+    });
+    html += '</div><button type="button" class="list-add-btn" onclick="addAction()">＋ 添加建议</button></div>';
+    html += '</div>';
+
+    // Params
+    var params = rule.params || {};
+    var paramKeys = Object.keys(params);
+    html += '<div class="edit-section"><div class="edit-section-title">⚙️ 参数配置</div>';
+    html += '<div id="editParams">';
+    paramKeys.forEach(function(key, i) {
+        html += renderParamEditRow(i, key, params[key]);
+    });
+    html += '</div><button type="button" class="list-add-btn" onclick="addParam()">＋ 添加参数</button>';
+    html += '</div>';
+
+    document.getElementById('editModalBody').innerHTML = html;
+    document.getElementById('editRuleModal').style.display = 'flex';
+
+    // Initialize condition builder for expression rules
+    if (isExpression && rule.condition) {
+        var parsed = parseSpELToRows(rule.condition, 'editConditionRows');
+        if (parsed) {
+            editConditionMode = 'simple';
+        } else {
+            editConditionMode = 'advanced';
+            toggleConditionMode('advanced', 'edit');
+        }
+    } else if (isExpression) {
+        editConditionMode = 'simple';
+        addConditionRow('editConditionRows');
+    }
+}
+
+function renderRootCauseRow(idx, title, desc) {
+    return '<div class="list-item-row" data-rc-idx="' + idx + '">' +
+        '<input class="edit-form-input rc-title" placeholder="根因标题" value="' + esc(title || '') + '" style="flex:1">' +
+        '<input class="edit-form-input rc-desc" placeholder="根因描述" value="' + esc(desc || '') + '" style="flex:2">' +
+        '<button type="button" class="list-remove-btn" onclick="this.parentElement.remove()">✕</button></div>';
+}
+
+function renderActionRow(idx, value) {
+    return '<div class="list-item-row" data-act-idx="' + idx + '">' +
+        '<input class="edit-form-input action-input" placeholder="处理建议" value="' + esc(value || '') + '" style="flex:1">' +
+        '<button type="button" class="list-remove-btn" onclick="this.parentElement.remove()">✕</button></div>';
+}
+
+function renderParamEditRow(idx, key, value) {
+    return '<div class="list-item-row" data-param-idx="' + idx + '">' +
+        '<input class="edit-form-input param-key-input" placeholder="参数名" value="' + esc(key || '') + '" style="flex:1">' +
+        '<input class="edit-form-input param-val-input" placeholder="参数值" value="' + esc(value || '') + '" style="flex:2">' +
+        '<button type="button" class="list-remove-btn" onclick="this.parentElement.remove()">✕</button></div>';
+}
+
+function addRootCause() {
+    var container = document.getElementById('editRootCauses');
+    container.insertAdjacentHTML('beforeend', renderRootCauseRow(Date.now(), '', ''));
+}
+
+function addAction() {
+    var container = document.getElementById('editActions');
+    container.insertAdjacentHTML('beforeend', renderActionRow(Date.now(), ''));
+}
+
+function addParam() {
+    var container = document.getElementById('editParams');
+    container.insertAdjacentHTML('beforeend', renderParamEditRow(Date.now(), '', ''));
+}
+
+function closeEditModal() {
+    document.getElementById('editRuleModal').style.display = 'none';
+    editingRule = null;
+}
+
+async function saveEditRule() {
+    if (!editingRule) return;
+    var ruleName = editingRule.name;
+    var isExpression = editingRule.type === 'expression';
+    var btn = document.getElementById('editSaveBtn');
+    btn.disabled = true; btn.textContent = '保存中...';
+
+    var errors = [];
+
+    // Collect new values
+    var newDesc = document.getElementById('editDescription').value.trim();
+    var newPriority = parseInt(document.getElementById('editPriority').value);
+    var newCondition = isExpression ? (editConditionMode === 'simple' ? generateSpEL('editConditionRows') : (document.getElementById('editCondition') ? document.getElementById('editCondition').value.trim() : null)) : null;
+
+    // Output
+    var newSummary = document.getElementById('editSummary').value.trim();
+    var rcRows = document.querySelectorAll('#editRootCauses .list-item-row');
+    var newRootCauses = [];
+    rcRows.forEach(function(row) {
+        var t = row.querySelector('.rc-title').value.trim();
+        var d = row.querySelector('.rc-desc').value.trim();
+        if (t || d) newRootCauses.push({title: t, description: d});
+    });
+    var actRows = document.querySelectorAll('#editActions .list-item-row');
+    var newActions = [];
+    actRows.forEach(function(row) {
+        var v = row.querySelector('.action-input').value.trim();
+        if (v) newActions.push(v);
+    });
+
+    // Params
+    var paramRows = document.querySelectorAll('#editParams .list-item-row');
+    var newParams = {};
+    paramRows.forEach(function(row) {
+        var k = row.querySelector('.param-key-input').value.trim();
+        var v = row.querySelector('.param-val-input').value.trim();
+        if (k) newParams[k] = v;
+    });
+
+    // Save description if changed
+    if (newDesc !== (editingRule.description || '')) {
+        try {
+            var r = await fetch('/api/v1/rules/' + encodeURIComponent(ruleName) + '/description', {
+                method: 'PUT', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({description: newDesc})
+            });
+            var resp = await r.json();
+            if (!resp.success) errors.push('描述: ' + (resp.message || '失败'));
+        } catch(e) { errors.push('描述: ' + e.message); }
+    }
+
+    // Save priority if changed
+    if (!isNaN(newPriority) && newPriority !== editingRule.priority) {
+        try {
+            var r = await fetch('/api/v1/rules/' + encodeURIComponent(ruleName) + '/priority', {
+                method: 'PUT', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({priority: newPriority})
+            });
+            var resp = await r.json();
+            if (!resp.success) errors.push('优先级: ' + (resp.message || '失败'));
+        } catch(e) { errors.push('优先级: ' + e.message); }
+    }
+
+    // Save condition if changed (expression only)
+    if (isExpression && newCondition !== null && newCondition !== (editingRule.condition || '')) {
+        try {
+            var r = await fetch('/api/v1/rules/' + encodeURIComponent(ruleName) + '/condition', {
+                method: 'PUT', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({condition: newCondition})
+            });
+            var resp = await r.json();
+            if (!resp.success) errors.push('条件: ' + (resp.message || '失败'));
+        } catch(e) { errors.push('条件: ' + e.message); }
+    }
+
+    // Save output
+    var oldOutput = editingRule.output || {};
+    var outputChanged = newSummary !== (oldOutput.summary || '') ||
+        JSON.stringify(newRootCauses) !== JSON.stringify(oldOutput.rootCauses || []) ||
+        JSON.stringify(newActions) !== JSON.stringify(oldOutput.actions || []);
+    if (outputChanged) {
+        try {
+            var r = await fetch('/api/v1/rules/' + encodeURIComponent(ruleName) + '/output', {
+                method: 'PUT', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({summary: newSummary, rootCauses: newRootCauses, actions: newActions})
+            });
+            var resp = await r.json();
+            if (!resp.success) errors.push('输出: ' + (resp.message || '失败'));
+        } catch(e) { errors.push('输出: ' + e.message); }
+    }
+
+    // Save params if changed
+    var oldParams = editingRule.params || {};
+    if (JSON.stringify(newParams) !== JSON.stringify(oldParams)) {
+        try {
+            var r = await fetch('/api/v1/rules/' + encodeURIComponent(ruleName) + '/params', {
+                method: 'PUT', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify(newParams)
+            });
+            var resp = await r.json();
+            if (!resp.success) errors.push('参数: ' + (resp.message || '失败'));
+        } catch(e) { errors.push('参数: ' + e.message); }
+    }
+
+    btn.disabled = false; btn.textContent = '保存';
+    if (errors.length > 0) {
+        showToast('部分保存失败: ' + errors.join('; '), 'error');
+    } else {
+        showToast('规则已保存', 'success');
+        closeEditModal();
+    }
+    loadRules();
+}
+
+/* ---- Create Rule Modal ---- */
+function openCreateModal() {
+    var html = '';
+    html += '<div class="edit-section"><div class="edit-section-title">📌 基础信息</div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">规则名称 <span style="color:var(--color-error)">*</span></label><input class="edit-form-input" id="createName" placeholder="英文+连字符格式，如 my-custom-rule"></div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">描述 <span style="color:var(--color-error)">*</span></label><textarea class="edit-form-textarea" id="createDescription" rows="2" placeholder="规则的中文描述"></textarea></div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">优先级</label><input type="number" class="edit-form-input" id="createPriority" value="500" style="width:120px"></div>';
+    html += '</div>';
+
+    html += '<div class="edit-section"><div class="edit-section-title">🔗 条件配置</div>';
+    html += '<div class="mode-switch"><button type="button" id="createModeBtnSimple" class="active" onclick="toggleConditionMode(\'simple\',\'create\')">简单模式</button><button type="button" id="createModeBtnAdvanced" onclick="toggleConditionMode(\'advanced\',\'create\')">高级模式</button></div>';
+    html += '<div id="createConditionSimple"><div class="condition-builder"><div id="createConditionRows"></div>';
+    html += '<button type="button" class="cond-add-btn" onclick="addConditionRow(\'createConditionRows\')">＋ 添加条件</button>';
+    html += '<div class="condition-preview" id="createConditionPreview"></div></div></div>';
+    html += '<div id="createConditionAdvanced" style="display:none"><div class="edit-form-group"><label class="edit-form-label">SpEL 条件表达式 <span style="color:var(--color-error)">*</span></label><textarea class="edit-form-textarea mono" id="createCondition" rows="3" placeholder="#handleState == \'INIT\'" oninput="var p=document.getElementById(\'createConditionPreview\');if(p)p.textContent=this.value"></textarea></div>';
+    html += getSpelReferenceHtml();
+    html += '</div></div>';
+
+    html += '<div class="edit-section"><div class="edit-section-title">📝 输出配置</div>';
+    html += '<div style="background:#eef4fb;border:1px solid #d0e2f2;border-radius:6px;padding:6px 10px;margin-bottom:10px;font-size:12px;color:#4a6a8a;line-height:1.6">';
+    html += '💡 在文本中使用 <code style="background:#d8e8f8;padding:1px 4px;border-radius:3px">{变量名}</code> 可自动替换为实际值：<br>';
+    html += '<code>{handleState}</code> 任务处理阶段 | <code>{taskState}</code> 大任务状态 | <code>{taskItemCount}</code> 子任务数量 | <code>{completedCount}</code> 已完成数 | <code>{runningCount}</code> 运行中数 | <code>{initCount}</code> 初始状态数 | <code>{cancelledCount}</code> 已取消数 | <code>{errorMessage}</code> 错误信息';
+    html += '</div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">诊断摘要</label><textarea class="edit-form-textarea" id="createSummary" rows="3" placeholder="诊断摘要，支持{variable}占位符"></textarea></div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">根因列表</label><div id="createRootCauses"></div><button type="button" class="list-add-btn" onclick="addCreateRootCause()">＋ 添加根因</button></div>';
+    html += '<div class="edit-form-group"><label class="edit-form-label">处理建议列表</label><div id="createActions"></div><button type="button" class="list-add-btn" onclick="addCreateAction()">＋ 添加建议</button></div>';
+    html += '</div>';
+
+    html += '<div class="edit-section"><div class="edit-section-title">⚙️ 参数配置（可选）</div>';
+    html += '<div id="createParams"></div><button type="button" class="list-add-btn" onclick="addCreateParam()">＋ 添加参数</button>';
+    html += '</div>';
+
+    document.getElementById('createModalBody').innerHTML = html;
+    document.getElementById('createRuleModal').style.display = 'flex';
+    createConditionMode = 'simple';
+    addConditionRow('createConditionRows');
+}
+
+function addCreateRootCause() {
+    var container = document.getElementById('createRootCauses');
+    container.insertAdjacentHTML('beforeend', renderRootCauseRow(Date.now(), '', ''));
+}
+function addCreateAction() {
+    var container = document.getElementById('createActions');
+    container.insertAdjacentHTML('beforeend', renderActionRow(Date.now(), ''));
+}
+function addCreateParam() {
+    var container = document.getElementById('createParams');
+    container.insertAdjacentHTML('beforeend', renderParamEditRow(Date.now(), '', ''));
+}
+
+function closeCreateModal() {
+    document.getElementById('createRuleModal').style.display = 'none';
+}
+
+async function submitCreateRule() {
+    var name = document.getElementById('createName').value.trim();
+    var description = document.getElementById('createDescription').value.trim();
+    var priority = parseInt(document.getElementById('createPriority').value) || 500;
+    var condition;
+    if (createConditionMode === 'simple') {
+        condition = generateSpEL('createConditionRows');
+    } else {
+        condition = document.getElementById('createCondition').value.trim();
+    }
+    var summary = document.getElementById('createSummary').value.trim();
+
+    if (!name) { showToast('请输入规则名称', 'error'); return; }
+    if (!description) { showToast('请输入规则描述', 'error'); return; }
+    if (!condition) { showToast('请输入条件表达式', 'error'); return; }
+
+    var rcRows = document.querySelectorAll('#createRootCauses .list-item-row');
+    var rootCauses = [];
+    rcRows.forEach(function(row) {
+        var t = row.querySelector('.rc-title').value.trim();
+        var d = row.querySelector('.rc-desc').value.trim();
+        if (t || d) rootCauses.push({title: t, description: d});
+    });
+    var actRows = document.querySelectorAll('#createActions .list-item-row');
+    var actions = [];
+    actRows.forEach(function(row) {
+        var v = row.querySelector('.action-input').value.trim();
+        if (v) actions.push(v);
+    });
+    var paramRows = document.querySelectorAll('#createParams .list-item-row');
+    var params = {};
+    paramRows.forEach(function(row) {
+        var k = row.querySelector('.param-key-input').value.trim();
+        var v = row.querySelector('.param-val-input').value.trim();
+        if (k) params[k] = v;
+    });
+
+    var btn = document.getElementById('createSaveBtn');
+    btn.disabled = true; btn.textContent = '创建中...';
+
+    try {
+        var r = await fetch('/api/v1/rules', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                name: name, description: description, priority: priority,
+                enabled: true, condition: condition,
+                output: { summary: summary, rootCauses: rootCauses, actions: actions },
+                params: params
+            })
+        });
+        var resp = await r.json();
+        if (resp.success) {
+            showToast('规则已创建: ' + name, 'success');
+            closeCreateModal();
+            loadRules();
+        } else {
+            showToast('创建失败: ' + (resp.message || ''), 'error');
+        }
+    } catch(e) { showToast('请求失败: ' + e.message, 'error'); }
+    btn.disabled = false; btn.textContent = '创建';
+}
+
+/* ---- Params Modal ---- */
+function openParamsModal(ruleName) {
+    editingParamsRule = ruleName;
+    var rule = rulesData.find(function(r) { return r.name === ruleName; });
+    if (!rule) return;
+    document.getElementById('paramsModalTitle').textContent = '编辑参数 - ' + ruleName;
+    var body = document.getElementById('paramsModalBody');
+    var html = '';
+    var params = rule.params || {};
+    var keys = Object.keys(params);
+    if (keys.length === 0) { html = '<div style="color:var(--color-text-muted);font-size:13px">该规则无可配置参数</div>'; }
+    else {
+        keys.forEach(function(key) {
+            html += '<div class="param-row">';
+            html += '<div class="param-key">' + esc(key) + '</div>';
+            html += '<input class="param-value-input" data-key="' + esc(key) + '" value="' + esc(params[key]) + '">';
+            html += '</div>';
+        });
+    }
+    body.innerHTML = html;
+    document.getElementById('paramsModal').style.display = 'flex';
+}
+
+function closeParamsModal() {
+    document.getElementById('paramsModal').style.display = 'none';
+    editingParamsRule = null;
+}
+
+function saveParams() {
+    if (!editingParamsRule) return;
+    var inputs = document.querySelectorAll('#paramsModalBody .param-value-input');
+    var params = {};
+    inputs.forEach(function(input) { params[input.getAttribute('data-key')] = input.value; });
+    fetch('/api/v1/rules/' + encodeURIComponent(editingParamsRule) + '/params', {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(params)
+    }).then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) {
+            showToast('参数已保存', 'success');
+            closeParamsModal();
+            loadRules();
+        } else { showToast('保存失败: ' + (resp.message || ''), 'error'); }
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); });
+}
+
+/* ---- Doc Search Config ---- */
+function loadDocSearchConfig() {
+    fetch('/api/v1/rules/doc-search/config').then(function(r) { return r.json(); }).then(function(resp) {
+        if (!resp.success || !resp.data) return;
+        var d = resp.data;
+        document.getElementById('cfgTopK').value = d.topK || 3;
+        document.getElementById('cfgThreshold').value = d.similarityThreshold || 0.6;
+        document.getElementById('cfgThresholdVal').textContent = d.similarityThreshold || 0.6;
+        document.getElementById('cfgPreSearch').checked = d.preSearchEnabled !== false;
+        document.getElementById('cfgPreSearchLabel').textContent = d.preSearchEnabled !== false ? '已启用' : '已禁用';
+        if (d.hybridEnabled !== undefined) {
+            document.getElementById('cfgHybrid').checked = d.hybridEnabled;
+            document.getElementById('cfgHybridLabel').textContent = d.hybridEnabled ? '已启用' : '已禁用';
+        }
+        if (d.vectorWeight !== undefined) {
+            document.getElementById('cfgVectorWeight').value = d.vectorWeight;
+            document.getElementById('cfgVectorWeightVal').textContent = d.vectorWeight;
+        }
+        if (d.keywordWeight !== undefined) {
+            document.getElementById('cfgKeywordWeight').value = d.keywordWeight;
+            document.getElementById('cfgKeywordWeightVal').textContent = d.keywordWeight;
+        }
+    }).catch(function() {});
+}
+
+function saveDocSearchConfig() {
+    var config = {
+        topK: parseInt(document.getElementById('cfgTopK').value) || 3,
+        similarityThreshold: parseFloat(document.getElementById('cfgThreshold').value) || 0.6,
+        preSearchEnabled: document.getElementById('cfgPreSearch').checked,
+        hybridEnabled: document.getElementById('cfgHybrid').checked,
+        vectorWeight: parseFloat(document.getElementById('cfgVectorWeight').value) || 0.6,
+        keywordWeight: parseFloat(document.getElementById('cfgKeywordWeight').value) || 0.4
+    };
+    fetch('/api/v1/rules/doc-search/config', {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(config)
+    }).then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) showToast('配置已保存', 'success');
+        else showToast('保存失败: ' + (resp.message || ''), 'error');
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); });
+}
+
+/* ---- Actions ---- */
+function reloadRules() {
+    fetch('/api/v1/rules/reload', { method: 'POST' }).then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) { showToast('规则已重载', 'success'); loadRules(); }
+        else showToast('重载失败: ' + (resp.message || ''), 'error');
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); });
+}
+
+function resetStatistics() {
+    if (!confirm('确定要重置所有统计数据？')) return;
+    fetch('/api/v1/rules/statistics/reset', { method: 'POST' }).then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) { showToast('统计已重置', 'success'); loadRules(); }
+        else showToast('重置失败: ' + (resp.message || ''), 'error');
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); });
+}
+
+/* ---- Toast ---- */
+function showToast(msg, type) {
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + (type || 'success');
+    el.textContent = (type === 'error' ? '❌ ' : '✅ ') + msg;
+    document.body.appendChild(el);
+    setTimeout(function() { el.style.opacity = '0'; setTimeout(function() { el.remove(); }, 300); }, 2500);
+}
+
+/* ---- Experiments ---- */
+function loadExperiments() {
+    fetch('/api/v1/experiments').then(function(r) { return r.json(); }).then(function(resp) {
+        if (!resp.success) { showToast('加载实验方案失败: ' + (resp.message || ''), 'error'); return; }
+        experimentsData = resp.data || [];
+        renderExperiments();
+        renderCompareSelects();
+    }).catch(function(err) {
+        showToast('加载实验方案失败: ' + err.message, 'error');
+    });
+}
+
+function renderExperiments() {
+    var tbody = document.getElementById('experimentsBody');
+    if (experimentsData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="loading-row">暂无实验方案</td></tr>';
+        return;
+    }
+    var html = '';
+    experimentsData.forEach(function(exp) {
+        html += '<tr>';
+        html += '<td style="font-weight:600">' + esc(exp.name) + '</td>';
+        html += '<td style="font-size:13px;color:var(--color-text-secondary)">' + esc(exp.description || '-') + '</td>';
+        html += '<td style="font-size:12px;color:var(--color-text-secondary)">' + formatTime(exp.createdAt) + '</td>';
+        html += '<td style="white-space:nowrap">';
+        html += '<button class="exp-action-btn" onclick="applyExperiment(\'' + esc(exp.id) + '\')">▶ 应用</button> ';
+        html += '<button class="exp-action-btn" onclick="takeSnapshot(\'' + esc(exp.id) + '\')">📸 快照</button> ';
+        html += '<button class="exp-action-btn danger" onclick="deleteExperiment(\'' + esc(exp.id) + '\')">🗑 删除</button>';
+        html += '</td>';
+        html += '</tr>';
+    });
+    tbody.innerHTML = html;
+}
+
+function renderCompareSelects() {
+    var selA = document.getElementById('compareA');
+    var selB = document.getElementById('compareB');
+    var valA = selA.value;
+    var valB = selB.value;
+    var opts = '<option value="">-- 选择方案 --</option>';
+    experimentsData.forEach(function(exp) {
+        opts += '<option value="' + esc(exp.id) + '">' + esc(exp.name) + '</option>';
+    });
+    selA.innerHTML = opts;
+    selB.innerHTML = opts;
+    if (valA) selA.value = valA;
+    if (valB) selB.value = valB;
+}
+
+function saveExperiment() {
+    var name = document.getElementById('expName').value.trim();
+    var desc = document.getElementById('expDesc').value.trim();
+    if (!name) { showToast('请输入方案名称', 'error'); return; }
+    fetch('/api/v1/experiments', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({name: name, description: desc})
+    }).then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) {
+            showToast('方案已保存: ' + name, 'success');
+            document.getElementById('expName').value = '';
+            document.getElementById('expDesc').value = '';
+            loadExperiments();
+        } else { showToast('保存失败: ' + (resp.message || ''), 'error'); }
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); });
+}
+
+function applyExperiment(id) {
+    var exp = experimentsData.find(function(e) { return e.id === id; });
+    var label = exp ? exp.name : id;
+    if (!confirm('确定要应用方案「' + label + '」到当前规则引擎？\n当前配置将被覆盖。')) return;
+    fetch('/api/v1/experiments/' + encodeURIComponent(id) + '/apply', {
+        method: 'POST'
+    }).then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) {
+            showToast('方案已应用: ' + label, 'success');
+            loadRules();
+            loadDocSearchConfig();
+        } else { showToast('应用失败: ' + (resp.message || ''), 'error'); }
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); });
+}
+
+function takeSnapshot(id) {
+    var exp = experimentsData.find(function(e) { return e.id === id; });
+    var label = exp ? exp.name : id;
+    if (!confirm('确定要将方案「' + label + '」的统计快照更新为当前统计数据？')) return;
+    fetch('/api/v1/experiments/' + encodeURIComponent(id) + '/snapshot', {
+        method: 'POST'
+    }).then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) {
+            showToast('快照已更新: ' + label, 'success');
+            loadExperiments();
+        } else { showToast('更新快照失败: ' + (resp.message || ''), 'error'); }
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); });
+}
+
+function deleteExperiment(id) {
+    var exp = experimentsData.find(function(e) { return e.id === id; });
+    var label = exp ? exp.name : id;
+    if (!confirm('确定要删除方案「' + label + '」？此操作不可恢复。')) return;
+    fetch('/api/v1/experiments/' + encodeURIComponent(id), {
+        method: 'DELETE'
+    }).then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) {
+            showToast('方案已删除: ' + label, 'success');
+            loadExperiments();
+        } else { showToast('删除失败: ' + (resp.message || ''), 'error'); }
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); });
+}
+
+function compareExperiments() {
+    var idA = document.getElementById('compareA').value;
+    var idB = document.getElementById('compareB').value;
+    if (!idA || !idB) { showToast('请选择两个方案进行对比', 'error'); return; }
+    if (idA === idB) { showToast('请选择不同的方案进行对比', 'error'); return; }
+    fetch('/api/v1/experiments/compare?a=' + encodeURIComponent(idA) + '&b=' + encodeURIComponent(idB))
+        .then(function(r) { return r.json(); }).then(function(resp) {
+        if (resp.success) {
+            renderComparisonResult(resp.data);
+            document.getElementById('comparisonPanel').style.display = '';
+        } else { showToast('对比失败: ' + (resp.message || ''), 'error'); }
+    }).catch(function(err) { showToast('请求失败: ' + err.message, 'error'); });
+}
+
+function renderComparisonResult(data) {
+    var html = '';
+    var pA = data.profileA || {};
+    var pB = data.profileB || {};
+    var stats = data.statisticsComparison || [];
+    var diffs = data.configDifferences || [];
+
+    var totalHitA = 0, totalHitB = 0, totalTimeA = 0, totalTimeB = 0, hitWeightA = 0, hitWeightB = 0;
+    stats.forEach(function(s) {
+        var hA = s.hitCountA || 0, hB = s.hitCountB || 0;
+        totalHitA += hA; totalHitB += hB;
+        totalTimeA += (s.avgDiagnoseTimeMsA || 0) * hA;
+        totalTimeB += (s.avgDiagnoseTimeMsB || 0) * hB;
+        hitWeightA += hA; hitWeightB += hB;
+    });
+    var avgTimeA = hitWeightA > 0 ? (totalTimeA / hitWeightA) : 0;
+    var avgTimeB = hitWeightB > 0 ? (totalTimeB / hitWeightB) : 0;
+
+    html += '<div class="comparison-summary">';
+    html += renderProfileSummaryCard('A', pA.name, totalHitA, avgTimeA, null);
+    html += renderProfileSummaryCard('B', pB.name, totalHitB, avgTimeB, {
+        hitA: totalHitA, hitB: totalHitB, timeA: avgTimeA, timeB: avgTimeB
+    });
+    html += '</div>';
+
+    if (diffs.length > 0) {
+        html += '<div style="margin-bottom:20px">';
+        html += '<div class="section-title" style="font-size:14px;margin-bottom:10px">🔧 规则配置差异</div>';
+        html += '<div class="table-wrapper"><table class="glass-table"><thead><tr><th>规则名称</th><th>差异</th></tr></thead><tbody>';
+        diffs.forEach(function(d) {
+            html += '<tr><td style="font-weight:600">' + esc(d.ruleName) + '</td>';
+            html += '<td style="font-size:12px">' + (d.changes || []).map(function(c){ return esc(c); }).join('<br>') + '</td></tr>';
+        });
+        html += '</tbody></table></div></div>';
+    }
+
+    if (stats.length > 0) {
+        html += '<div>';
+        html += '<div class="section-title" style="font-size:14px;margin-bottom:10px">📈 各规则统计对比</div>';
+        html += '<div class="table-wrapper"><table class="glass-table"><thead><tr>';
+        html += '<th>规则名称</th><th>A 命中</th><th>B 命中</th><th>变化</th><th>A 耗时(ms)</th><th>B 耗时(ms)</th><th>耗时变化</th>';
+        html += '</tr></thead><tbody>';
+        stats.forEach(function(s) {
+            html += '<tr>';
+            html += '<td style="font-weight:600">' + esc(s.ruleName) + '</td>';
+            html += '<td>' + s.hitCountA + '</td>';
+            html += '<td>' + s.hitCountB + '</td>';
+            html += '<td>' + renderChange(s.hitCountChangePercent, s.hitCountDiff) + '</td>';
+            html += '<td>' + (s.avgDiagnoseTimeMsA || 0).toFixed(1) + '</td>';
+            html += '<td>' + (s.avgDiagnoseTimeMsB || 0).toFixed(1) + '</td>';
+            html += '<td>' + renderChange(s.avgDiagnoseTimeMsChangePercent, s.avgDiagnoseTimeMsDiff) + '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table></div></div>';
+    }
+
+    document.getElementById('comparisonContent').innerHTML = html;
+}
+
+function renderProfileSummaryCard(label, name, totalHit, avgTime, diffRef) {
+    var html = '<div class="comparison-profile-card">';
+    html += '<div class="comparison-profile-title">方案 ' + label + ': ' + esc(name || '未知') + '</div>';
+    html += '<div class="comparison-stat-row"><span class="comparison-stat-label">总命中数</span><span class="comparison-stat-value">' + totalHit;
+    if (diffRef && label === 'B') {
+        html += renderChangeSpan(diffRef.hitA, diffRef.hitB);
+    }
+    html += '</span></div>';
+    html += '<div class="comparison-stat-row"><span class="comparison-stat-label">平均耗时</span><span class="comparison-stat-value">' + avgTime.toFixed(1) + ' ms';
+    if (diffRef && label === 'B') {
+        html += renderChangeSpan(diffRef.timeA, diffRef.timeB, true);
+    }
+    html += '</span></div>';
+    html += '</div>';
+    return html;
+}
+
+function renderChangeSpan(base, current, lowerIsBetter) {
+    if (base === 0 && current === 0) return '';
+    var pct;
+    if (base === 0) { pct = '+∞'; }
+    else { pct = ((current - base) / base * 100).toFixed(1); }
+    var diff = current - base;
+    var isUp = diff > 0;
+    var cls;
+    if (lowerIsBetter) {
+        cls = isUp ? 'change-down' : 'change-up';
+    } else {
+        cls = isUp ? 'change-up' : 'change-down';
+    }
+    if (diff === 0) cls = 'change-neutral';
+    var arrow = diff > 0 ? '↑' : (diff < 0 ? '↓' : '');
+    var pctStr = (base === 0) ? '+∞' : (diff > 0 ? '+' : '') + pct + '%';
+    return '<span class="' + cls + '">' + arrow + pctStr + '</span>';
+}
+
+function renderChange(pctStr, diff) {
+    if (diff === 0 || diff === undefined) return '<span class="change-neutral">-</span>';
+    var isUp = diff > 0;
+    var cls = isUp ? 'change-up' : 'change-down';
+    var arrow = isUp ? '↑' : '↓';
+    return '<span class="' + cls + '">' + arrow + ' ' + esc(pctStr) + '</span>';
+}
+
+/* ---- Condition Builder ---- */
+var createConditionMode = 'simple';
+var editConditionMode = 'simple';
+
+var CONDITION_VARIABLES = [
+  { name: 'taskState', label: '大任务状态', type: 'enum',
+    options: ['INIT','RUNNING','AUTO_SUCCESS','MANUAL_SUCCESS','CANCELLED'] },
+  { name: 'handleState', label: '处理阶段', type: 'enum',
+    options: ['INIT','KEY_PLANNING','PATH_PLANNING'] },
+  { name: 'completedCount', label: '已完成子任务数', type: 'number' },
+  { name: 'initCount', label: '初始状态子任务数', type: 'number' },
+  { name: 'runningCount', label: '运行中子任务数', type: 'number' },
+  { name: 'cancelledCount', label: '已取消子任务数', type: 'number' },
+  { name: 'taskItemCount', label: '子任务总数', type: 'number' },
+  { name: 'hasConflicts', label: '有点位冲突', type: 'boolean' },
+  { name: 'hasRelevantDocs', label: '有相关文档', type: 'boolean' },
+  { name: 'taskItemStates', label: '子任务状态列表', type: 'list',
+    options: ['INIT','PLANNED','ISSUED_DCS','RUNNING','AUTO_SUCCESS','MANUAL_SUCCESS','CANCELLED'] },
+  { name: 'ticketStates', label: '执行单状态列表', type: 'list',
+    options: ['INIT','RUNNING','AUTO_SUCCESS','MANUAL_SUCCESS','CANCELLED'] },
+  { name: 'errorMessage', label: '错误信息', type: 'string' },
+];
+
+function addConditionRow(containerId) {
+    var container = document.getElementById(containerId);
+    var rows = container.querySelectorAll('.condition-row');
+    var html = '';
+    if (rows.length > 0) {
+        html += '<div class="condition-connector"><button type="button" onclick="toggleConnector(this)">AND</button></div>';
+    }
+    html += '<div class="condition-row">';
+    html += '<select class="cond-var" onchange="onVariableChange(this)"><option value="">-- 选择变量 --</option>';
+    CONDITION_VARIABLES.forEach(function(v) {
+        html += '<option value="' + v.name + '">' + v.label + ' (' + v.name + ')</option>';
+    });
+    html += '</select>';
+    html += '<select class="cond-op" onchange="onConditionChange(\'' + containerId + '\')"><option value="">-- 操作符 --</option></select>';
+    html += '<div class="cond-val-wrap"><input class="cond-val" placeholder="\u503c" oninput="onConditionChange(\'' + containerId + '\')"></div>';
+    html += '<button type="button" class="cond-remove" onclick="removeConditionRow(this, \'' + containerId + '\')" title="删除条件">✕</button>';
+    html += '</div>';
+    container.insertAdjacentHTML('beforeend', html);
+    var previewId = containerId.replace('Rows', 'Preview');
+    updateConditionPreview(containerId, previewId);
+}
+
+function removeConditionRow(btn, containerId) {
+    var row = btn.closest('.condition-row');
+    var prev = row.previousElementSibling;
+    var next = row.nextElementSibling;
+    // Remove associated connector
+    if (prev && prev.classList.contains('condition-connector')) {
+        prev.remove();
+    } else if (next && next.classList.contains('condition-connector')) {
+        next.remove();
+    }
+    row.remove();
+    var previewId = containerId.replace('Rows', 'Preview');
+    updateConditionPreview(containerId, previewId);
+}
+
+function toggleConnector(btn) {
+    btn.textContent = btn.textContent === 'AND' ? 'OR' : 'AND';
+    var container = btn.closest('.condition-builder').querySelector('[id$="ConditionRows"]') || btn.closest('.condition-builder').querySelector('[id$="Rows"]');
+    if (container) {
+        var previewId = container.id.replace('Rows', 'Preview');
+        updateConditionPreview(container.id, previewId);
+    }
+}
+
+function onVariableChange(select) {
+    var row = select.closest('.condition-row');
+    var opSelect = row.querySelector('.cond-op');
+    var valWrap = row.querySelector('.cond-val-wrap');
+    var varName = select.value;
+    var varDef = CONDITION_VARIABLES.find(function(v) { return v.name === varName; });
+
+    opSelect.innerHTML = '<option value="">-- 操作符 --</option>';
+    valWrap.innerHTML = '';
+
+    if (!varDef) return;
+
+    var containerId = select.closest('.condition-builder').querySelector('[id$="Rows"]').id;
+
+    if (varDef.type === 'enum') {
+        opSelect.innerHTML += '<option value="==">等于 (==)</option><option value="!=">不等于 (!=)</option>';
+        var valHtml = '<select class="cond-val" onchange="onConditionChange(\'' + containerId + '\')">';
+        valHtml += '<option value="">-- 选择值 --</option>';
+        varDef.options.forEach(function(o) { valHtml += '<option value="' + o + '">' + o + '</option>'; });
+        valHtml += '</select>';
+        valWrap.innerHTML = valHtml;
+    } else if (varDef.type === 'number') {
+        opSelect.innerHTML += '<option value="==">等于 (==)</option><option value="!=">不等于 (!=)</option>';
+        opSelect.innerHTML += '<option value=">">大于 (>)</option><option value="<">小于 (<)</option>';
+        opSelect.innerHTML += '<option value=">=">大于等于 (>=)</option><option value="<=">小于等于 (<=)</option>';
+        valWrap.innerHTML = '<input type="number" class="cond-val" placeholder="数值" oninput="onConditionChange(\'' + containerId + '\')"/>';
+    } else if (varDef.type === 'boolean') {
+        opSelect.innerHTML += '<option value="true">为真</option><option value="false">为假</option>';
+        valWrap.innerHTML = '';
+    } else if (varDef.type === 'list') {
+        opSelect.innerHTML += '<option value="contains">包含 (contains)</option><option value="notContains">不包含 (notContains)</option>';
+        var valHtml = '<div class="multi-select" onclick="toggleMultiDropdown(this, event)">';
+        valHtml += '<div class="multi-select-tags"><span class="multi-select-placeholder">点击选择...</span></div>';
+        valHtml += '<div class="multi-select-dropdown" style="display:none">';
+        varDef.options.forEach(function(o) {
+            valHtml += '<label class="multi-option"><input type="checkbox" value="' + o + '" onchange="onMultiSelectChange(this, \'' + containerId + '\')">' + o + '</label>';
+        });
+        valHtml += '</div></div>';
+        valWrap.innerHTML = valHtml;
+    } else if (varDef.type === 'string') {
+        opSelect.innerHTML += '<option value="contains">包含</option><option value="notContains">不包含</option>';
+        opSelect.innerHTML += '<option value="empty">为空</option><option value="notEmpty">不为空</option>';
+        valWrap.innerHTML = '<input class="cond-val" placeholder="文本值" oninput="onConditionChange(\'' + containerId + '\')" />';
+        opSelect.onchange = function() {
+            var op = opSelect.value;
+            if (op === 'empty' || op === 'notEmpty') {
+                valWrap.innerHTML = '';
+            } else {
+                if (!valWrap.querySelector('.cond-val')) {
+                    valWrap.innerHTML = '<input class="cond-val" placeholder="文本值" oninput="onConditionChange(\'' + containerId + '\')" />';
+                }
+            }
+            onConditionChange(containerId);
+        };
+    }
+    opSelect.value = opSelect.options[1] ? opSelect.options[1].value : '';
+    if (varDef.type === 'string') { opSelect.onchange(); }
+    else { onConditionChange(containerId); }
+}
+
+function onConditionChange(containerId) {
+    var previewId = containerId.replace('Rows', 'Preview');
+    updateConditionPreview(containerId, previewId);
+}
+
+function toggleMultiDropdown(el, event) {
+    // Don't toggle if clicking on a tag remove button
+    if (event && event.target.classList.contains('multi-tag-remove')) return;
+    var dropdown = el.querySelector('.multi-select-dropdown');
+    var isOpen = dropdown.style.display !== 'none';
+    // Close all other dropdowns first
+    document.querySelectorAll('.multi-select-dropdown').forEach(function(d) { d.style.display = 'none'; });
+    if (!isOpen) {
+        dropdown.style.display = 'block';
+        event && event.stopPropagation();
+    }
+}
+
+function onMultiSelectChange(checkbox, containerId) {
+    var multiSelect = checkbox.closest('.multi-select');
+    updateMultiTags(multiSelect);
+    onConditionChange(containerId);
+}
+
+function removeMultiTag(removeBtn, value, containerId) {
+    var multiSelect = removeBtn.closest('.multi-select');
+    var cb = multiSelect.querySelector('.multi-select-dropdown input[value="' + value + '"]');
+    if (cb) cb.checked = false;
+    updateMultiTags(multiSelect);
+    onConditionChange(containerId);
+}
+
+function updateMultiTags(multiSelectEl) {
+    var tagsContainer = multiSelectEl.querySelector('.multi-select-tags');
+    var checkboxes = multiSelectEl.querySelectorAll('.multi-select-dropdown input[type="checkbox"]:checked');
+    var containerId = '';
+    var firstCb = multiSelectEl.querySelector('.multi-select-dropdown input[type="checkbox"]');
+    if (firstCb) {
+        var onchangeAttr = firstCb.getAttribute('onchange');
+        if (onchangeAttr) {
+            var match = onchangeAttr.match(/onMultiSelectChange\(this,\s*'([^']+)'\)/);
+            if (match) containerId = match[1];
+        }
+    }
+    var html = '';
+    checkboxes.forEach(function(cb) {
+        html += '<span class="multi-tag">' + cb.value + ' <span class="multi-tag-remove" onclick="event.stopPropagation(); removeMultiTag(this, \'' + cb.value + '\', \'' + containerId + '\')">×</span></span>';
+    });
+    if (checkboxes.length === 0) {
+        html = '<span class="multi-select-placeholder">点击选择...</span>';
+    }
+    tagsContainer.innerHTML = html;
+}
+
+// Close multi-select dropdowns when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.multi-select')) {
+        document.querySelectorAll('.multi-select-dropdown').forEach(function(d) { d.style.display = 'none'; });
+    }
+});
+
+function generateSpEL(containerId) {
+    var container = document.getElementById(containerId);
+    if (!container) return '';
+    var rows = container.querySelectorAll('.condition-row');
+    var fragments = [];
+    var connectors = [];
+    var children = container.children;
+    for (var i = 0; i < children.length; i++) {
+        if (children[i].classList.contains('condition-connector')) {
+            var btn = children[i].querySelector('button');
+            connectors.push(btn ? btn.textContent : 'AND');
+        }
+    }
+    rows.forEach(function(row) {
+        var varSelect = row.querySelector('.cond-var');
+        var opSelect = row.querySelector('.cond-op');
+        var valEl = row.querySelector('.cond-val-wrap .cond-val');
+        if (!varSelect || !varSelect.value || !opSelect || !opSelect.value) return;
+        var varName = varSelect.value;
+        var op = opSelect.value;
+        var val = valEl ? (valEl.value || '').trim() : '';
+        var varDef = CONDITION_VARIABLES.find(function(v) { return v.name === varName; });
+        if (!varDef) return;
+        var spel = '';
+        if (varDef.type === 'enum') {
+            if (val) spel = '#' + varName + ' ' + op + ' \'' + val + '\'';
+        } else if (varDef.type === 'number') {
+            if (val !== '') spel = '#' + varName + ' ' + op + ' ' + val;
+        } else if (varDef.type === 'boolean') {
+            spel = op === 'true' ? '#' + varName : '!#' + varName;
+        } else if (varDef.type === 'list') {
+            var multiWrap = row.querySelector('.multi-select-dropdown');
+            var checkedVals = [];
+            if (multiWrap) {
+                multiWrap.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb) {
+                    checkedVals.push(cb.value);
+                });
+            }
+            if (checkedVals.length > 0) {
+                var parts = checkedVals.map(function(v) {
+                    if (op === 'contains') return '#' + varName + '.contains(\'' + v + '\')';
+                    else return '!#' + varName + '.contains(\'' + v + '\')';
+                });
+                spel = parts.join(' && ');
+            }
+        } else if (varDef.type === 'string') {
+            if (op === 'contains' && val) {
+                spel = '#' + varName + ' != null && #' + varName + '.contains(\'' + val + '\')';
+            } else if (op === 'notContains' && val) {
+                spel = '#' + varName + ' == null || !#' + varName + '.contains(\'' + val + '\')';
+            } else if (op === 'empty') {
+                spel = '#' + varName + ' == null || #' + varName + '.isEmpty()';
+            } else if (op === 'notEmpty') {
+                spel = '#' + varName + ' != null && !#' + varName + '.isEmpty()';
+            }
+        }
+        if (spel) fragments.push(spel);
+    });
+    if (fragments.length === 0) return '';
+    if (fragments.length === 1) return fragments[0];
+    var result = fragments[0];
+    for (var j = 1; j < fragments.length; j++) {
+        var conn = (connectors[j - 1] || 'AND') === 'AND' ? ' && ' : ' || ';
+        result += conn + fragments[j];
+    }
+    return result;
+}
+
+function updateConditionPreview(containerId, previewId) {
+    var preview = document.getElementById(previewId);
+    if (!preview) return;
+    var spel = generateSpEL(containerId);
+    preview.textContent = spel;
+}
+
+function parseSpELToRows(spelStr, containerId) {
+    if (!spelStr || !spelStr.trim()) return false;
+    spelStr = spelStr.trim();
+
+    // Determine the main connector: split by && or ||
+    // We need to handle compound fragments like "#x != null && #x.contains('y')" as single units
+    // Strategy: try splitting by ' || ' first, then ' && ', based on which appears as the main connector
+    var mainConn = 'AND';
+    var rawParts = [];
+
+    // Try to intelligently split: count top-level && and ||
+    // For simplicity, detect if || is used as connector between independent conditions
+    // Compound string conditions use && or || internally, so we merge them
+    var tokens = splitSpELTokens(spelStr);
+    if (!tokens) return false;
+
+    mainConn = tokens.connector;
+    rawParts = tokens.parts;
+
+    // Try to parse each part
+    var parsedRows = [];
+    for (var i = 0; i < rawParts.length; i++) {
+        var parsed = parseOneCondition(rawParts[i].trim());
+        if (!parsed) return false; // Cannot parse, fallback to advanced
+        parsedRows.push(parsed);
+    }
+
+    // Successfully parsed all, now build the condition rows
+    var container = document.getElementById(containerId);
+    if (!container) return false;
+    container.innerHTML = '';
+
+    for (var j = 0; j < parsedRows.length; j++) {
+        var p = parsedRows[j];
+        addConditionRow(containerId);
+        var rows = container.querySelectorAll('.condition-row');
+        var row = rows[rows.length - 1];
+        var varSelect = row.querySelector('.cond-var');
+        varSelect.value = p.varName;
+        onVariableChange(varSelect);
+        var opSelect = row.querySelector('.cond-op');
+        opSelect.value = p.op;
+        // Trigger string op change handler
+        var varDef = CONDITION_VARIABLES.find(function(v) { return v.name === p.varName; });
+        if (varDef && varDef.type === 'string' && opSelect.onchange) {
+            opSelect.onchange();
+        }
+        if (p.val !== undefined && p.val !== null) {
+            if (varDef && varDef.type === 'list' && Array.isArray(p.val)) {
+                // Restore checkbox state for list type
+                var multiSelect = row.querySelector('.multi-select');
+                if (multiSelect) {
+                    var checkboxes = multiSelect.querySelectorAll('.multi-select-dropdown input[type="checkbox"]');
+                    checkboxes.forEach(function(cb) {
+                        cb.checked = p.val.indexOf(cb.value) !== -1;
+                    });
+                    updateMultiTags(multiSelect);
+                }
+            } else {
+                var valEl = row.querySelector('.cond-val-wrap .cond-val');
+                if (valEl) valEl.value = p.val;
+            }
+        }
+    }
+    // Update all connector buttons to the correct connector text
+    var connBtns = container.querySelectorAll('.condition-connector button');
+    connBtns.forEach(function(btn) { btn.textContent = mainConn; });
+    var previewId = containerId.replace('Rows', 'Preview');
+    updateConditionPreview(containerId, previewId);
+    return true;
+}
+
+function splitSpELTokens(spelStr) {
+    // Try to split into independent condition fragments
+    // Compound string patterns: "#var != null && #var.contains('x')" or "#var == null || #var.isEmpty()"
+    // These should be treated as single fragments
+
+    // First try: see if we can identify compound string patterns and replace them with placeholders
+    var placeholders = [];
+    var processed = spelStr;
+
+    // Match compound string patterns
+    // Pattern: #var != null && #var.contains('...') 
+    // Pattern: #var != null && !#var.contains('...')
+    // Pattern: #var == null || #var.isEmpty()
+    // Pattern: #var != null && !#var.isEmpty()
+    // Pattern: #var == null || !#var.contains('...')
+    var compoundPatterns = [
+        /#(\w+)\s*!=\s*null\s*&&\s*#\1\.contains\('[^']*'\)/g,
+        /#(\w+)\s*!=\s*null\s*&&\s*!#\1\.contains\('[^']*'\)/g,
+        /#(\w+)\s*==\s*null\s*\|\|\s*#\1\.isEmpty\(\)/g,
+        /#(\w+)\s*!=\s*null\s*&&\s*!#\1\.isEmpty\(\)/g,
+        /#(\w+)\s*==\s*null\s*\|\|\s*!#\1\.contains\('[^']*'\)/g
+    ];
+
+    // Also treat multi-contains on the same list variable as compound:
+    // e.g. #var.contains('A') && #var.contains('B') && #var.contains('C')
+    // or  !#var.contains('A') && !#var.contains('B')
+    var listMultiPatterns = [
+        /(?:!?#(\w+)\.contains\('[^']*'\))(?:\s*&&\s*!?#\1\.contains\('[^']*'\))+/g
+    ];
+    listMultiPatterns.forEach(function(pat) {
+        processed = processed.replace(pat, function(match) {
+            var idx = placeholders.length;
+            placeholders.push(match);
+            return '___PH' + idx + '___';
+        });
+    });
+
+    compoundPatterns.forEach(function(pat) {
+        processed = processed.replace(pat, function(match) {
+            var idx = placeholders.length;
+            placeholders.push(match);
+            return '___PH' + idx + '___';
+        });
+    });
+
+    // Now split by && or ||
+    var hasAnd = processed.indexOf(' && ') !== -1;
+    var hasOr = processed.indexOf(' || ') !== -1;
+
+    var parts, connector;
+    if (hasAnd && !hasOr) {
+        parts = processed.split(' && ');
+        connector = 'AND';
+    } else if (hasOr && !hasAnd) {
+        parts = processed.split(' || ');
+        connector = 'OR';
+    } else if (!hasAnd && !hasOr) {
+        parts = [processed];
+        connector = 'AND';
+    } else {
+        // Mixed connectors at top level - too complex
+        return null;
+    }
+
+    // Restore placeholders
+    var restored = parts.map(function(part) {
+        return part.replace(/___PH(\d+)___/g, function(m, idx) {
+            return placeholders[parseInt(idx)];
+        });
+    });
+
+    return { parts: restored, connector: connector };
+}
+
+function parseOneCondition(fragment) {
+    fragment = fragment.trim();
+    // Remove wrapping parentheses
+    if (fragment.charAt(0) === '(' && fragment.charAt(fragment.length - 1) === ')') {
+        fragment = fragment.substring(1, fragment.length - 1).trim();
+    }
+
+    // Boolean false: !#varName
+    var m = fragment.match(/^!#(\w+)$/);
+    if (m) {
+        var vd = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vd && vd.type === 'boolean') return { varName: m[1], op: 'false', val: null };
+    }
+
+    // Boolean true: #varName (standalone)
+    m = fragment.match(/^#(\w+)$/);
+    if (m) {
+        var vd2 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vd2 && vd2.type === 'boolean') return { varName: m[1], op: 'true', val: null };
+    }
+
+    // Enum: #var == 'VALUE' or #var != 'VALUE'
+    m = fragment.match(/^#(\w+)\s*(==|!=)\s*'([^']*)'$/);
+    if (m) {
+        var vd3 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vd3 && vd3.type === 'enum') return { varName: m[1], op: m[2], val: m[3] };
+    }
+
+    // Number: #var == 123, #var > 0, etc.
+    m = fragment.match(/^#(\w+)\s*(==|!=|>|<|>=|<=)\s*(-?\d+(?:\.\d+)?)$/);
+    if (m) {
+        var vd4 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vd4 && vd4.type === 'number') return { varName: m[1], op: m[2], val: m[3] };
+    }
+
+    // List multi-contains: #var.contains('A') && #var.contains('B')
+    m = fragment.match(/^(?:#(\w+)\.contains\('[^']*'\))(?:\s*&&\s*#\1\.contains\('[^']*'\))*$/);
+    if (m) {
+        var vdListM1 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vdListM1 && vdListM1.type === 'list') {
+            var vals = [];
+            fragment.replace(/#\w+\.contains\('([^']*)'/g, function(_, v) { vals.push(v); });
+            return { varName: m[1], op: 'contains', val: vals };
+        }
+    }
+
+    // List multi-notContains: !#var.contains('A') && !#var.contains('B')
+    m = fragment.match(/^(?:!#(\w+)\.contains\('[^']*'\))(?:\s*&&\s*!#\1\.contains\('[^']*'\))*$/);
+    if (m) {
+        var vdListM2 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vdListM2 && vdListM2.type === 'list') {
+            var vals2 = [];
+            fragment.replace(/#\w+\.contains\('([^']*)'/g, function(_, v) { vals2.push(v); });
+            return { varName: m[1], op: 'notContains', val: vals2 };
+        }
+    }
+
+    // List single contains: #var.contains('xxx')
+    m = fragment.match(/^#(\w+)\.contains\('([^']*)'\)$/);
+    if (m) {
+        var vdList1 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vdList1 && vdList1.type === 'list') return { varName: m[1], op: 'contains', val: [m[2]] };
+    }
+
+    // List single notContains: !#var.contains('xxx')
+    m = fragment.match(/^!#(\w+)\.contains\('([^']*)'\)$/);
+    if (m) {
+        var vdList2 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vdList2 && vdList2.type === 'list') return { varName: m[1], op: 'notContains', val: [m[2]] };
+    }
+
+    // String contains: #var != null && #var.contains('xxx')
+    m = fragment.match(/^#(\w+)\s*!=\s*null\s*&&\s*#\1\.contains\('([^']*)'\)$/);
+    if (m) {
+        var vd5 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vd5 && vd5.type === 'string') return { varName: m[1], op: 'contains', val: m[2] };
+    }
+
+    // String notContains: #var == null || !#var.contains('xxx')
+    m = fragment.match(/^#(\w+)\s*==\s*null\s*\|\|\s*!#\1\.contains\('([^']*)'\)$/);
+    if (m) {
+        var vd6 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vd6 && vd6.type === 'string') return { varName: m[1], op: 'notContains', val: m[2] };
+    }
+
+    // String empty: #var == null || #var.isEmpty()
+    m = fragment.match(/^#(\w+)\s*==\s*null\s*\|\|\s*#\1\.isEmpty\(\)$/);
+    if (m) {
+        var vd7 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vd7 && vd7.type === 'string') return { varName: m[1], op: 'empty', val: null };
+    }
+
+    // String notEmpty: #var != null && !#var.isEmpty()
+    m = fragment.match(/^#(\w+)\s*!=\s*null\s*&&\s*!#\1\.isEmpty\(\)$/);
+    if (m) {
+        var vd8 = CONDITION_VARIABLES.find(function(v) { return v.name === m[1]; });
+        if (vd8 && vd8.type === 'string') return { varName: m[1], op: 'notEmpty', val: null };
+    }
+
+    // Cannot parse
+    return null;
+}
+
+function toggleConditionMode(mode, prefix) {
+    prefix = prefix || 'create';
+    if (prefix === 'edit') { editConditionMode = mode; } else { createConditionMode = mode; }
+    var simpleEl = document.getElementById(prefix + 'ConditionSimple');
+    var advancedEl = document.getElementById(prefix + 'ConditionAdvanced');
+    var btnSimple = document.getElementById(prefix + 'ModeBtnSimple');
+    var btnAdvanced = document.getElementById(prefix + 'ModeBtnAdvanced');
+    if (!simpleEl || !advancedEl) return;
+    if (mode === 'simple') {
+        simpleEl.style.display = '';
+        advancedEl.style.display = 'none';
+        if (btnSimple) btnSimple.classList.add('active');
+        if (btnAdvanced) btnAdvanced.classList.remove('active');
+    } else {
+        var rowsId = prefix + 'ConditionRows';
+        var spel = generateSpEL(rowsId);
+        var ta = document.getElementById(prefix + 'Condition');
+        if (spel && ta) ta.value = spel;
+        simpleEl.style.display = 'none';
+        advancedEl.style.display = '';
+        if (btnSimple) btnSimple.classList.remove('active');
+        if (btnAdvanced) btnAdvanced.classList.add('active');
+        var previewEl = document.getElementById(prefix + 'ConditionPreview');
+        if (ta && previewEl) { previewEl.textContent = ta.value; }
+    }
+}
+
+/* ---- Utils ---- */
+function esc(s) {
+    if (s == null) return '';
+    var d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+}
+
+function formatTime(t) {
+    if (!t) return '-';
+    return String(t).replace('T', ' ').substring(0, 19);
+}
+
+function formatTimeShort(t) {
+    if (!t) return '-';
+    var s = String(t).replace('T', ' ');
+    var datePart = s.substring(0, 10);
+    var today = new Date().toISOString().substring(0, 10);
+    if (datePart === today) return s.substring(11, 16);
+    return s.substring(5, 16);
+}
+</script>
+</body>
+</html>
+

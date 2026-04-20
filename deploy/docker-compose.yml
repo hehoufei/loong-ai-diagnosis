@@ -1,0 +1,46 @@
+services:
+  ai-diagnosis:
+    container_name: loong-ai-diagnosis
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      # 数据库配置
+      DB_URL: "jdbc:mysql://your-mysql-host:3306/loong?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&autoReconnect=true"
+      DB_USERNAME: "your_db_user"
+      DB_PASSWORD: "your_db_password"
+      # AI 模型配置
+      LLM_API_KEY: "your_api_key"
+      LLM_MODEL: "glm-4.7-flash"
+      # WCS 地址
+      MAP_API_URL: "http://loong-main:8088"
+      # JVM 参数
+      JAVA_OPTS: "-Xms512m -Xmx2g"
+      # 时区
+      TZ: Asia/Shanghai
+    ports:
+      - "18080:18080"
+    volumes:
+      # 日志目录
+      - ./ai-diagnosis/logs:/app/logs
+      # 向量存储持久化
+      - ./ai-diagnosis/data:/root/.loong-ai-diagnosis
+    networks:
+      - loong_loong
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "4.00"
+          memory: 4G
+        reservations:
+          memory: 1G
+
+networks:
+  loong_loong:
+    external: true

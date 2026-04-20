@@ -1,0 +1,12 @@
+# Project exclude paths
+/target/
+
+# Java Maven/Gradle 编译产物
+target/
+
+# Tauri/Rust 编译产物
+src-tauri/target/
+
+# 通用额外忽略
+**/target/
+**/target/**

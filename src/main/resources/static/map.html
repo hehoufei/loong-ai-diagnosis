@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务路径地图</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, sans-serif; background: #1a1a2e; color: #fff; overflow: hidden; }
+        .toolbar { position: fixed; top: 0; left: 0; right: 0; z-index: 10; background: rgba(26,26,46,.95); padding: 8px 20px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid #333; }
+        .toolbar h3 { font-size: 14px; color: #a78bfa; }
+        .legend { display: flex; gap: 14px; font-size: 11px; }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+        .toolbar .hint { margin-left: auto; font-size: 11px; color: #666; }
+        #mapCanvas { display: block; cursor: grab; }
+        #mapCanvas:active { cursor: grabbing; }
+        .loading-overlay { position: fixed; inset: 0; background: rgba(26,26,46,.9); display: flex; align-items: center; justify-content: center; font-size: 15px; color: #a78bfa; z-index: 20; }
+        .spinner { width: 22px; height: 22px; border: 3px solid #333; border-top-color: #a78bfa; border-radius: 50%; animation: spin .7s linear infinite; margin-right: 10px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <h3>🗺️ 任务路径地图</h3>
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#52c41a"></div> 已完成</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#1a73e8"></div> 执行中</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#faad14"></div> 等待</div>
+        </div>
+        <div class="hint">滚轮缩放 · 拖拽平移</div>
+    </div>
+    <div id="loadingOverlay" class="loading-overlay"><div class="spinner"></div> 加载地图...</div>
+    <canvas id="mapCanvas"></canvas>
+</body>
+</html>
+
+<script>
+var canvas = document.getElementById('mapCanvas');
+var ctx = canvas.getContext('2d');
+var W, H, offsetX = 0, offsetY = 0, scale = 1;
+var dragging = false, dragSX, dragSY;
+var mapNodes = [], mapLinks = [], mapAisles = [], mapDevices = [];
+var nodeMap = {};
+var pathNodeSet = new Set(), pathLegs = [], pathLegSet = new Set();
+var COLORS = ['#FF0000','#0000FF','#D7D706','#FF00FF','#00FFFF','#800000','#008000','#000080','#808000','#800080'];
+
+function resize() { W = window.innerWidth; H = window.innerHeight; canvas.width = W; canvas.height = H; draw(); }
+window.addEventListener('resize', resize);
+
+try {
+    JSON.parse(sessionStorage.getItem('mapPathNodes') || '[]').forEach(function(n) { pathNodeSet.add(n); });
+    pathLegs = JSON.parse(sessionStorage.getItem('mapPathLegs') || '[]');
+} catch(e) {}
+
+// 并行加载：节点映射表 + 地图数据
+Promise.all([
+    fetch('/api/v1/map/nodeList', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' }).then(function(r){return r.json();}),
+    fetch('/api/v1/map/viewDetail', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{"id":"1"}' }).then(function(r){return r.json();})
+]).then(function(results) {
+    // 1. 解析节点映射（nodeNum → nodeCode）
+    var nl = results[0]; if (nl.data) nl = nl.data; if (typeof nl === 'string') nl = JSON.parse(nl); if (nl.data) nl = nl.data;
+    var numToCode = {};
+    if (Array.isArray(nl)) {
+        nl.forEach(function(n) {
+            if (n.nodeNum != null && n.nodeCode) {
+                numToCode[String(n.nodeNum)] = n.nodeCode;
+                numToCode['ND_' + n.nodeNum] = n.nodeCode;
+            }
+        });
+    }
+    console.log('节点映射表大小:', Object.keys(numToCode).length);
+
+    // 2. 用映射表转换路径节点
+    var resolved = new Set();
+    pathNodeSet.forEach(function(code) {
+        resolved.add(numToCode[code] || code);
+    });
+    pathNodeSet = resolved;
+    pathLegs.forEach(function(leg) {
+        leg.from = numToCode[leg.from] || leg.from;
+        leg.to = numToCode[leg.to] || leg.to;
+    });
+    pathLegSet = new Set();
+    pathLegs.forEach(function(l) { pathLegSet.add(l.from + '→' + l.to); });
+    console.log('转换后路径节点:', Array.from(pathNodeSet));
+
+    // 3. 解析地图
+    var d = results[1]; if (d.data) d = d.data; if (typeof d === 'string') d = JSON.parse(d); if (d.data) d = d.data;
+    parseMapData(d);
+
+    var matched = 0;
+    pathNodeSet.forEach(function(c) { if (nodeMap[c]) matched++; });
+    console.log('路径匹配:', matched, '/', pathNodeSet.size);
+
+    if (matched > 0) autoFitToPath(); else autoFit();
+    document.getElementById('loadingOverlay').style.display = 'none';
+    draw();
+}).catch(function(e) {
+    document.getElementById('loadingOverlay').innerHTML = '⚠️ ' + e.message;
+});
+</script>
+
+<script>
+function parseMapData(data) {
+    (data.nodeList || []).forEach(function(n) {
+        if (!n.nodeCode || n.layoutX == null) return;
+        var nd = { code: n.nodeCode, x: n.layoutX, y: n.layoutY, kind: n.kind || '', w: 32, h: 30, type: 'point' };
+        mapNodes.push(nd); nodeMap[n.nodeCode] = nd;
+    });
+    (data.deviceList || []).forEach(function(d, i) {
+        if (!d.deviceCode || d.layoutX == null) return;
+        var sub = (d.subDeviceType || '').toUpperCase();
+        var dt = (d.deviceType || '').toUpperCase();
+        var nd = { code: d.deviceCode, x: d.layoutX, y: d.layoutY, w: d.width || 56, h: d.height || 32, angle: d.angle || 0, sub: sub, dt: dt, name: d.deviceName || '', fill: d.fill || null, type: 'device', length: d.length || 0 };
+        if (dt === 'CONVEYOR' || dt === 'CONVEYOR_MACHINE') nd.fill = nd.fill || COLORS[i % COLORS.length];
+        mapDevices.push(nd); nodeMap[d.deviceCode] = nd;
+    });
+    (data.aisleList || []).forEach(function(a) {
+        if (a.layoutX == null) return;
+        mapAisles.push({ x: a.layoutX, y: a.layoutY, w: a.width || 400, h: a.height || 40, angle: a.angle || 0 });
+    });
+    (data.linkDataList || []).forEach(function(l) {
+        if (l.from && l.to) mapLinks.push({ from: l.from, to: l.to, pts: l.points || [] });
+    });
+}
+
+function autoFit() {
+    var all = mapNodes.concat(mapDevices);
+    if (!all.length) return;
+    var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    all.forEach(function(n) { if(n.x<minX)minX=n.x; if(n.y<minY)minY=n.y; if(n.x>maxX)maxX=n.x; if(n.y>maxY)maxY=n.y; });
+    var mw=maxX-minX+80, mh=maxY-minY+80;
+    scale = Math.min((W-20)/mw,(H-60)/mh,3);
+    offsetX = (W-mw*scale)/2-(minX-40)*scale;
+    offsetY = (H-mh*scale)/2-(minY-40)*scale+20;
+}
+
+function autoFitToPath() {
+    var pts = [];
+    pathNodeSet.forEach(function(c) { if(nodeMap[c]) pts.push(nodeMap[c]); });
+    if (!pts.length) { autoFit(); return; }
+    var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    pts.forEach(function(n) { if(n.x<minX)minX=n.x; if(n.y<minY)minY=n.y; if(n.x>maxX)maxX=n.x; if(n.y>maxY)maxY=n.y; });
+    var pad=300; minX-=pad; minY-=pad; maxX+=pad; maxY+=pad;
+    var mw=maxX-minX, mh=maxY-minY;
+    scale = Math.min((W-20)/mw,(H-60)/mh,5);
+    offsetX = (W-mw*scale)/2-minX*scale;
+    offsetY = (H-mh*scale)/2-minY*scale+20;
+}
+
+function draw() {
+    ctx.clearRect(0,0,W,H);
+    ctx.save(); ctx.translate(offsetX,offsetY); ctx.scale(scale,scale);
+
+    // 巷道
+    mapAisles.forEach(function(a) {
+        ctx.save(); ctx.translate(a.x,a.y); if(a.angle) ctx.rotate(a.angle*Math.PI/180);
+        ctx.fillStyle='rgba(128,128,128,0.08)'; ctx.strokeStyle='#FF8800'; ctx.lineWidth=1;
+        ctx.fillRect(-a.w/2,-a.h/2,a.w,a.h); ctx.strokeRect(-a.w/2,-a.h/2,a.w,a.h);
+        ctx.restore();
+    });
+    // 轨道
+    mapDevices.forEach(function(d) {
+        if(!/RAIL/.test(d.sub)) return;
+        ctx.save(); ctx.translate(d.x,d.y); if(d.angle) ctx.rotate(d.angle*Math.PI/180);
+        ctx.strokeStyle='#BBBFC3'; ctx.lineWidth=/MAGNETIC/.test(d.sub)?8:15; ctx.globalAlpha=0.6;
+        var len=d.length||d.w||400;
+        ctx.beginPath(); ctx.moveTo(-len/2,0); ctx.lineTo(len/2,0); ctx.stroke();
+        ctx.globalAlpha=1; ctx.restore();
+    });
+    // 连线
+    mapLinks.forEach(function(l) {
+        var fn=nodeMap[l.from],tn=nodeMap[l.to]; if(!fn||!tn) return;
+        var isP=pathLegSet.has(l.from+'→'+l.to)||pathLegSet.has(l.to+'→'+l.from);
+        ctx.beginPath();
+        if(l.pts.length>=2){ctx.moveTo(l.pts[0].x,l.pts[0].y);for(var i=1;i<l.pts.length;i++)ctx.lineTo(l.pts[i].x,l.pts[i].y);}
+        else{ctx.moveTo(fn.x,fn.y);ctx.lineTo(tn.x,tn.y);}
+        if(isP){var st=getLegState(l.from,l.to)||getLegState(l.to,l.from)||'';ctx.strokeStyle=/SUCCESS/.test(st)?'#52c41a':(/RUNNING/.test(st)?'#1a73e8':'#faad14');ctx.lineWidth=5;ctx.globalAlpha=0.9;}
+        else{ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1;}
+        ctx.stroke(); ctx.globalAlpha=1;
+    });
+    // 设备
+    mapDevices.forEach(function(d) {
+        if(/RAIL/.test(d.sub)) return;
+        var isP=pathNodeSet.has(d.code);
+        ctx.save(); ctx.translate(d.x,d.y); if(d.angle) ctx.rotate(d.angle*Math.PI/180);
+        var w=d.w||56,h=d.h||32;
+        ctx.fillStyle=(d.dt==='CONVEYOR'||d.dt==='CONVEYOR_MACHINE')?'#3a4a5a':'#3a4a5a';
+        ctx.globalAlpha=isP?1:0.5; ctx.fillRect(-w/2,-h/2,w,h); ctx.globalAlpha=1;
+        if(isP){ctx.strokeStyle=getPathColor(d.code);ctx.lineWidth=3;ctx.strokeRect(-w/2-2,-h/2-2,w+4,h+4);}
+        ctx.restore();
+    });
+    // 点位
+    mapNodes.forEach(function(n) {
+        if(pathNodeSet.has(n.code)) return;
+        ctx.fillStyle='#2a3a4a'; ctx.globalAlpha=0.4;
+        ctx.fillRect(n.x-5,n.y-5,10,10); ctx.globalAlpha=1;
+        // 显示点位编号
+        ctx.fillStyle='rgba(200,200,220,0.5)';
+        ctx.font='9px sans-serif';
+        ctx.textAlign='center';
+        ctx.fillText(n.code,n.x,n.y-8);
+    });
+    // 路径高亮层
+    for(var li=0;li<pathLegs.length;li++){
+        var leg=pathLegs[li],fn=nodeMap[leg.from],tn=nodeMap[leg.to]; if(!fn||!tn) continue;
+        var color=/SUCCESS/.test(leg.state)?'#52c41a':(/RUNNING/.test(leg.state)?'#1a73e8':'#faad14');
+        ctx.beginPath();ctx.moveTo(fn.x,fn.y);ctx.lineTo(tn.x,tn.y);
+        ctx.strokeStyle=color;ctx.lineWidth=6;ctx.globalAlpha=0.8;ctx.stroke();ctx.globalAlpha=1;
+        var dx=tn.x-fn.x,dy=tn.y-fn.y,mx=(fn.x+tn.x)/2,my=(fn.y+tn.y)/2,ang=Math.atan2(dy,dx);
+        ctx.save();ctx.translate(mx,my);ctx.rotate(ang);
+        ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(-4,-5);ctx.lineTo(-4,5);ctx.closePath();ctx.fillStyle=color;ctx.fill();ctx.restore();
+    }
+    var drawn=new Set();
+    for(var pi=0;pi<pathLegs.length;pi++){
+        [pathLegs[pi].from,pathLegs[pi].to].forEach(function(code){
+            if(drawn.has(code)) return; drawn.add(code);
+            var nd=nodeMap[code]; if(!nd) return;
+            var c=getPathColor(code);
+            ctx.beginPath();ctx.arc(nd.x,nd.y,18,0,Math.PI*2);ctx.fillStyle=c;ctx.globalAlpha=0.2;ctx.fill();ctx.globalAlpha=1;
+            ctx.beginPath();ctx.arc(nd.x,nd.y,10,0,Math.PI*2);ctx.fillStyle=c;ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke();
+            ctx.font='bold 12px sans-serif';var txt=code,tw=ctx.measureText(txt).width;
+            ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(nd.x-tw/2-4,nd.y-30,tw+8,18);
+            ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(txt,nd.x,nd.y-21);
+        });
+    }
+    ctx.restore();
+}
+
+function getPathColor(code){for(var i=0;i<pathLegs.length;i++){var l=pathLegs[i];if(l.to===code||l.from===code)return/SUCCESS/.test(l.state)?'#52c41a':(/RUNNING/.test(l.state)?'#1a73e8':'#faad14');}return'#faad14';}
+function getLegState(f,t){for(var i=0;i<pathLegs.length;i++){if(pathLegs[i].from===f&&pathLegs[i].to===t)return pathLegs[i].state;}return null;}
+
+canvas.addEventListener('mousedown',function(e){dragging=true;dragSX=e.clientX-offsetX;dragSY=e.clientY-offsetY;});
+canvas.addEventListener('mousemove',function(e){if(!dragging)return;offsetX=e.clientX-dragSX;offsetY=e.clientY-dragSY;draw();});
+canvas.addEventListener('mouseup',function(){dragging=false;});
+canvas.addEventListener('mouseleave',function(){dragging=false;});
+canvas.addEventListener('wheel',function(e){e.preventDefault();var mx=e.clientX,my=e.clientY,wx=(mx-offsetX)/scale,wy=(my-offsetY)/scale;scale*=e.deltaY<0?1.15:0.87;scale=Math.max(0.02,Math.min(scale,30));offsetX=mx-wx*scale;offsetY=my-wy*scale;draw();},{passive:false});
+resize();
+</script>

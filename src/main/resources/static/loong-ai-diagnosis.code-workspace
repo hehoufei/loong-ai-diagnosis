@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": "../../../.."
+		},
+		{
+			"path": "../../../../../../project-jf/loong-0.7-1"
+		},
+		{
+			"path": "../../../../../loong-platform"
+		},
+		{
+			"path": "../../../../../loong-web"
+		}
+	],
+	"settings": {
+	}
+}
