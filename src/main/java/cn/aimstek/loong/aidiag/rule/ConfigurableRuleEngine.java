@@ -2,14 +2,22 @@ package cn.aimstek.loong.aidiag.rule;
 
 import cn.aimstek.loong.aidiag.dto.DiagnoseResponse;
 import cn.aimstek.loong.aidiag.dto.RootCauseItem;
+import cn.aimstek.loong.aidiag.service.RuleEngineBootstrapService;
+import cn.aimstek.loong.aidiag.service.RuleEngineSnapshotService;
+import cn.aimstek.loong.aidiag.service.RulePriorityService;
+import cn.aimstek.loong.aidiag.service.RuleStatisticsService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import java.util.Set;
 
 @Slf4j
 @Service
@@ -18,10 +26,12 @@ public class ConfigurableRuleEngine implements RuleEngine {
     private final List<DiagnoseRule> beanRules;
     private final List<DiagnoseRule> allRules;
     private final RuleProperties properties;
+    private final RulePriorityService rulePriorityService;
+    private final RuleEngineSnapshotService snapshotService;
+    private final RuleEngineBootstrapService bootstrapService;
+    private final RuleStatisticsService statisticsService;
     private volatile List<DiagnoseRule> sortedRules;
     private final Map<String, RuleStatistics> statisticsMap = new ConcurrentHashMap<>();
-    /** 动态表达式规则（非Spring Bean） */
-    private final List<ExpressionRule> expressionRules = new ArrayList<>();
 
     /** 上次生效的配置快照，用于检测变更 */
     private volatile String lastConfigSnapshot;
@@ -29,22 +39,22 @@ public class ConfigurableRuleEngine implements RuleEngine {
     /**
      * Spring 自动注入所有 DiagnoseRule Bean，根据 RuleProperties 过滤和排序
      */
-    public ConfigurableRuleEngine(List<DiagnoseRule> rules, RuleProperties properties) {
+    public ConfigurableRuleEngine(List<DiagnoseRule> rules,
+                                  RuleProperties properties,
+                                  RulePriorityService rulePriorityService,
+                                  RuleEngineSnapshotService snapshotService,
+                                  RuleEngineBootstrapService bootstrapService,
+                                  RuleStatisticsService statisticsService) {
         this.beanRules = new ArrayList<>(rules);
         this.allRules = new ArrayList<>(rules);
         this.properties = properties;
-        // 扫描配置中的表达式规则
-        loadExpressionRules();
-        this.sortedRules = buildActiveRules(allRules, properties);
-        this.lastConfigSnapshot = buildConfigSnapshot(properties);
-        // 初始化统计数据
-        for (DiagnoseRule rule : allRules) {
-            RuleProperties.RuleConfig config = properties.getRules().get(rule.getName());
-            boolean enabled = config == null || config.isEnabled();
-            statisticsMap.put(rule.getName(), new RuleStatistics(rule.getName(), getEffectivePriority(rule, properties), enabled));
-        }
-        log.info("规则引擎初始化完成，共加载 {} 条规则（Bean {} 条 + 表达式 {} 条，总注册 {} 条）: {}",
-                sortedRules.size(), beanRules.size(), expressionRules.size(), allRules.size(),
+        this.rulePriorityService = rulePriorityService;
+        this.snapshotService = snapshotService;
+        this.bootstrapService = bootstrapService;
+        this.statisticsService = statisticsService;
+        rebuildRules();
+        log.info("规则引擎初始化完成，共加载 {} 条规则（Bean {} 条，总注册 {} 条）: {}",
+                sortedRules.size(), beanRules.size(), allRules.size(),
                 sortedRules.stream()
                         .map(r -> r.getName() + "(P" + getEffectivePriority(r, properties) + ")")
                         .collect(Collectors.joining(", ")));
@@ -101,7 +111,6 @@ public class ConfigurableRuleEngine implements RuleEngine {
         if (!currentSnapshot.equals(lastConfigSnapshot)) {
             log.info("检测到规则引擎配置变更，开始重新加载规则...");
             reloadRules();
-            lastConfigSnapshot = currentSnapshot;
         }
     }
 
@@ -109,12 +118,18 @@ public class ConfigurableRuleEngine implements RuleEngine {
      * 重新加载规则：根据最新配置重新过滤和排序
      */
     public void reloadRules() {
-        // 重新扫描表达式规则
-        loadExpressionRules();
-        List<DiagnoseRule> newSortedRules = buildActiveRules(allRules, properties);
-        this.sortedRules = newSortedRules;
+        rebuildRules();
+        log.info("规则引擎重新加载完成，当前活跃规则 {} 条: {}",
+                sortedRules.size(),
+                sortedRules.stream()
+                        .map(r -> r.getName() + "(P" + getEffectivePriority(r, properties) + ")")
+                        .collect(Collectors.joining(", ")));
+    }
+
+    private void rebuildRules() {
+        this.sortedRules = buildActiveRules(allRules, properties);
         this.lastConfigSnapshot = buildConfigSnapshot(properties);
-        // 同步统计条目：为新规则创建统计
+
         for (DiagnoseRule rule : allRules) {
             statisticsMap.computeIfAbsent(rule.getName(), name -> {
                 RuleProperties.RuleConfig config = properties.getRules().get(name);
@@ -122,71 +137,30 @@ public class ConfigurableRuleEngine implements RuleEngine {
                 return new RuleStatistics(name, getEffectivePriority(rule, properties), enabled);
             });
         }
-        // 清理已不存在的表达式规则统计
+
         Set<String> activeNames = allRules.stream().map(DiagnoseRule::getName).collect(Collectors.toSet());
         statisticsMap.keySet().removeIf(name -> !activeNames.contains(name));
-        log.info("规则引擎重新加载完成，当前活跃规则 {} 条: {}",
-                newSortedRules.size(),
-                newSortedRules.stream()
-                        .map(r -> r.getName() + "(P" + getEffectivePriority(r, properties) + ")")
-                        .collect(Collectors.joining(", ")));
     }
 
     /**
      * 根据配置过滤并排序规则
      */
     private List<DiagnoseRule> buildActiveRules(List<DiagnoseRule> rules, RuleProperties props) {
-        return rules.stream()
-                .filter(r -> {
-                    RuleProperties.RuleConfig config = props.getRules().get(r.getName());
-                    return config == null || config.isEnabled();  // 默认启用
-                })
-                .sorted((a, b) -> {
-                    int pa = getEffectivePriority(a, props);
-                    int pb = getEffectivePriority(b, props);
-                    return Integer.compare(pb, pa);  // 降序：优先级高的先执行
-                })
-                .collect(Collectors.toList());
+        return bootstrapService.buildActiveRules(rules, props);
     }
 
     /**
      * 获取规则的有效优先级：配置优先级（非-1时）> 代码默认优先级
      */
     private int getEffectivePriority(DiagnoseRule rule, RuleProperties props) {
-        RuleProperties.RuleConfig config = props.getRules().get(rule.getName());
-        if (config != null && config.getPriority() != -1) {
-            return config.getPriority();
-        }
-        return rule.getPriority();
+        return rulePriorityService.getEffectivePriority(rule, props);
     }
 
     /**
      * 构建配置快照字符串，用于检测变更
      */
     private String buildConfigSnapshot(RuleProperties props) {
-        StringBuilder sb = new StringBuilder();
-        props.getRules().entrySet().stream()
-                .sorted(Map.Entry.comparingByKey())
-                .forEach(e -> {
-                    RuleProperties.RuleConfig c = e.getValue();
-                    sb.append(e.getKey())
-                      .append("=enabled:").append(c.isEnabled())
-                      .append(",priority:").append(c.getPriority())
-                      .append(",params:").append(c.getParams())
-                      .append(",desc:").append(c.getDescription() == null ? "" : c.getDescription())
-                      .append(",condition:").append(c.getCondition() == null ? "" : c.getCondition());
-                    RuleProperties.OutputConfig out = c.getOutput();
-                    if (out != null) {
-                        sb.append(",out.summary:").append(out.getSummary() == null ? "" : out.getSummary())
-                          .append(",out.rootCauses:").append(out.getRootCauses())
-                          .append(",out.actions:").append(out.getActions());
-                    }
-                    sb.append(";");
-                });
-        sb.append("docSearch=topK:").append(props.getDocSearch().getTopK())
-                .append(",threshold:").append(props.getDocSearch().getSimilarityThreshold())
-                .append(",preSearch:").append(props.getDocSearch().isPreSearchEnabled());
-        return sb.toString();
+        return snapshotService.buildSnapshot(props);
     }
 
     /**
@@ -206,47 +180,24 @@ public class ConfigurableRuleEngine implements RuleEngine {
         return resp;
     }
 
-    /**
-     * 获取当前已加载的规则列表（用于管理和调试）
-     */
     public List<DiagnoseRule> getLoadedRules() {
         return Collections.unmodifiableList(sortedRules);
     }
 
-    /**
-     * 获取所有已注册的规则（包括被禁用的）
-     */
     public List<DiagnoseRule> getAllRules() {
         return Collections.unmodifiableList(allRules);
     }
 
-    /**
-     * 获取规则数量
-     */
     public int getRuleCount() {
         return sortedRules.size();
     }
 
-    /** 获取所有规则的统计数据 */
     public List<RuleStatistics> getStatistics() {
-        // 更新每条统计的 priority、enabled 和 description 状态
-        for (DiagnoseRule rule : allRules) {
-            RuleStatistics stats = statisticsMap.get(rule.getName());
-            if (stats != null) {
-                stats.setPriority(getEffectivePriority(rule, properties));
-                RuleProperties.RuleConfig config = properties.getRules().get(rule.getName());
-                stats.setEnabled(config == null || config.isEnabled());
-                stats.setDescription(rule.getDescription());
-            }
-        }
+        statisticsService.syncMeta(new ArrayList<>(statisticsMap.values()), allRules, properties);
         return new ArrayList<>(statisticsMap.values());
     }
 
-    /**
-     * 运行时添加表达式规则
-     */
     public void addExpressionRule(String name, RuleProperties.RuleConfig config) {
-        // 检查是否已存在同名规则
         if (allRules.stream().anyMatch(r -> r.getName().equals(name))) {
             throw new IllegalArgumentException("规则名称已存在: " + name);
         }
@@ -254,22 +205,16 @@ public class ConfigurableRuleEngine implements RuleEngine {
             throw new IllegalArgumentException("表达式规则必须配置condition: " + name);
         }
         ExpressionRule rule = new ExpressionRule(name, config);
-        expressionRules.add(rule);
         allRules.add(rule);
-        // 同步到properties
         properties.getRules().put(name, config);
         reloadRules();
         log.info("动态添加表达式规则: {}", name);
     }
 
-    /**
-     * 运行时删除表达式规则（不允许删除Bean规则）
-     */
     public void removeExpressionRule(String name) {
         if (isBuiltinRule(name)) {
             throw new IllegalArgumentException("不允许删除内置Bean规则: " + name);
         }
-        expressionRules.removeIf(r -> r.getName().equals(name));
         allRules.removeIf(r -> r.getName().equals(name));
         properties.getRules().remove(name);
         statisticsMap.remove(name);
@@ -277,39 +222,10 @@ public class ConfigurableRuleEngine implements RuleEngine {
         log.info("动态删除表达式规则: {}", name);
     }
 
-    /**
-     * 判断某规则是否为内置Bean规则
-     */
     public boolean isBuiltinRule(String name) {
         return beanRules.stream().anyMatch(r -> r.getName().equals(name));
     }
 
-    /**
-     * 从配置中扫描并加载表达式规则
-     */
-    private void loadExpressionRules() {
-        // 收集Bean规则名称
-        Set<String> beanRuleNames = beanRules.stream()
-                .map(DiagnoseRule::getName)
-                .collect(Collectors.toSet());
-
-        // 清理旧的表达式规则
-        expressionRules.clear();
-        allRules.removeIf(r -> r instanceof ExpressionRule);
-
-        // 扫描properties中有condition但没有对应Bean的配置项
-        properties.getRules().forEach((name, config) -> {
-            if (config.getCondition() != null && !config.getCondition().isEmpty()
-                    && !beanRuleNames.contains(name)) {
-                ExpressionRule rule = new ExpressionRule(name, config);
-                expressionRules.add(rule);
-                allRules.add(rule);
-                log.debug("加载表达式规则: {} (condition={})", name, config.getCondition());
-            }
-        });
-    }
-
-    /** 重置所有统计数据 */
     public void resetStatistics() {
         statisticsMap.values().forEach(RuleStatistics::reset);
         log.info("规则统计数据已重置");

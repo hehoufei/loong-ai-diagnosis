@@ -2,6 +2,7 @@ package cn.aimstek.loong.aidiag.tool;
 
 import cn.aimstek.loong.aidiag.dto.PointConflict;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -20,14 +21,30 @@ import java.util.*;
 @RequiredArgsConstructor
 public class PointConflictTool {
 
+    private static final long SLOW_QUERY_WARN_MS = 1000L;
+    private static final long VERY_SLOW_QUERY_WARN_MS = 3000L;
+
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+
+    @PostConstruct
+    public void warmUp() {
+        long start = System.currentTimeMillis();
+        try {
+            Integer count = jdbcTemplate.queryForObject("SELECT 1", Integer.class);
+            log.info("PointConflictTool 数据源预热完成, result={}, cost={}ms", count, System.currentTimeMillis() - start);
+        } catch (Exception e) {
+            log.warn("PointConflictTool 数据源预热失败, cost={}ms, error={}", System.currentTimeMillis() - start, e.getMessage(), e);
+        }
+    }
 
     @Tool(description = "查询指定点位列表的锁定状态，返回被其他任务占用的点位信息，用于判断是否存在路径冲突。需排除当前任务自身的锁")
     public String checkPointConflicts(
             @ToolParam(description = "当前任务ID，用于排除自身的锁") String taskId,
             @ToolParam(description = "需要检查的点位编码列表，逗号分隔，如: ND_20013,ND_20014") String points) {
+        long start = System.currentTimeMillis();
         try {
+            log.info("PointConflictTool 开始查询, taskId={}, points={}", taskId, points);
             String[] pointArray = points.split(",");
             Set<String> matchValues = new LinkedHashSet<>();
             for (String p : pointArray) {
@@ -38,6 +55,7 @@ public class PointConflictTool {
                 }
             }
             if (matchValues.isEmpty()) {
+                log.info("PointConflictTool 查询完成, 耗时={}ms, 无有效点位", System.currentTimeMillis() - start);
                 return "[]";
             }
 
@@ -61,7 +79,6 @@ public class PointConflictTool {
                 return c;
             }, matchValues.toArray());
 
-            // 过滤掉当前任务自身的锁
             List<PointConflict> conflicts = new ArrayList<>();
             for (PointConflict c : allLocks) {
                 String occ = c.getOccupiedBy();
@@ -69,9 +86,18 @@ public class PointConflictTool {
                     conflicts.add(c);
                 }
             }
+
+            long cost = System.currentTimeMillis() - start;
+            if (cost >= VERY_SLOW_QUERY_WARN_MS) {
+                log.warn("PointConflictTool 查询非常慢, cost={}ms, taskId={}, points={}, 冲突数={}", cost, taskId, points, conflicts.size());
+            } else if (cost >= SLOW_QUERY_WARN_MS) {
+                log.warn("PointConflictTool 查询偏慢, cost={}ms, taskId={}, points={}, 冲突数={}", cost, taskId, points, conflicts.size());
+            } else {
+                log.info("PointConflictTool 查询完成, 耗时={}ms, 冲突数={}", cost, conflicts.size());
+            }
             return objectMapper.writeValueAsString(conflicts);
         } catch (Exception e) {
-            log.warn("查询点位锁冲突失败: {}", e.getMessage());
+            log.warn("查询点位锁冲突失败, 耗时={}ms, error={}", System.currentTimeMillis() - start, e.getMessage(), e);
             return "查询点位锁冲突失败: " + e.getMessage() + "。请尝试其他诊断方式。";
         }
     }

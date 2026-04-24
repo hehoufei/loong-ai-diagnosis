@@ -14,6 +14,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 @Slf4j
@@ -46,6 +47,13 @@ public class HttpTaskClient implements TaskClient {
             log.error("查询任务详情失败: {}", url, e);
             throw new AiDiagnosisException("TASK_QUERY_FAILED", "查询任务失败: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public List<TaskDetail> findRelatedTasks(TaskDetail focusTask, LocalDateTime windowStart, LocalDateTime windowEnd, String env) {
+        log.info("HttpTaskClient 暂未提供全局关联任务查询接口, taskId={}, windowStart={}, windowEnd={}",
+                focusTask == null ? null : focusTask.getTaskId(), windowStart, windowEnd);
+        return Collections.emptyList();
     }
 
     private TaskDetail mapTaskDetail(JsonNode data) {

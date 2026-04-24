@@ -7,6 +7,7 @@ import cn.aimstek.loong.aidiag.config.ModelConfig;
 import cn.aimstek.loong.aidiag.dto.ChatRequest;
 import cn.aimstek.loong.aidiag.service.AgentChatService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -18,6 +19,7 @@ import java.util.UUID;
 /**
  * v2 Agent 对话控制器：提供 SSE 流式对话、会话管理和模型配置接口。
  */
+@Slf4j
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/v2/diagnosis")
@@ -33,8 +35,14 @@ public class AgentChatController {
         if (sessionId == null || sessionId.isBlank()) {
             sessionId = UUID.randomUUID().toString();
         }
+        ModelConfig.ModelItem item = modelConfig.getActiveModelItem();
+        long start = System.currentTimeMillis();
         SseEmitter emitter = new SseEmitter(180_000L);
-        agentChatService.chat(emitter, sessionId, request.getMessage());
+        String msg = request.getMessage();
+        log.info("收到 Agent Chat 请求, sessionId={}, activeModel={}, provider={}, model={}, msgLen={}",
+                sessionId, modelConfig.getActiveModelName(), item.getProvider(), item.getModel(), msg == null ? 0 : msg.length());
+        agentChatService.chat(emitter, sessionId, msg);
+        log.debug("Agent Chat 已提交异步处理, sessionId={}, cost={}ms", sessionId, System.currentTimeMillis() - start);
         return emitter;
     }
 
@@ -62,7 +70,6 @@ public class AgentChatController {
     @GetMapping("/models")
     public Response<Map<String, Object>> listModels() {
         List<ModelConfig.ModelItem> models = modelConfig.listModels();
-        // 脱敏：不返回完整 API Key
         List<Map<String, Object>> list = models.stream().map(m -> {
             Map<String, Object> map = new java.util.LinkedHashMap<>();
             map.put("name", m.getName());

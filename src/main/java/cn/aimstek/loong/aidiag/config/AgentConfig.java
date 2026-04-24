@@ -68,13 +68,17 @@ public class AgentConfig {
         public synchronized ChatClient getChatClient() {
             String currentModel = modelConfig.getActiveModelName();
             if (cachedClient != null && currentModel.equals(cachedModelName)) {
+                log.debug("复用缓存 ChatClient: model={}", cachedModelName);
                 return cachedClient;
             }
-            cachedClient = buildChatClient(modelConfig.getActiveModelItem());
+            ModelConfig.ModelItem item = modelConfig.getActiveModelItem();
+            long start = System.currentTimeMillis();
+            cachedClient = buildChatClient(item);
             cachedModelName = currentModel;
-            log.info("构建 ChatClient: provider={}, model={}",
-                    modelConfig.getActiveModelItem().getProvider(),
-                    modelConfig.getActiveModelItem().getModel());
+            log.info("构建 ChatClient: activeModel={}, provider={}, model={}, baseUrl={}, temp={}, hasApiKey={}, cost={}ms",
+                    currentModel, item.getProvider(), item.getModel(), item.getBaseUrl(), item.getTemperature(),
+                    item.getApiKey() != null && !item.getApiKey().isBlank(),
+                    System.currentTimeMillis() - start);
             return cachedClient;
         }
 

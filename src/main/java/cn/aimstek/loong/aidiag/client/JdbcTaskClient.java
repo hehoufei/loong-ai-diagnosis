@@ -11,7 +11,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -52,26 +55,36 @@ public class JdbcTaskClient implements TaskClient {
         return detail;
     }
 
+    @Override
+    public List<TaskDetail> findRelatedTasks(TaskDetail focusTask, LocalDateTime windowStart, LocalDateTime windowEnd, String env) {
+        if (focusTask == null) {
+            return List.of();
+        }
+
+        LocalDateTime effectiveStart = windowStart != null
+                ? windowStart
+                : (focusTask.getCreateTime() != null ? focusTask.getCreateTime().minusMinutes(30) : LocalDateTime.now().minusMinutes(30));
+        LocalDateTime effectiveEnd = windowEnd != null ? windowEnd : LocalDateTime.now().plusMinutes(5);
+
+        Map<String, TaskDetail> related = new LinkedHashMap<>();
+        addTasks(related, queryRelatedCurrentTasks(focusTask, effectiveStart, effectiveEnd));
+        addTasks(related, queryRelatedHistoryTasks(focusTask, effectiveStart, effectiveEnd));
+        related.remove(focusTask.getTaskId());
+
+        List<TaskDetail> result = new ArrayList<>(related.values());
+        for (TaskDetail detail : result) {
+            detail.setTaskItems(queryTaskItems(detail.getTaskId(), detail.getWmsTaskNo()));
+            detail.setTickets(queryTickets(detail.getWmsTaskNo()));
+        }
+        return result;
+    }
+
     private List<TaskDetail.TaskItemDetail> queryTaskItems(String taskId, String wmsTaskNo) {
         List<TaskDetail.TaskItemDetail> items = jdbcTemplate.query(
             "SELECT id, wms_task_no, start_point, end_point, device_code, device_type, " +
             "task_state, check_status, start_time, finish_time, create_time " +
             "FROM tas_task_item WHERE parent_id = ? OR wms_task_no = ? ORDER BY create_time",
-            (rs, rowNum) -> {
-                TaskDetail.TaskItemDetail item = new TaskDetail.TaskItemDetail();
-                item.setId(rs.getString("id"));
-                item.setWmsTaskNo(rs.getString("wms_task_no"));
-                item.setStartPoint(rs.getString("start_point"));
-                item.setEndPoint(rs.getString("end_point"));
-                item.setDeviceCode(rs.getString("device_code"));
-                item.setDeviceType(rs.getString("device_type"));
-                item.setTaskState(rs.getString("task_state"));
-                item.setCheckStatus(rs.getString("check_status"));
-                item.setStartTime(toLocalDateTime(rs.getTimestamp("start_time")));
-                item.setFinishTime(toLocalDateTime(rs.getTimestamp("finish_time")));
-                item.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
-                return item;
-            }, taskId, wmsTaskNo);
+            (rs, rowNum) -> mapTaskItem(rs), taskId, wmsTaskNo);
 
         if (items.isEmpty()) {
             // 查历史表
@@ -79,21 +92,7 @@ public class JdbcTaskClient implements TaskClient {
                 "SELECT id, wms_task_no, start_point, end_point, device_code, device_type, " +
                 "task_state, check_status, start_time, finish_time, create_time " +
                 "FROM his_tas_task_item WHERE parent_id = ? OR wms_task_no = ? ORDER BY create_time",
-                (rs, rowNum) -> {
-                    TaskDetail.TaskItemDetail item = new TaskDetail.TaskItemDetail();
-                    item.setId(rs.getString("id"));
-                    item.setWmsTaskNo(rs.getString("wms_task_no"));
-                    item.setStartPoint(rs.getString("start_point"));
-                    item.setEndPoint(rs.getString("end_point"));
-                    item.setDeviceCode(rs.getString("device_code"));
-                    item.setDeviceType(rs.getString("device_type"));
-                    item.setTaskState(rs.getString("task_state"));
-                    item.setCheckStatus(rs.getString("check_status"));
-                    item.setStartTime(toLocalDateTime(rs.getTimestamp("start_time")));
-                    item.setFinishTime(toLocalDateTime(rs.getTimestamp("finish_time")));
-                    item.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
-                    return item;
-                }, taskId, wmsTaskNo);
+                (rs, rowNum) -> mapTaskItem(rs), taskId, wmsTaskNo);
         }
         return items;
     }
@@ -119,6 +118,40 @@ public class JdbcTaskClient implements TaskClient {
         return tickets;
     }
 
+    private List<TaskDetail> queryRelatedCurrentTasks(TaskDetail focusTask, LocalDateTime windowStart, LocalDateTime windowEnd) {
+        return jdbcTemplate.query(
+                "SELECT DISTINCT id, wms_task_no, task_source, business_type, task_type, task_state, handle_state, " +
+                        "container_code, business_from, definite_from, business_to, definite_to, error_message, " +
+                        "priority, create_time, definite_time, split_time, start_time, finish_time " +
+                        "FROM tas_task WHERE create_time BETWEEN ? AND ? AND (id = ? OR wms_task_no = ? OR container_code = ? " +
+                        "OR business_from = ? OR definite_from = ? OR business_to = ? OR definite_to = ?) ORDER BY create_time DESC LIMIT 20",
+                (rs, rowNum) -> mapTask(rs),
+                Timestamp.valueOf(windowStart), Timestamp.valueOf(windowEnd),
+                focusTask.getTaskId(), focusTask.getWmsTaskNo(), focusTask.getContainerCode(),
+                focusTask.getBusinessFrom(), focusTask.getDefiniteFrom(), focusTask.getBusinessTo(), focusTask.getDefiniteTo());
+    }
+
+    private List<TaskDetail> queryRelatedHistoryTasks(TaskDetail focusTask, LocalDateTime windowStart, LocalDateTime windowEnd) {
+        return jdbcTemplate.query(
+                "SELECT DISTINCT id, wms_task_no, task_source, business_type, task_type, task_state, handle_state, " +
+                        "container_code, business_from, definite_from, business_to, definite_to, error_message, " +
+                        "priority, create_time, definite_time, split_time, start_time, finish_time " +
+                        "FROM his_tas_task WHERE create_time BETWEEN ? AND ? AND (id = ? OR wms_task_no = ? OR container_code = ? " +
+                        "OR business_from = ? OR definite_from = ? OR business_to = ? OR definite_to = ?) ORDER BY create_time DESC LIMIT 20",
+                (rs, rowNum) -> mapTask(rs),
+                Timestamp.valueOf(windowStart), Timestamp.valueOf(windowEnd),
+                focusTask.getTaskId(), focusTask.getWmsTaskNo(), focusTask.getContainerCode(),
+                focusTask.getBusinessFrom(), focusTask.getDefiniteFrom(), focusTask.getBusinessTo(), focusTask.getDefiniteTo());
+    }
+
+    private void addTasks(Map<String, TaskDetail> target, List<TaskDetail> tasks) {
+        for (TaskDetail detail : tasks) {
+            if (detail != null && detail.getTaskId() != null) {
+                target.putIfAbsent(detail.getTaskId(), detail);
+            }
+        }
+    }
+
     private TaskDetail mapTask(ResultSet rs) throws SQLException {
         TaskDetail d = new TaskDetail();
         d.setTaskId(rs.getString("id"));
@@ -141,6 +174,22 @@ public class JdbcTaskClient implements TaskClient {
         d.setStartTime(toLocalDateTime(rs.getTimestamp("start_time")));
         d.setFinishTime(toLocalDateTime(rs.getTimestamp("finish_time")));
         return d;
+    }
+
+    private TaskDetail.TaskItemDetail mapTaskItem(ResultSet rs) throws SQLException {
+        TaskDetail.TaskItemDetail item = new TaskDetail.TaskItemDetail();
+        item.setId(rs.getString("id"));
+        item.setWmsTaskNo(rs.getString("wms_task_no"));
+        item.setStartPoint(rs.getString("start_point"));
+        item.setEndPoint(rs.getString("end_point"));
+        item.setDeviceCode(rs.getString("device_code"));
+        item.setDeviceType(rs.getString("device_type"));
+        item.setTaskState(rs.getString("task_state"));
+        item.setCheckStatus(rs.getString("check_status"));
+        item.setStartTime(toLocalDateTime(rs.getTimestamp("start_time")));
+        item.setFinishTime(toLocalDateTime(rs.getTimestamp("finish_time")));
+        item.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
+        return item;
     }
 
     private TaskDetail.TicketDetail mapTicket(ResultSet rs) throws SQLException {

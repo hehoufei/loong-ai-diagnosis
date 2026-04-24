@@ -25,7 +25,9 @@ public class TaskDetailTool {
 
     @Tool(description = "根据任务ID查询WCS主任务详情，返回任务状态、处理阶段、起终点、容器号、时间戳等核心信息")
     public String getTaskDetail(@ToolParam(description = "WCS任务ID或WMS任务号") String taskId) {
+        long start = System.currentTimeMillis();
         try {
+            log.info("TaskDetailTool 开始查询, taskId={}, env={}", taskId, envConfig.getActiveEnv());
             TaskDetail detail = taskClient.getTaskDetail(taskId, envConfig.getActiveEnv());
             ObjectNode node = objectMapper.createObjectNode();
             node.put("taskId", detail.getTaskId());
@@ -47,9 +49,11 @@ public class TaskDetailTool {
             node.put("splitTime", str(detail.getSplitTime()));
             node.put("startTime", str(detail.getStartTime()));
             node.put("finishTime", str(detail.getFinishTime()));
-            return objectMapper.writeValueAsString(node);
+            String result = objectMapper.writeValueAsString(node);
+            log.info("TaskDetailTool 查询完成, 耗时={}ms", System.currentTimeMillis() - start);
+            return result;
         } catch (Exception e) {
-            log.warn("查询主任务详情失败: {}", e.getMessage());
+            log.warn("查询主任务详情失败, 耗时={}ms, error={}", System.currentTimeMillis() - start, e.getMessage(), e);
             return "查询主任务详情失败: " + e.getMessage() + "。请检查任务ID是否正确或尝试其他诊断方式。";
         }
     }

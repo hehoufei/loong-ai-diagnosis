@@ -25,13 +25,16 @@ public class DocSearchTool {
 
     @Tool(description = "从运维文档和设备手册中检索与查询相关的知识片段，用于辅助诊断分析")
     public String searchDocs(@ToolParam(description = "检索查询语句") String query) {
+        long start = System.currentTimeMillis();
         try {
             int topK = agentProperties.getRagTopK();
+            log.info("DocSearchTool 开始检索, query={}, topK={}", shorten(query), topK);
             List<Document> results = vectorStore.similaritySearch(
                     SearchRequest.builder().query(query).topK(topK).build()
             );
 
             if (results == null || results.isEmpty()) {
+                log.info("DocSearchTool 检索完成, 耗时={}ms, 无结果", System.currentTimeMillis() - start);
                 return "未找到相关文档。知识库可能为空或没有匹配的内容，请基于内置知识继续诊断。";
             }
 
@@ -45,10 +48,18 @@ public class DocSearchTool {
                 sb.append("【").append(i + 1).append("】来源: ").append(source).append("\n");
                 sb.append(doc.getText()).append("\n\n");
             }
+            log.info("DocSearchTool 检索完成, 耗时={}ms, 命中={} 条", System.currentTimeMillis() - start, results.size());
             return sb.toString();
         } catch (Exception e) {
-            log.warn("文档检索失败: {}", e.getMessage());
+            log.warn("文档检索失败, 耗时={}ms, error={}", System.currentTimeMillis() - start, e.getMessage(), e);
             return "文档检索失败: " + e.getMessage() + "。请基于内置知识继续诊断。";
         }
+    }
+
+    private String shorten(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() > 80 ? text.substring(0, 80) + "..." : text;
     }
 }

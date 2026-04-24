@@ -6,6 +6,7 @@ import cn.aimstek.loong.aidiag.rule.ConfigurableRuleEngine;
 import cn.aimstek.loong.aidiag.rule.DiagnoseRule;
 import cn.aimstek.loong.aidiag.rule.RuleProperties;
 import cn.aimstek.loong.aidiag.rule.RuleStatistics;
+import cn.aimstek.loong.aidiag.service.RuleStatisticsService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ public class RuleManageController {
 
     private final ConfigurableRuleEngine ruleEngine;
     private final RuleProperties ruleProperties;
+    private final RuleStatisticsService ruleStatisticsService;
 
     // ====== 查询类 API ======
 
@@ -34,7 +36,7 @@ public class RuleManageController {
     @GetMapping
     public Response<List<RuleInfo>> listRules() {
         try {
-            List<RuleStatistics> stats = ruleEngine.getStatistics();
+            List<RuleStatistics> stats = ruleStatisticsService.listStatistics(ruleEngine.getStatistics());
             Map<String, RuleStatistics> statsMap = stats.stream()
                     .collect(Collectors.toMap(RuleStatistics::getRuleName, s -> s, (a, b) -> a));
 
@@ -94,7 +96,7 @@ public class RuleManageController {
     @GetMapping("/statistics")
     public Response<List<RuleStatistics>> getStatistics() {
         try {
-            return BaseResponse.success(ruleEngine.getStatistics());
+            return BaseResponse.success(ruleStatisticsService.listStatistics(ruleEngine.getStatistics()));
         } catch (Exception e) {
             log.error("获取统计数据失败", e);
             return BaseResponse.failure("STATISTICS_ERROR", "获取统计数据失败: " + e.getMessage());

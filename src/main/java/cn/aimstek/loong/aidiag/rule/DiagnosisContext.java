@@ -1,12 +1,12 @@
 package cn.aimstek.loong.aidiag.rule;
 
-import cn.aimstek.loong.aidiag.dto.TaskDetail;
 import cn.aimstek.loong.aidiag.dto.PointConflict;
-import lombok.Data;
+import cn.aimstek.loong.aidiag.dto.TaskDetail;
 import lombok.Builder;
+import lombok.Data;
 
-import java.util.List;
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 诊断上下文，封装规则执行所需的所有数据。
@@ -23,6 +23,10 @@ public class DiagnosisContext {
     /** 向量检索结果（融入规则链路） */
     @Builder.Default
     private List<String> relevantDocs = new ArrayList<>();
+    /** 链路追踪ID */
+    private String traceId;
+    /** 当前诊断模式 */
+    private String diagnosisMode;
 
     // ====== 便捷访问方法 ======
 

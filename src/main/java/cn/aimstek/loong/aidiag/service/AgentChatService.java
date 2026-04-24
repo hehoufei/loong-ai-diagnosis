@@ -4,9 +4,7 @@ import cn.aimstek.loong.aidiag.config.AgentConfig.ChatClientProvider;
 import cn.aimstek.loong.aidiag.dto.AgentSseEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -46,28 +44,36 @@ public class AgentChatService {
         try {
             sendSseEvent(emitter, "thinking", Map.of("content", "正在分析您的问题..."));
 
-            log.info("开始 Agent 推理, sessionId={}, message={}", sessionId,
-                    message.length() > 100 ? message.substring(0, 100) + "..." : message);
+            String messagePreview = message == null ? "" : (message.length() > 100 ? message.substring(0, 100) + "..." : message);
+            log.info("开始 Agent 推理, sessionId={}, message={}", sessionId, messagePreview);
             long startTime = System.currentTimeMillis();
 
-            // 使用 stream() 流式模式，每个 token 实时推送到前端
-            var flux = chatClientProvider.getChatClient().prompt()
+            long clientStart = System.currentTimeMillis();
+            var chatClient = chatClientProvider.getChatClient();
+            log.info("Agent 获取 ChatClient 完成, sessionId={}, cost={}ms", sessionId, System.currentTimeMillis() - clientStart);
+
+            long streamStart = System.currentTimeMillis();
+            var flux = chatClient.prompt()
                     .user(message)
                     .advisors(advisor -> advisor.param("chat_memory_conversation_id", sessionId))
                     .stream()
                     .chatResponse();
+            log.info("Agent 开始流式订阅, sessionId={}, cost={}ms", sessionId, System.currentTimeMillis() - streamStart);
 
-            // 用 CountDownLatch 等待流完成（因为我们在 @Async 线程中）
             CountDownLatch latch = new CountDownLatch(1);
             StringBuilder fullContent = new StringBuilder();
+            long[] firstTokenAt = new long[]{-1L};
 
             Disposable subscription = flux.subscribe(
                     chatResponse -> {
-                        // 每个 chunk 可能包含文本内容
                         if (chatResponse != null && chatResponse.getResult() != null
                                 && chatResponse.getResult().getOutput() != null) {
                             String text = chatResponse.getResult().getOutput().getText();
                             if (text != null && !text.isEmpty()) {
+                                if (firstTokenAt[0] < 0) {
+                                    firstTokenAt[0] = System.currentTimeMillis();
+                                    log.info("Agent 首个 token 到达, sessionId={}, firstTokenCost={}ms", sessionId, firstTokenAt[0] - startTime);
+                                }
                                 fullContent.append(text);
                                 sendSseEvent(emitter, "text", Map.of("content", text));
                             }
@@ -75,25 +81,28 @@ public class AgentChatService {
                     },
                     error -> {
                         long elapsed = System.currentTimeMillis() - startTime;
-                        log.error("Agent 推理异常, sessionId={}, 耗时={}ms", sessionId, elapsed, error);
+                        long firstTokenCost = firstTokenAt[0] > 0 ? (firstTokenAt[0] - startTime) : -1;
+                        log.error("Agent 推理异常, sessionId={}, 耗时={}ms, firstTokenCost={}ms, error={}", sessionId, elapsed, firstTokenCost, error.getMessage(), error);
                         sendErrorAndComplete(emitter, "诊断过程出错: " + error.getMessage());
                         latch.countDown();
                     },
                     () -> {
                         long elapsed = System.currentTimeMillis() - startTime;
-                        log.info("Agent 推理完成, sessionId={}, 耗时={}ms", sessionId, elapsed);
+                        long firstTokenCost = firstTokenAt[0] > 0 ? (firstTokenAt[0] - startTime) : -1;
+                        log.info("Agent 推理完成, sessionId={}, 耗时={}ms, firstTokenCost={}ms, 输出长度={}", sessionId, elapsed, firstTokenCost, fullContent.length());
 
                         if (fullContent.length() == 0) {
-                            sendSseEvent(emitter, "text",
-                                    Map.of("content", "抱歉，未能生成有效的诊断结果，请重试。"));
+                            sendSseEvent(emitter, "text", Map.of("content", "抱歉，未能生成有效的诊断结果，请重试。"));
                         }
                         sendSseEvent(emitter, "done", Collections.emptyMap());
-                        try { emitter.complete(); } catch (Exception ignored) {}
+                        try {
+                            emitter.complete();
+                        } catch (Exception ignored) {
+                        }
                         latch.countDown();
                     }
             );
 
-            // 等待流完成，最多等 5 分钟
             if (!latch.await(5, TimeUnit.MINUTES)) {
                 log.warn("Agent 推理超时, sessionId={}", sessionId);
                 subscription.dispose();

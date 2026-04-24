@@ -367,6 +367,21 @@ var _categories = {};
 var _currentFilter = '';
 var importPollingTimer = null;
 
+function normalizeDocMeta(d) {
+    d = d || {};
+    return {
+        docId: d.docId || d.doc_id || '',
+        docTitle: d.docTitle || d.doc_title || d.title || '',
+        title: d.title || d.docTitle || d.doc_title || '',
+        type: d.type || d.docType || d.doc_type || '',
+        category: d.category || d.docCategory || d.doc_category || '',
+        chunkCount: d.chunkCount || d.chunk_count || 0,
+        importTime: d.importTime || d.import_time || '',
+        language: d.language || '',
+        keywords: d.keywords || ''
+    };
+}
+
 /* ---- Init ---- */
 loadEnvInfo();
 loadModelInfo();
@@ -452,7 +467,7 @@ function loadDocumentMetadata() {
             document.getElementById('docTableWrap').innerHTML = '<div class="empty-state">加载失败: ' + esc(resp.message || '未知错误') + '</div>';
             return;
         }
-        _allDocs = resp.data || [];
+        _allDocs = (resp.data || []).map(normalizeDocMeta);
         renderDocumentTable();
     }).catch(function(err) {
         console.error('加载文档列表失败', err);
