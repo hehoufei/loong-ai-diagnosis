@@ -7,6 +7,21 @@ target/
 # Tauri/Rust 编译产物
 src-tauri/target/
 
+# Node.js 依赖
+node_modules/
+
+# 前端构建产物
+dist/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
 # 通用额外忽略
 **/target/
 **/target/**
+/.qoder/pdf-to-text.js

@@ -120,12 +120,28 @@
         }
         .hero-subtitle { font-size: 15px; color: var(--color-text-secondary); margin-bottom: 28px; }
         .hero-input-row {
-            display: flex; gap: 10px; max-width: 600px; margin: 0 auto;
-            justify-content: center;
+            display: flex; gap: 10px; max-width: 760px; margin: 0 auto;
+            justify-content: center; flex-wrap: wrap;
         }
-        .hero-input-row .glass-input { flex: 1; height: 48px; font-size: 15px; }
+        .hero-input-row .glass-input { flex: 1; min-width: 260px; height: 48px; font-size: 15px; }
         .hero-input-row .glass-btn { height: 48px; white-space: nowrap; }
         .hero-input-row .glass-btn-outline { height: 48px; white-space: nowrap; }
+        .scope-switch {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px; border-radius: 16px;
+            background: rgba(255,255,255,0.55); border: 1px solid rgba(99,102,241,0.12);
+            backdrop-filter: blur(12px);
+        }
+        .scope-option {
+            border: none; background: transparent; color: var(--color-text-secondary);
+            padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: var(--transition);
+        }
+        .scope-option.active {
+            background: linear-gradient(135deg, rgba(99,102,241,0.16), rgba(139,92,246,0.14));
+            color: var(--color-primary);
+            box-shadow: inset 0 0 0 1px rgba(99,102,241,0.12);
+        }
 
         /* env toast */
         .env-toast {
@@ -267,6 +283,128 @@
         }
         .rc-title { font-weight: 700; font-size: 13px; color: var(--color-secondary); margin-bottom: 4px; }
         .rc-desc { font-size: 13px; line-height: 1.65; color: var(--color-text-secondary); }
+        .global-analysis-card {
+            background: rgba(79,70,229,0.05);
+            border: 1px solid rgba(99,102,241,0.12);
+            border-radius: var(--radius-card);
+            padding: 20px 22px;
+            margin-top: 12px;
+        }
+        .global-header {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            flex-wrap: wrap; margin-bottom: 14px;
+        }
+        .global-title {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 16px; font-weight: 700; color: var(--color-primary);
+        }
+        .global-meta {
+            display: flex; flex-wrap: wrap; gap: 8px;
+        }
+        .meta-pill {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+            background: rgba(99,102,241,0.08); color: var(--color-primary);
+            border: 1px solid rgba(99,102,241,0.12);
+        }
+        .global-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;
+            margin-bottom: 14px;
+        }
+        .global-chain {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;
+            align-items: stretch; margin-top: 10px;
+        }
+        .global-chain-node {
+            position: relative;
+            background: rgba(255,255,255,0.62);
+            border: 1px solid rgba(99,102,241,0.1);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 8px 24px rgba(15,23,42,0.04);
+        }
+        .global-chain-node.root { border-color: rgba(239,68,68,0.18); }
+        .global-chain-node.direct { border-color: rgba(245,158,11,0.18); }
+        .global-chain-node.focus { border-color: rgba(99,102,241,0.18); }
+        .global-chain-node-title {
+            font-size: 12px; color: var(--color-text-muted); margin-bottom: 8px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.04em;
+        }
+        .global-chain-node-id {
+            font-size: 15px; font-weight: 700; color: var(--color-text); margin-bottom: 10px;
+            word-break: break-word;
+        }
+        .global-chain-node-desc {
+            font-size: 13px; color: var(--color-text-secondary); line-height: 1.7;
+        }
+        .global-chain-arrow {
+            display: flex; align-items: center; justify-content: center;
+            color: var(--color-primary); font-weight: 700; font-size: 20px;
+        }
+        .global-impact-list {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+        }
+        .impact-pill {
+            display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px;
+            background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.12);
+            color: var(--color-primary); font-size: 12px; font-weight: 600;
+        }
+        .global-stat {
+            background: rgba(255,255,255,0.55); border: 1px solid rgba(99,102,241,0.08);
+            border-radius: 14px; padding: 14px 16px;
+        }
+        .global-stat-label { font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px; }
+        .global-stat-value { font-size: 14px; font-weight: 700; color: var(--color-text); word-break: break-word; }
+        .global-section-title {
+            font-size: 14px; font-weight: 700; color: var(--color-text); margin: 16px 0 10px;
+        }
+        .global-empty {
+            padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,0.45);
+            color: var(--color-text-muted); font-size: 13px;
+        }
+        .global-task-list { display: flex; flex-direction: column; gap: 10px; }
+        .global-task-item {
+            background: rgba(255,255,255,0.55); border: 1px solid rgba(99,102,241,0.08);
+            border-radius: 14px; padding: 14px 16px;
+        }
+        .global-task-item.is-highlight {
+            border-color: rgba(99,102,241,0.22);
+            box-shadow: 0 10px 28px rgba(99,102,241,0.10);
+            background: rgba(99,102,241,0.06);
+        }
+        .global-task-actions {
+            display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;
+        }
+        .mini-action-btn {
+            border: 1px solid rgba(99,102,241,0.14);
+            background: rgba(99,102,241,0.06);
+            color: var(--color-primary);
+            border-radius: 999px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .mini-action-btn:hover {
+            transform: translateY(-1px);
+            background: rgba(99,102,241,0.12);
+        }
+        .global-task-top {
+            display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .global-task-id { font-size: 14px; font-weight: 700; color: var(--color-text); }
+        .global-task-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .global-task-reason { font-size: 13px; color: var(--color-text-secondary); line-height: 1.7; }
+        .global-edge-list, .global-bottleneck-list {
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .global-edge-item, .global-bottleneck-item {
+            padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,0.5);
+            border: 1px solid rgba(99,102,241,0.08); font-size: 13px; color: var(--color-text-secondary);
+            line-height: 1.7;
+        }
         .action-list { padding-left: 8px; margin-top: 12px; list-style: none; }
         .action-list li {
             font-size: 13px; line-height: 1.8; color: var(--color-text); padding: 3px 0;
@@ -601,6 +739,10 @@
         <p class="hero-subtitle">输入任务ID，逐步查询任务链路，AI 自动分析故障根因</p>
         <div class="hero-input-row">
             <input type="text" id="taskId" class="glass-input" placeholder="请输入任务ID或WMS任务号" autocomplete="off">
+            <div class="scope-switch" id="scopeSwitch">
+                <button class="scope-option active" type="button" data-scope="single" onclick="setDiagnoseScope('single')">单任务</button>
+                <button class="scope-option" type="button" data-scope="global" onclick="setDiagnoseScope('global')">全局关联</button>
+            </div>
             <button class="glass-btn" id="diagnoseBtn" onclick="startDiagnose()">开始诊断</button>
             <button class="glass-btn-outline" id="mapBtn" onclick="openMap()">🗺️ 地图查看</button>
         </div>
@@ -811,10 +953,25 @@ const STEP_LABELS = {
     6: '规则引擎分析'
 };
 const STEP_ICONS = { 1: '①', 2: '②', 3: '③', 4: '④', 5: '⑤', 6: '⑥' };
+let diagnoseScope = 'single';
+
+function setDiagnoseScope(scope) {
+    diagnoseScope = scope === 'global' ? 'global' : 'single';
+    var options = document.querySelectorAll('.scope-option');
+    options.forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-scope') === diagnoseScope);
+    });
+    document.getElementById('mapBtn').style.display = diagnoseScope === 'global' ? 'none' : '';
+}
 
 function startDiagnose() {
     var taskId = document.getElementById('taskId').value.trim();
     if (!taskId) { alert('请输入任务ID'); return; }
+
+    if (diagnoseScope === 'global') {
+        startGlobalDiagnose(taskId);
+        return;
+    }
 
     var btn = document.getElementById('diagnoseBtn');
     var errorBox = document.getElementById('errorBox');
@@ -906,6 +1063,38 @@ function startDiagnose() {
         source.close();
         btn.disabled = false;
     };
+}
+
+function startGlobalDiagnose(taskId) {
+    var btn = document.getElementById('diagnoseBtn');
+    var errorBox = document.getElementById('errorBox');
+    var timeline = document.getElementById('timeline');
+
+    btn.disabled = true;
+    errorBox.style.display = 'none';
+    timeline.innerHTML = '<div class="step-card active"><div class="step-header"><div class="step-icon active">◎</div><div class="step-label">全局关联诊断</div></div><div class="step-content"><div class="step-loading"><div class="spinner"></div><span>正在分析关联任务、阻塞链与瓶颈资源...</span></div></div></div>';
+    document.getElementById('sopArea').innerHTML = '';
+
+    fetch('/api/v1/diagnosis/task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: taskId, scope: 'global', timeWindowMinutes: 30 })
+    })
+        .then(function(r) { return r.json(); })
+        .then(function(resp) {
+            if (!resp || !resp.success || !resp.data) {
+                throw new Error(resp && resp.message ? resp.message : '全局诊断失败');
+            }
+            timeline.innerHTML = renderGlobalDiagnosis(resp.data);
+        })
+        .catch(function(err) {
+            errorBox.textContent = '⚠️ ' + (err && err.message ? err.message : '全局诊断失败');
+            errorBox.style.display = 'block';
+            timeline.innerHTML = '';
+        })
+        .finally(function() {
+            btn.disabled = false;
+        });
 }
 
 function ensureStepCard(step, label) {
@@ -1090,6 +1279,245 @@ function renderConflicts(conflicts) {
     html += '</tbody></table>';
     html += '<div class="conflict-tip">💡 建议操作：检查占用任务是否卡住，如已无效可手动释放锁或取消占用任务，释放后当前任务可自动继续执行。</div>';
     return html;
+}
+
+function renderGlobalDiagnosis(result) {
+    var snapshot = result.relationSnapshot || {};
+    var html = '<div class="global-analysis-card">';
+    html += '<div class="global-header">';
+    html += '<div class="global-title"><span>🌐</span><span>全局关联诊断结果</span></div>';
+    html += '<div class="global-meta">';
+    html += '<span class="meta-pill">模式：' + esc(result.diagnosisMode || 'global-rule') + '</span>';
+    html += '<span class="meta-pill">置信度：' + esc(result.confidence == null ? '-' : result.confidence) + '</span>';
+    html += '</div></div>';
+    html += '<div class="ai-summary">' + esc(result.summary || '无全局诊断结论') + '</div>';
+    html += '<div class="global-grid">';
+    html += renderGlobalStat('当前任务', snapshot.focusTaskId || '-');
+    html += renderGlobalStat('直接阻塞候选', snapshot.directBlockerTaskId || '-');
+    html += renderGlobalStat('根阻塞候选', snapshot.rootBlockerTaskId || '-');
+    html += renderGlobalStat('影响任务数', String((snapshot.impactedTaskIds || []).length));
+    html += '</div>';
+
+    html += '<div class="global-section-title">阻塞链路</div>';
+    html += renderGlobalChain(snapshot);
+
+    if (result.rootCauses && result.rootCauses.length > 0) {
+        html += '<div class="global-section-title">根因判断</div>';
+        result.rootCauses.forEach(function(rc) {
+            html += '<div class="rc-item"><div class="rc-title">' + esc(rc.title) + '</div><div class="rc-desc">' + esc(rc.description) + '</div></div>';
+        });
+    }
+
+    if (result.actions && result.actions.length > 0) {
+        html += '<div class="global-section-title">建议动作</div>';
+        html += '<ol class="action-list">';
+        result.actions.forEach(function(a) { html += '<li>' + esc(a) + '</li>'; });
+        html += '</ol>';
+    }
+
+    html += '<div class="global-section-title">瓶颈资源</div>';
+    html += renderBottlenecks(snapshot.bottleneckResources || []);
+    html += '<div class="global-section-title">依赖链路</div>';
+    html += renderDependencyEdges(snapshot.dependencyEdges || []);
+    html += '<div class="global-section-title">关联任务</div>';
+    html += renderRelatedTasks(snapshot.relatedTasks || []);
+    html += '</div>';
+    return html;
+}
+
+function renderGlobalStat(label, value) {
+    return '<div class="global-stat"><div class="global-stat-label">' + esc(label) + '</div><div class="global-stat-value">' + esc(value) + '</div></div>';
+}
+
+function renderGlobalChain(snapshot) {
+    var html = '<div class="global-chain">';
+    var rootTask = findRelatedTaskById(snapshot, snapshot.rootBlockerTaskId);
+    var directTask = findRelatedTaskById(snapshot, snapshot.directBlockerTaskId);
+
+    html += renderChainNode('根阻塞源', rootTask || { taskId: snapshot.rootBlockerTaskId || '-', blockageType: 'UNKNOWN', blockageReason: '未识别到更早的明确异常任务。' }, 'root');
+    html += '<div class="global-chain-arrow">→</div>';
+    html += renderChainNode('直接阻塞者', directTask || { taskId: snapshot.directBlockerTaskId || '-', blockageType: 'UNKNOWN', blockageReason: '未识别到明确直接阻塞任务。' }, 'direct');
+    html += '<div class="global-chain-arrow">→</div>';
+    html += renderChainNode('当前任务', {
+        taskId: snapshot.focusTaskId || '-',
+        blockageType: directTask ? directTask.blockageType : 'UNKNOWN',
+        blockageReason: directTask ? ('当前任务可能受 ' + (directTask.taskId || '-') + ' 影响。') : '当前任务暂无明确直接阻塞候选。'
+    }, 'focus');
+    html += '</div>';
+
+    html += '<div class="global-section-title" style="margin-top:14px;">影响任务</div>';
+    if (snapshot.impactedTaskIds && snapshot.impactedTaskIds.length > 0) {
+        html += '<div class="global-impact-list">';
+        snapshot.impactedTaskIds.forEach(function(taskId) {
+            html += '<span class="impact-pill">' + esc(taskId) + '</span>';
+        });
+        html += '</div>';
+    } else {
+        html += '<div class="global-empty">暂未识别到明确受影响任务</div>';
+    }
+    return html;
+}
+
+function renderChainNode(title, task, type) {
+    var html = '<div class="global-chain-node ' + esc(type) + '">';
+    html += '<div class="global-chain-node-title">' + esc(title) + '</div>';
+    html += '<div class="global-chain-node-id">' + esc(task.taskId || '-') + '</div>';
+    html += '<div class="global-task-tags" style="margin-bottom:10px;">';
+    html += '<span class="tag ' + blockageTagClass(task.blockageType) + '">' + esc(formatBlockageType(task.blockageType)) + '</span>';
+    html += '</div>';
+    html += '<div class="global-chain-node-desc">' + esc(task.blockageReason || '无进一步说明') + '</div>';
+    if (task.taskId && task.taskId !== '-') {
+        html += '<div class="global-task-actions"><button class="mini-action-btn" type="button" data-task-id="' + escAttr(task.taskId) + '" data-switch-single="1" onclick="drillDownFromButton(this)">继续分析该任务</button></div>';
+    }
+    html += '</div>';
+    return html;
+}
+
+function findRelatedTaskById(snapshot, taskId) {
+    if (!snapshot || !snapshot.relatedTasks || !taskId) {
+        return null;
+    }
+    for (var i = 0; i < snapshot.relatedTasks.length; i++) {
+        if (snapshot.relatedTasks[i].taskId === taskId) {
+            return snapshot.relatedTasks[i];
+        }
+    }
+    return null;
+}
+
+function renderBottlenecks(items) {
+    if (!items || items.length === 0) {
+        return '<div class="global-empty">未识别到明确瓶颈资源</div>';
+    }
+    var html = '<div class="global-bottleneck-list">';
+    items.forEach(function(item) {
+        html += '<div class="global-bottleneck-item"><b>' + esc(item.resourceType) + ':' + esc(item.resourceKey) + '</b> - '
+            + esc(item.description || '') + '（关联任务数：' + esc(item.impactedTaskCount) + '）</div>';
+    });
+    html += '</div>';
+    return html;
+}
+
+function renderDependencyEdges(items) {
+    if (!items || items.length === 0) {
+        return '<div class="global-empty">未识别到明确依赖边</div>';
+    }
+    var html = '<div class="global-edge-list">';
+    items.forEach(function(item) {
+        html += '<div class="global-edge-item"><b>' + esc(item.fromTaskId) + '</b> → <b>' + esc(item.toTaskId) + '</b>'
+            + '，关系：' + esc(item.relationType || '-')
+            + '，资源：' + esc(item.resourceKey || '-')
+            + '。' + esc(item.description || '') + '</div>';
+    });
+    html += '</div>';
+    return html;
+}
+
+function renderRelatedTasks(items) {
+    if (!items || items.length === 0) {
+        return '<div class="global-empty">未查询到关联任务</div>';
+    }
+    var html = '<div class="global-task-list">';
+    items.forEach(function(item) {
+        html += '<div class="global-task-item" id="related-task-' + escAttr(item.taskId || '') + '">';
+        html += '<div class="global-task-top">';
+        html += '<div>';
+        html += '<div class="global-task-id">' + esc(item.taskId || '-') + '</div>';
+        html += '<div style="font-size:12px;color:var(--color-text-muted);margin-top:4px;">WMS任务号：' + esc(item.wmsTaskNo || '-') + '</div>';
+        html += '</div>';
+        html += '<div class="global-task-tags">';
+        html += '<span class="tag tag-running">' + esc(formatRelationType(item.relationType)) + '</span>';
+        html += '<span class="tag ' + blockageTagClass(item.blockageType) + '">' + esc(formatBlockageType(item.blockageType)) + '</span>';
+        html += stateTag(item.taskState || '-');
+        html += '</div></div>';
+        html += '<div class="global-task-reason">';
+        html += '<b>关联原因：</b>' + esc(item.relationReason || '无') + '<br>';
+        html += '<b>阻塞判断：</b>' + esc(item.blockageReason || '无') + '<br>';
+        html += '<b>处理状态：</b>' + esc(item.handleState || '-') + '，<b>设备：</b>' + esc(item.deviceCode || '-') + '，<b>容器：</b>' + esc(item.containerCode || '-') + '，<b>业务终点：</b>' + esc(item.businessTo || '-') + '。';
+        if (item.errorMessage) {
+            html += '<br><b style="color:var(--color-error)">异常信息：</b><span style="color:var(--color-error)">' + esc(item.errorMessage) + '</span>';
+        }
+        html += '</div>';
+        html += '<div class="global-task-actions">';
+        html += '<button class="mini-action-btn" type="button" data-task-id="' + escAttr(item.taskId || '') + '" data-switch-single="0" onclick="drillDownFromButton(this)">继续分析该任务</button>';
+        html += '<button class="mini-action-btn" type="button" data-task-id="' + escAttr(item.taskId || '') + '" onclick="highlightTaskFromButton(this)">定位此任务</button>';
+        html += '</div>';
+        html += '</div>';
+    });
+    html += '</div>';
+    return html;
+}
+
+function formatRelationType(type) {
+    switch (type) {
+        case 'same_container': return '同容器';
+        case 'same_device': return '同设备';
+        case 'same_source_point': return '同起点位';
+        case 'same_target_point': return '同目标点位';
+        case 'upstream_blocked': return '上游阻塞';
+        default: return type || '关联任务';
+    }
+}
+
+function formatBlockageType(type) {
+    switch (type) {
+        case 'SELF_ERROR': return '任务异常';
+        case 'RESOURCE_BUSY': return '资源繁忙';
+        case 'POINT_OCCUPIED': return '点位占用';
+        case 'CONTAINER_LOCKED': return '容器未释放';
+        case 'UPSTREAM_BLOCKED': return '上游阻塞';
+        default: return type || '待确认';
+    }
+}
+
+function blockageTagClass(type) {
+    switch (type) {
+        case 'SELF_ERROR': return 'tag-error';
+        case 'RESOURCE_BUSY': return 'tag-running';
+        case 'POINT_OCCUPIED': return 'tag-warn';
+        case 'CONTAINER_LOCKED': return 'tag-warn';
+        case 'UPSTREAM_BLOCKED': return 'tag-init';
+        default: return 'tag-init';
+    }
+}
+
+function drillDownTask(taskId, switchToSingle) {
+    if (!taskId) return;
+    document.getElementById('taskId').value = taskId;
+    if (switchToSingle) {
+        setDiagnoseScope('single');
+    }
+    startDiagnose();
+}
+
+function drillDownFromButton(btn) {
+    if (!btn) return;
+    var taskId = btn.getAttribute('data-task-id') || '';
+    var switchToSingle = btn.getAttribute('data-switch-single') === '1';
+    drillDownTask(taskId, switchToSingle);
+}
+
+function highlightRelatedTask(taskId) {
+    if (!taskId) return;
+    var el = document.getElementById('related-task-' + taskId.replace(/[^a-zA-Z0-9_-]/g, '_'));
+    if (!el) return;
+    document.querySelectorAll('.global-task-item.is-highlight').forEach(function(node) {
+        node.classList.remove('is-highlight');
+    });
+    el.classList.add('is-highlight');
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(function() {
+        el.classList.remove('is-highlight');
+    }, 2200);
+}
+
+function highlightTaskFromButton(btn) {
+    if (!btn) return;
+    highlightRelatedTask(btn.getAttribute('data-task-id') || '');
+}
+
+function escAttr(text) {
+    return String(text == null ? '' : text).replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
 function renderAI(ai) {
@@ -1553,6 +1981,8 @@ function openMap() {
     sessionStorage.setItem('mapPathLegs', JSON.stringify(legs));
     window.open('map.html', '_blank');
 }
+
+setDiagnoseScope('single');
 
 document.getElementById('taskId').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') startDiagnose();

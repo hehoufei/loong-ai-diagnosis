@@ -8,14 +8,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 @Slf4j
 @Primary
@@ -51,9 +52,119 @@ public class HttpTaskClient implements TaskClient {
 
     @Override
     public List<TaskDetail> findRelatedTasks(TaskDetail focusTask, LocalDateTime windowStart, LocalDateTime windowEnd, String env) {
-        log.info("HttpTaskClient 暂未提供全局关联任务查询接口, taskId={}, windowStart={}, windowEnd={}",
-                focusTask == null ? null : focusTask.getTaskId(), windowStart, windowEnd);
-        return Collections.emptyList();
+        if (focusTask == null) {
+            return Collections.emptyList();
+        }
+        String wcsUrl = envConfig.getWcsUrl();
+        String url = wcsUrl + "/task/web/taskManagerPageQuery";
+
+        String focusId = focusTask.getWmsTaskNo() != null ? focusTask.getWmsTaskNo() : focusTask.getTaskId();
+        String timeFrom = windowStart != null ? windowStart.format(FMT) : null;
+        String timeTo = windowEnd != null ? windowEnd.format(FMT) : null;
+
+        // 用 LinkedHashSet 按 wmsTaskNo 去重，保持插入顺序
+        Map<String, TaskDetail> merged = new LinkedHashMap<>();
+
+        // 1. 按容器号查询
+        if (focusTask.getContainerCode() != null && !focusTask.getContainerCode().isBlank()) {
+            Map<String, Object> body = buildPageQueryBody("containerCode", focusTask.getContainerCode(), timeFrom, timeTo);
+            List<TaskDetail> byContainer = doPageQuery(url, body);
+            for (TaskDetail t : byContainer) {
+                merged.putIfAbsent(t.getWmsTaskNo(), t);
+            }
+        }
+
+        // 2. 按业务起点查询（WCS TasTaskManagerPageDto 字段为 startPoint）
+        String fromPoint = focusTask.getDefiniteFrom() != null ? focusTask.getDefiniteFrom() : focusTask.getBusinessFrom();
+        if (fromPoint != null && !fromPoint.isBlank()) {
+            Map<String, Object> body = buildPageQueryBody("startPoint", fromPoint, timeFrom, timeTo);
+            List<TaskDetail> byFrom = doPageQuery(url, body);
+            for (TaskDetail t : byFrom) {
+                merged.putIfAbsent(t.getWmsTaskNo(), t);
+            }
+        }
+
+        // 3. 按业务终点查询（WCS TasTaskManagerPageDto 字段为 endPoint）
+        String toPoint = focusTask.getDefiniteTo() != null ? focusTask.getDefiniteTo() : focusTask.getBusinessTo();
+        if (toPoint != null && !toPoint.isBlank()) {
+            Map<String, Object> body = buildPageQueryBody("endPoint", toPoint, timeFrom, timeTo);
+            List<TaskDetail> byTo = doPageQuery(url, body);
+            for (TaskDetail t : byTo) {
+                merged.putIfAbsent(t.getWmsTaskNo(), t);
+            }
+        }
+
+        // 排除焦点任务自身
+        merged.remove(focusId);
+
+        List<TaskDetail> result = new ArrayList<>(merged.values());
+        log.info("查询到关联任务 {} 条（排除自身 {}）", result.size(), focusId);
+        return result;
+    }
+
+    private Map<String, Object> buildPageQueryBody(String field, String value, String createTimeFrom, String createTimeTo) {
+        Map<String, Object> body = new HashMap<>();
+        body.put(field, value);
+        body.put("pageNum", 1);
+        body.put("pageSize", 50);
+        if (createTimeFrom != null) {
+            body.put("createTimeFrom", createTimeFrom);
+        }
+        if (createTimeTo != null) {
+            body.put("createTimeTo", createTimeTo);
+        }
+        return body;
+    }
+
+    private List<TaskDetail> doPageQuery(String url, Map<String, Object> body) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+            String json = restTemplate.postForObject(url, entity, String.class);
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode records = root.path("data").path("records");
+
+            List<TaskDetail> result = new ArrayList<>();
+            if (records.isArray()) {
+                for (JsonNode node : records) {
+                    TaskDetail detail = mapTaskSummary(node);
+                    result.add(detail);
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("关联任务分页查询失败, url={}, body={}: {}", url, body, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 将 taskManagerPageQuery 返回的单条记录映射为 TaskDetail（仅主任务核心字段，不含子任务/执行单）
+     */
+    private TaskDetail mapTaskSummary(JsonNode node) {
+        TaskDetail d = new TaskDetail();
+        d.setTaskId(text(node, "wmsTaskNo"));
+        d.setWmsTaskNo(text(node, "wmsTaskNo"));
+        d.setTaskSource(text(node, "taskSource"));
+        d.setBusinessType(text(node, "businessType"));
+        d.setTaskType(intVal(node, "taskType"));
+        d.setTaskState(text(node, "taskState"));
+        d.setHandleState(text(node, "handleState"));
+        d.setContainerCode(text(node, "containerCode"));
+        d.setBusinessFrom(text(node, "businessFrom"));
+        d.setDefiniteFrom(text(node, "definiteFrom"));
+        d.setBusinessTo(text(node, "businessTo"));
+        d.setDefiniteTo(text(node, "definiteTo"));
+        d.setErrorMessage(text(node, "errorMessage"));
+        d.setPriority(intVal(node, "priority"));
+        d.setCreateTime(dateTime(node, "createTime"));
+        d.setDefiniteTime(dateTime(node, "definiteTime"));
+        d.setSplitTime(dateTime(node, "splitTime"));
+        d.setStartTime(dateTime(node, "startTime"));
+        d.setFinishTime(dateTime(node, "finishTime"));
+        return d;
     }
 
     private TaskDetail mapTaskDetail(JsonNode data) {
