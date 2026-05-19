@@ -1,40 +1,33 @@
 package cn.aimstek.loong.aidiag.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * 诊断结果出参。
+ */
 @Data
+@Schema(description = "诊断结果")
 public class DiagnoseResponse {
+
+    @Schema(description = "一句话根因摘要")
     private String summary;
+
+    @Schema(description = "根因列表")
     private List<RootCauseItem> rootCauses = new ArrayList<>();
+
+    @Schema(description = "建议操作列表")
     private List<String> actions = new ArrayList<>();
-    private List<RelevantDoc> relevantDocs = new ArrayList<>();
 
-    /**
-     * 分析范围：single / global
-     */
-    private String analysisScope;
-
-    /**
-     * 全局分析快照，单任务模式下可为空
-     */
-    private TaskRelationSnapshot relationSnapshot;
-
-    /**
-     * 诊断模式：rule / llm / hybrid / fallback
-     * 旧前端可忽略该字段，新前端可逐步接入。
-     */
+    @Schema(description = "诊断模式：rule / llm / fallback")
     private String diagnosisMode;
 
-    /**
-     * 诊断置信度，范围 0.0 ~ 1.0
-     */
+    @Schema(description = "诊断置信度，范围 0.0 ~ 1.0")
     private Double confidence;
 
-    /**
-     * 链路追踪ID，便于定位一次诊断的完整过程
-     */
+    @Schema(description = "链路追踪ID")
     private String traceId;
 }

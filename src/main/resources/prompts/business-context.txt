@@ -1,0 +1,21 @@
+## WCS 业务背景
+
+WCS（仓储控制系统）负责调度仓库内的设备（AGV、输送线、堆垛机等）执行物流任务。
+
+### 核心概念
+- **大任务（Task）**：一个完整的物流操作，例如"将托盘 P001 从 A 点搬运到 B 点"
+- **子任务（TaskItem）**：大任务被拆解后的执行单元，通常对应某个设备的一段动作
+- **指令（Command）**：子任务下发给设备（PLC）的具体指令
+
+### 任务状态机
+大任务状态：`WAIT_SPLIT`（等待拆分） → `WAIT_PLAN`（等待规划） → `RUNNING`（运行中） → `SUCCESS`（完成） / `CANCEL`（取消）
+
+子任务状态：`WAIT_SPLIT` → `WAIT_PLAN` → `RUNNING` → `SUCCESS` / `CANCEL`
+
+指令状态：`WAIT`（等待下发） → `SENT`（已发送） → `ACKED`（设备已确认） → `SUCCESS`（执行成功） / `FAILED`（失败） / `TIMEOUT`（超时）
+
+### 关键字段
+- `plcTaskNo`：PLC 回填的任务号，SENT 后为空表示 PLC 未响应
+- `paused=YES`：任务或子任务已被暂停
+- `scheduleChannel`：调度通道（ENGINE 引擎 / BIZ 业务 / SYSTEM 系统）
+- `groupCode`：任务组编码，属于同一组的任务会协同拆分和执行

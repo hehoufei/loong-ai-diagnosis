@@ -54,22 +54,7 @@
             <artifactId>spring-ai-starter-model-zhipuai</artifactId>
         </dependency>
 
-        <!-- Spring AI OpenAI（兼容所有 OpenAI 协议的模型：DeepSeek、通义千问、Moonshot、Ollama 等） -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-openai</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-jdbc</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>com.mysql</groupId>
-            <artifactId>mysql-connector-j</artifactId>
-            <scope>runtime</scope>
-        </dependency>
+        <!-- JDBC/MySQL 已移除：无状态、不落库 -->
 
         <!-- SpringDoc OpenAPI (兼容 Spring Boot 3.4) -->
         <dependency>
@@ -90,32 +75,7 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Spring AI VectorStore（SimpleVectorStore + VectorStore 接口） -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-vector-store</artifactId>
-        </dependency>
-
-        <!-- Spring AI Tika 文档解析（PDF 等），排除不必要的解析器以控制 JAR 体积 -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-tika-document-reader</artifactId>
-            <exclusions>
-                <!-- 排除 POI（Excel/Word/PPT 解析），仅保留 PDF 和纯文本 -->
-                <exclusion>
-                    <groupId>org.apache.poi</groupId>
-                    <artifactId>poi</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.poi</groupId>
-                    <artifactId>poi-ooxml</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>org.apache.poi</groupId>
-                    <artifactId>poi-scratchpad</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
+        <!-- VectorStore/Tika 已移除：不在 MVP 范围 -->
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

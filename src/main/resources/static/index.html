@@ -4,1991 +4,510 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WCS 任务智能诊断</title>
-    <link rel="stylesheet" href="common.css">
     <style>
-        /* ========== Page-specific Styles ========== */
-        .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
-
-        /* -- Topbar internals -- */
-        .topbar-logo {
-            display: flex; align-items: center; gap: 8px;
-            font-size: 16px; font-weight: 700; color: var(--color-primary);
-            white-space: nowrap; flex-shrink: 0;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #e0e7ff 0%, #f5f3ff 100%);
+            min-height: 100vh;
+            margin: 0;
+            color: #1f2937;
         }
-        .topbar-logo span.icon { font-size: 20px; }
-        .topbar-center { flex: 1; display: flex; justify-content: center; position: relative; min-width: 0; }
-        .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-
-        /* env badge in topbar */
-        .env-badge {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
-            background: rgba(99,102,241,0.08); color: var(--color-primary);
-            border: 1px solid rgba(99,102,241,0.15); cursor: pointer;
-            transition: var(--transition); user-select: none;
+        /* ===== 导航栏 ===== */
+        .nav {
+            background: rgba(255,255,255,0.85);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(99,102,241,0.12);
+            position: sticky; top: 0; z-index: 100;
         }
-        .env-badge:hover { background: rgba(99,102,241,0.14); }
-        .env-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-success); flex-shrink: 0; }
-        .env-url-hint { font-size: 11px; color: var(--color-text-muted); margin-left: 4px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-        /* env popover */
-        .env-popover {
-            top: 100%; left: 50%;
-            width: 480px; max-width: calc(100vw - 32px);
-            margin-top: 4px;
-            /* use margin for centering to avoid animation overriding transform */
-            margin-left: -240px;
-            animation: popoverIn 0.2s ease-out;
+        .nav-inner {
+            max-width: 1100px; margin: 0 auto;
+            display: flex; align-items: center; gap: 4px;
+            padding: 0 24px; height: 52px;
         }
-        @media (max-width: 540px) {
-            .env-popover { left: auto; right: -60px; margin-left: 0; }
+        .nav-brand {
+            font-weight: 800; font-size: 16px;
+            background: linear-gradient(135deg,#6366f1,#8b5cf6);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; margin-right: 16px; white-space: nowrap;
         }
-        .env-popover-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 12px; font-size: 15px; font-weight: 600; color: var(--color-text);
+        .nav a {
+            display: flex; align-items: center; gap: 5px;
+            padding: 6px 14px; border-radius: 8px;
+            font-size: 14px; font-weight: 500; color: #4b5563;
+            text-decoration: none; transition: all .15s;
         }
-        .env-close-btn {
-            background: none; border: none; font-size: 18px; cursor: pointer;
-            color: var(--color-text-muted); transition: var(--transition);
+        .nav a:hover { background: rgba(99,102,241,0.08); color: #4f46e5; }
+        .nav a.active { background: rgba(99,102,241,0.12); color: #4f46e5; font-weight: 600; }
+        .container { max-width: 900px; margin: 0 auto; padding: 40px 24px; }
+        .hero {
+            background: rgba(255, 255, 255, 0.72);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 24px;
+            padding: 48px 40px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(99, 102, 241, 0.08);
         }
-        .env-close-btn:hover { color: var(--color-error); }
-        .env-add-section {
-            margin-top: 12px; padding-top: 12px;
-            border-top: 1px solid rgba(99,102,241,0.08);
-        }
-        .env-add-section .label { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 8px; }
-        .env-add-row { display: flex; gap: 8px; }
-        .env-add-row input {
-            flex: 1; height: 36px; padding: 0 12px;
-            background: rgba(255,255,255,0.6); border: 1.5px solid rgba(99,102,241,0.12);
-            border-radius: var(--radius-input); font-size: 13px; color: var(--color-text);
-            outline: none; transition: var(--transition);
-        }
-        .env-add-row input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(99,102,241,0.1); }
-        .env-add-btn {
-            height: 36px; padding: 0 18px; background: var(--color-success); color: #fff;
-            border: none; border-radius: var(--radius-btn); font-size: 13px; font-weight: 600;
-            cursor: pointer; white-space: nowrap; transition: var(--transition);
-        }
-        .env-add-btn:hover { filter: brightness(1.1); }
-
-        /* env list items */
-        .env-item {
-            display: flex; align-items: center; gap: 10px;
-            padding: 10px 12px; margin-bottom: 6px;
-            border-radius: 12px; border: 1px solid rgba(99,102,241,0.06);
-            background: rgba(255,255,255,0.4); transition: var(--transition);
-        }
-        .env-item.active { background: rgba(99,102,241,0.06); border-color: rgba(99,102,241,0.15); }
-        .env-item-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .env-item-info { flex: 1; min-width: 0; }
-        .env-item-name { font-size: 13px; font-weight: 500; color: var(--color-text); }
-        .env-item-url { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .env-item-actions { display: flex; gap: 6px; align-items: center; }
-        .env-switch-btn {
-            height: 28px; padding: 0 12px; background: var(--gradient-btn); color: #fff;
-            border: none; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 500;
-            transition: var(--transition); white-space: nowrap;
-        }
-        .env-switch-btn:hover { box-shadow: 0 2px 8px rgba(99,102,241,0.3); }
-        .env-del-btn {
-            height: 28px; padding: 0 10px; background: transparent; color: var(--color-error);
-            border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; font-size: 12px;
-            cursor: pointer; transition: var(--transition); white-space: nowrap;
-        }
-        .env-del-btn:hover { background: rgba(239,68,68,0.06); }
-        .env-active-badge {
-            font-size: 11px; color: #fff; background: var(--color-success);
-            padding: 3px 10px; border-radius: 10px; font-weight: 600;
-        }
-
-        /* -- Hero Section -- */
-        .hero-section {
-            margin-top: 48px; margin-bottom: 32px;
-        }
-        .hero-card {
-            padding: 48px 40px 40px; text-align: center;
-        }
-        .hero-card:hover { transform: none; }
         .hero-icon { font-size: 48px; margin-bottom: 12px; display: block; }
         .hero-title {
-            font-size: 28px; font-weight: 800; color: var(--color-text);
-            margin-bottom: 8px;
-            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            font-size: 28px;
+            font-weight: 800;
+            margin: 0 0 8px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        .hero-subtitle { font-size: 15px; color: var(--color-text-secondary); margin-bottom: 28px; }
-        .hero-input-row {
-            display: flex; gap: 10px; max-width: 760px; margin: 0 auto;
-            justify-content: center; flex-wrap: wrap;
-        }
-        .hero-input-row .glass-input { flex: 1; min-width: 260px; height: 48px; font-size: 15px; }
-        .hero-input-row .glass-btn { height: 48px; white-space: nowrap; }
-        .hero-input-row .glass-btn-outline { height: 48px; white-space: nowrap; }
-        .scope-switch {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 6px; border-radius: 16px;
-            background: rgba(255,255,255,0.55); border: 1px solid rgba(99,102,241,0.12);
-            backdrop-filter: blur(12px);
-        }
-        .scope-option {
-            border: none; background: transparent; color: var(--color-text-secondary);
-            padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 600;
-            cursor: pointer; transition: var(--transition);
-        }
-        .scope-option.active {
-            background: linear-gradient(135deg, rgba(99,102,241,0.16), rgba(139,92,246,0.14));
-            color: var(--color-primary);
-            box-shadow: inset 0 0 0 1px rgba(99,102,241,0.12);
-        }
-
-        /* env toast */
-        .env-toast {
-            display: none; padding: 10px 16px; margin-top: 16px;
-            background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.2);
-            border-radius: var(--radius-card); font-size: 13px; color: var(--color-success);
-            backdrop-filter: blur(12px); animation: fadeIn .3s ease;
-        }
-
-        /* -- Error Box -- */
-        .error-box {
-            display: none; margin-top: 16px; padding: 14px 18px;
-            background: rgba(239,68,68,0.08);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(239,68,68,0.15);
-            border-left: 4px solid var(--color-error);
-            border-radius: var(--radius-card);
-            color: var(--color-error); font-size: 14px; font-weight: 500;
-        }
-
-        /* -- Results Container -- */
-        .results-wrapper {
-            margin-top: 24px; padding: 24px;
-        }
-        .results-wrapper:hover { transform: none; }
-        .results-wrapper:empty, .results-wrapper.hidden { display: none; }
-
-        /* -- Step Cards -- */
-        .step-card {
-            background: rgba(255,255,255,0.5);
-            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 14px; padding: 14px 16px;
-            box-shadow: 0 4px 16px rgba(99,102,241,0.05);
-            animation: fadeIn .4s ease;
-            transition: var(--transition);
-        }
-        .step-card h3 {
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-        .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-
-        /* -- Layout for #timeline -- */
-        #timeline {
-            display: grid;
-            grid-template-columns: 1fr;
+        .hero-subtitle { font-size: 15px; color: #6b7280; margin-bottom: 28px; }
+        .input-row {
+            display: flex;
             gap: 12px;
-            align-items: start;
+            max-width: 640px;
+            margin: 0 auto;
+            flex-wrap: wrap;
         }
-        .step-icon {
-            width: 30px; height: 30px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 13px; font-weight: 700; color: #fff; flex-shrink: 0;
-            transition: var(--transition);
+        .input-row input {
+            flex: 1;
+            min-width: 240px;
+            height: 48px;
+            padding: 0 18px;
+            border: 1.5px solid rgba(99, 102, 241, 0.15);
+            border-radius: 12px;
+            font-size: 15px;
+            background: rgba(255, 255, 255, 0.6);
+            outline: none;
+            transition: all 0.2s;
         }
-        .step-icon.active {
-            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-            box-shadow: 0 2px 8px rgba(99,102,241,0.25);
+        .input-row input:focus {
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
         }
-        .step-icon.done {
-            background: linear-gradient(135deg, var(--color-success), #34d399);
-            box-shadow: 0 2px 8px rgba(16,185,129,0.25);
-        }
-        .step-icon.pending { background: rgba(156,163,175,0.3); }
-        .step-label { font-size: 14px; font-weight: 700; color: var(--color-text); }
-        .step-content { padding-left: 42px; }
-
-        /* Loading spinner */
-        .step-loading {
-            display: flex; align-items: center; gap: 8px;
-            color: var(--color-text-muted); font-size: 13px; padding: 4px 0;
-        }
-        .spinner {
-            width: 18px; height: 18px;
-            border: 2.5px solid rgba(99,102,241,0.15);
-            border-top-color: var(--color-primary);
-            border-radius: 50%; animation: spin .7s linear infinite;
-        }
-
-        /* -- Data Table (inline fallback using glass-table tokens) -- */
-        .data-table {
-            width: 100%; border-collapse: separate; border-spacing: 0;
-            font-size: 12.5px; margin-top: 6px; table-layout: fixed;
-        }
-        .data-table th {
-            background: rgba(99,102,241,0.05); text-align: left; padding: 5px 10px;
-            border-bottom: 1px solid rgba(99,102,241,0.08); color: var(--color-text-secondary);
-            font-weight: 600; font-size: 11.5px;
-        }
-        .data-table td {
-            padding: 6px 10px; border-bottom: 1px solid rgba(99,102,241,0.04);
-            color: var(--color-text); max-width: 160px; overflow: hidden;
-            text-overflow: ellipsis; white-space: nowrap; line-height: 1.4;
-        }
-        .data-table td[title]:hover { overflow: visible; white-space: normal; word-break: break-all; }
-        .data-table tr:last-child td { border-bottom: none; }
-
-        /* Status tags */
-        .tag {
-            display: inline-block; padding: 2px 10px; border-radius: var(--radius-tag);
-            font-size: 12px; font-weight: 600;
-        }
-        .tag-success { background: rgba(16,185,129,0.1); color: var(--color-success); }
-        .tag-running { background: rgba(99,102,241,0.1); color: var(--color-primary); }
-        .tag-error { background: rgba(239,68,68,0.1); color: var(--color-error); }
-        .tag-init { background: rgba(156,163,175,0.1); color: var(--color-text-muted); }
-        .tag-warn { background: rgba(245,158,11,0.1); color: var(--color-warning); }
-
-        /* -- Log Box -- */
-        .log-box {
-            background: #1a1b2e; color: #d4d4d4;
-            border-radius: var(--radius-card); padding: 10px 12px;
-            font-family: "Cascadia Code", Consolas, monospace;
-            font-size: 11.5px; line-height: 1.5; max-height: 200px;
-            overflow-y: auto; margin-top: 8px;
-            border: 1px solid rgba(99,102,241,0.1);
-        }
-
-        /* -- Subtask area scrollable -- */
-        .subtask-area {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        .log-line { white-space: pre-wrap; word-break: break-all; }
-
-        /* -- AI Result -- */
-        .ai-result-wrapper {
-            background: rgba(139,92,246,0.06);
-            backdrop-filter: blur(12px); border: 1px solid rgba(139,92,246,0.12);
-            border-radius: var(--radius-card); padding: 18px 20px; margin-top: 4px;
-        }
-        .ai-summary { font-size: 15px; line-height: 1.75; color: var(--color-text); margin-bottom: 14px; }
-        .rc-item {
-            padding: 12px 14px; margin-bottom: 8px;
-            background: rgba(255,255,255,0.5);
-            backdrop-filter: blur(10px); border: 1px solid rgba(139,92,246,0.1);
-            border-radius: 12px; border-left: 3px solid var(--color-secondary);
-        }
-        .rc-title { font-weight: 700; font-size: 13px; color: var(--color-secondary); margin-bottom: 4px; }
-        .rc-desc { font-size: 13px; line-height: 1.65; color: var(--color-text-secondary); }
-        .global-analysis-card {
-            background: rgba(79,70,229,0.05);
-            border: 1px solid rgba(99,102,241,0.12);
-            border-radius: var(--radius-card);
-            padding: 20px 22px;
-            margin-top: 12px;
-        }
-        .global-header {
-            display: flex; align-items: center; justify-content: space-between; gap: 12px;
-            flex-wrap: wrap; margin-bottom: 14px;
-        }
-        .global-title {
-            display: flex; align-items: center; gap: 8px;
-            font-size: 16px; font-weight: 700; color: var(--color-primary);
-        }
-        .global-meta {
-            display: flex; flex-wrap: wrap; gap: 8px;
-        }
-        .meta-pill {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
-            background: rgba(99,102,241,0.08); color: var(--color-primary);
-            border: 1px solid rgba(99,102,241,0.12);
-        }
-        .global-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;
-            margin-bottom: 14px;
-        }
-        .global-chain {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;
-            align-items: stretch; margin-top: 10px;
-        }
-        .global-chain-node {
-            position: relative;
-            background: rgba(255,255,255,0.62);
-            border: 1px solid rgba(99,102,241,0.1);
-            border-radius: 16px;
-            padding: 16px;
-            box-shadow: 0 8px 24px rgba(15,23,42,0.04);
-        }
-        .global-chain-node.root { border-color: rgba(239,68,68,0.18); }
-        .global-chain-node.direct { border-color: rgba(245,158,11,0.18); }
-        .global-chain-node.focus { border-color: rgba(99,102,241,0.18); }
-        .global-chain-node-title {
-            font-size: 12px; color: var(--color-text-muted); margin-bottom: 8px; font-weight: 600;
-            text-transform: uppercase; letter-spacing: 0.04em;
-        }
-        .global-chain-node-id {
-            font-size: 15px; font-weight: 700; color: var(--color-text); margin-bottom: 10px;
-            word-break: break-word;
-        }
-        .global-chain-node-desc {
-            font-size: 13px; color: var(--color-text-secondary); line-height: 1.7;
-        }
-        .global-chain-arrow {
-            display: flex; align-items: center; justify-content: center;
-            color: var(--color-primary); font-weight: 700; font-size: 20px;
-        }
-        .global-impact-list {
-            display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
-        }
-        .impact-pill {
-            display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 999px;
-            background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.12);
-            color: var(--color-primary); font-size: 12px; font-weight: 600;
-        }
-        .global-stat {
-            background: rgba(255,255,255,0.55); border: 1px solid rgba(99,102,241,0.08);
-            border-radius: 14px; padding: 14px 16px;
-        }
-        .global-stat-label { font-size: 12px; color: var(--color-text-muted); margin-bottom: 6px; }
-        .global-stat-value { font-size: 14px; font-weight: 700; color: var(--color-text); word-break: break-word; }
-        .global-section-title {
-            font-size: 14px; font-weight: 700; color: var(--color-text); margin: 16px 0 10px;
-        }
-        .global-empty {
-            padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,0.45);
-            color: var(--color-text-muted); font-size: 13px;
-        }
-        .global-task-list { display: flex; flex-direction: column; gap: 10px; }
-        .global-task-item {
-            background: rgba(255,255,255,0.55); border: 1px solid rgba(99,102,241,0.08);
-            border-radius: 14px; padding: 14px 16px;
-        }
-        .global-task-item.is-highlight {
-            border-color: rgba(99,102,241,0.22);
-            box-shadow: 0 10px 28px rgba(99,102,241,0.10);
-            background: rgba(99,102,241,0.06);
-        }
-        .global-task-actions {
-            display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;
-        }
-        .mini-action-btn {
-            border: 1px solid rgba(99,102,241,0.14);
-            background: rgba(99,102,241,0.06);
-            color: var(--color-primary);
-            border-radius: 999px;
-            padding: 6px 12px;
-            font-size: 12px;
+        .input-row button {
+            height: 48px;
+            padding: 0 28px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            transition: var(--transition);
+            transition: all 0.2s;
         }
-        .mini-action-btn:hover {
+        .input-row button:hover:not(:disabled) {
             transform: translateY(-1px);
-            background: rgba(99,102,241,0.12);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.3);
         }
-        .global-task-top {
-            display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap;
-            margin-bottom: 8px;
+        .input-row button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .hint {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 12px;
         }
-        .global-task-id { font-size: 14px; font-weight: 700; color: var(--color-text); }
-        .global-task-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-        .global-task-reason { font-size: 13px; color: var(--color-text-secondary); line-height: 1.7; }
-        .global-edge-list, .global-bottleneck-list {
-            display: flex; flex-direction: column; gap: 8px;
+        .error-box {
+            display: none;
+            margin-top: 24px;
+            padding: 14px 18px;
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-left: 4px solid #ef4444;
+            border-radius: 12px;
+            color: #b91c1c;
+            font-size: 14px;
         }
-        .global-edge-item, .global-bottleneck-item {
-            padding: 12px 14px; border-radius: 12px; background: rgba(255,255,255,0.5);
-            border: 1px solid rgba(99,102,241,0.08); font-size: 13px; color: var(--color-text-secondary);
+        .result-card {
+            display: none;
+            margin-top: 24px;
+            background: rgba(255, 255, 255, 0.72);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 20px;
+            padding: 28px 32px;
+            box-shadow: 0 12px 40px rgba(99, 102, 241, 0.06);
+        }
+        .result-badge-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-rule { background: rgba(16, 185, 129, 0.12); color: #059669; }
+        .badge-llm { background: rgba(139, 92, 246, 0.12); color: #7c3aed; }
+        .badge-fallback { background: rgba(245, 158, 11, 0.12); color: #d97706; }
+        .badge-confidence { background: rgba(99, 102, 241, 0.1); color: #4f46e5; }
+        .badge-trace { background: rgba(107, 114, 128, 0.08); color: #6b7280; font-family: monospace; }
+        .summary {
+            font-size: 18px;
+            font-weight: 600;
+            line-height: 1.6;
+            color: #1f2937;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid rgba(99, 102, 241, 0.1);
+        }
+        .section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #4f46e5;
+            margin: 20px 0 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: linear-gradient(180deg, #6366f1, #8b5cf6);
+            border-radius: 2px;
+        }
+        .rc-item {
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(139, 92, 246, 0.12);
+            border-left: 3px solid #8b5cf6;
+            border-radius: 12px;
+        }
+        .rc-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: #7c3aed;
+            margin-bottom: 6px;
+        }
+        .rc-desc {
+            font-size: 13px;
             line-height: 1.7;
+            color: #4b5563;
         }
-        .action-list { padding-left: 8px; margin-top: 12px; list-style: none; }
+        .action-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
         .action-list li {
-            font-size: 13px; line-height: 1.8; color: var(--color-text); padding: 3px 0;
-            display: flex; align-items: baseline; gap: 10px;
+            font-size: 14px;
+            line-height: 1.7;
+            color: #1f2937;
+            padding: 8px 0 8px 20px;
+            position: relative;
         }
         .action-list li::before {
             content: '';
-            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-            display: inline-block; position: relative; top: 1px;
+            position: absolute;
+            left: 0;
+            top: 16px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
         }
-
-        /* -- Relevant Docs -- */
-        .ref-docs-section { margin-top: 14px; margin-bottom: 14px; }
-        .ref-docs-title {
-            display: flex; align-items: center; gap: 8px;
-            font-size: 14px; font-weight: 700; color: #3b82f6; margin-bottom: 10px;
+        .spinner-wrap {
+            display: none;
+            margin-top: 24px;
+            text-align: center;
+            padding: 24px;
+            color: #6b7280;
         }
-        .ref-doc-card {
-            background: rgba(255,255,255,0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(139,92,246,0.08); border-left: 3px solid #60a5fa;
-            border-radius: 10px; padding: 12px 14px; margin-bottom: 8px;
+        .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 2.5px solid rgba(99, 102, 241, 0.18);
+            border-top-color: #6366f1;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 10px;
         }
-        .ref-doc-source {
-            display: inline-block; font-size: 11px; background: rgba(96,165,250,0.1); color: #3b82f6;
-            border-radius: 4px; padding: 2px 8px; margin-bottom: 6px; font-weight: 500;
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .footer-links {
+            text-align: center;
+            margin-top: 32px;
+            font-size: 13px;
+            color: #9ca3af;
         }
-        .ref-doc-content {
-            font-size: 13px; line-height: 1.7; color: #555; white-space: pre-wrap; word-break: break-word;
+        .footer-links a {
+            color: #6366f1;
+            text-decoration: none;
+            margin: 0 8px;
         }
-        .ref-doc-toggle {
-            background: none; border: none; color: #3b82f6; font-size: 12px;
-            cursor: pointer; padding: 4px 0 0; font-family: inherit;
-        }
-        .ref-doc-toggle:hover { text-decoration: underline; }
-
-        .empty-hint { color: var(--color-text-muted); font-size: 13px; padding: 4px 0; }
-        .conflict-warn { color: var(--color-error); font-weight: 600; }
-
-        /* -- SOP Card -- */
-        .sop-card {
-            background: rgba(255,255,255,0.5);
-            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: var(--radius-card); padding: 14px 16px;
-            margin-bottom: 12px; box-shadow: 0 4px 16px rgba(99,102,241,0.06);
-            animation: fadeIn .4s ease;
-        }
-        .sop-title { font-size: 15px; font-weight: 700; color: var(--color-secondary); margin-bottom: 14px; }
-        .sop-endpoints {
-            display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
-            padding: 10px 16px; background: rgba(139,92,246,0.06);
-            border-radius: 12px; font-size: 13px;
-        }
-        .sop-ep { padding: 3px 12px; border-radius: 8px; font-weight: 600; font-size: 12px; }
-        .sop-ep-s { background: rgba(99,102,241,0.1); color: var(--color-primary); }
-        .sop-ep-e { background: rgba(16,185,129,0.1); color: var(--color-success); }
-
-        .sop-rail {
-            display: flex; align-items: flex-start; overflow-x: auto;
-            padding: 16px 10px 20px; gap: 0;
-        }
-        .sop-stop {
-            display: flex; flex-direction: column; align-items: center;
-            min-width: 80px; flex-shrink: 0; position: relative; z-index: 2;
-        }
-        .sop-stop-dot {
-            width: 40px; height: 40px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 15px; font-weight: 700; color: #fff;
-            backdrop-filter: blur(8px); border: 2px solid transparent;
-            transition: all .3s;
-        }
-        .sop-stop-dot.done {
-            background: linear-gradient(135deg, var(--color-success), #34d399);
-            border-color: rgba(16,185,129,0.3);
-        }
-        .sop-stop-dot.active {
-            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-            border-color: rgba(99,102,241,0.3);
-            animation: pulseGlow 2s ease-in-out infinite;
-        }
-        .sop-stop-dot.waiting {
-            background: rgba(156,163,175,0.15);
-            border-color: rgba(156,163,175,0.2);
-            color: var(--color-text-muted); font-size: 12px;
-        }
-        .sop-stop-dot.error {
-            background: linear-gradient(135deg, var(--color-error), #f87171);
-            border-color: rgba(239,68,68,0.3);
-        }
-        .sop-stop-name {
-            font-size: 12px; font-weight: 700; color: var(--color-text);
-            margin-top: 8px; text-align: center; white-space: nowrap;
-        }
-        .sop-stop-sub {
-            font-size: 10px; color: var(--color-secondary); margin-top: 2px;
-            text-align: center; white-space: nowrap; font-weight: 500;
-        }
-        .sop-conn {
-            display: flex; flex-direction: column; align-items: center;
-            min-width: 100px; flex: 1; flex-shrink: 0; padding-top: 17px;
-        }
-        .sop-conn-bar {
-            width: 100%; height: 6px; border-radius: 3px;
-            position: relative; overflow: hidden;
-        }
-        .sop-conn-bar.done {
-            background: linear-gradient(90deg, var(--color-success), #34d399);
-        }
-        .sop-conn-bar.active {
-            background: linear-gradient(90deg, var(--color-success), var(--color-primary));
-        }
-        .sop-conn-bar.active::after {
-            content: ''; position: absolute; top: 0; left: -50%;
-            width: 50%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,.6), transparent);
-            animation: sopShine 1.5s infinite;
-        }
-        @keyframes sopShine { 0% { left: -50%; } 100% { left: 150%; } }
-        .sop-conn-bar.waiting { background: rgba(156,163,175,0.15); }
-        .sop-conn-bar.error { background: rgba(239,68,68,0.15); }
-        .sop-conn-info {
-            display: flex; flex-direction: column; align-items: center;
-            gap: 2px; margin-top: 6px;
-        }
-        .sop-conn-badge {
-            padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;
-        }
-        .sop-conn-badge.done { background: rgba(16,185,129,0.1); color: var(--color-success); }
-        .sop-conn-badge.active { background: rgba(99,102,241,0.1); color: var(--color-primary); }
-        .sop-conn-badge.waiting { background: rgba(156,163,175,0.08); color: var(--color-text-muted); }
-        .sop-conn-badge.error { background: rgba(239,68,68,0.1); color: var(--color-error); }
-        .sop-conn-act { font-size: 11px; color: var(--color-text-muted); text-align: center; }
-
-        /* -- Ticket sub-section in step -- */
-        .ticket-section {
-            margin: 8px 0 0 0; padding: 10px 14px;
-            background: rgba(99,102,241,0.04); border-radius: 10px;
-            border-left: 3px solid var(--color-primary);
-        }
-        .ticket-section-title {
-            font-size: 12px; font-weight: 600; color: var(--color-primary); margin-bottom: 6px;
-        }
-
-        /* conflict suggestion */
-        .conflict-tip {
-            margin-top: 10px; padding: 10px 14px;
-            background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15);
-            border-radius: 10px; font-size: 13px; color: var(--color-warning);
-        }
-
-        /* AI deep analyze button */
-        .ai-deep-btn {
-            background: linear-gradient(135deg, #8b5cf6, #6366f1);
-            font-size: 15px;
-            padding: 10px 28px;
-        }
-        .ai-deep-btn:hover {
-            background: linear-gradient(135deg, #7c3aed, #4f46e5);
-            box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
-        }
-        .ai-deep-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        /* -- Model Tag & Popover -- */
-        .model-tag {
-            background: rgba(139, 92, 246, 0.08); color: #8b5cf6;
-            border: 1px solid rgba(139, 92, 246, 0.15);
-        }
-        .model-tag:hover { background: rgba(139, 92, 246, 0.14); }
-        #modelPopover {
-            top: 100%; right: 0;
-            width: 500px; max-width: calc(100vw - 32px);
-            margin-top: 4px;
-            animation: popoverIn 0.2s ease-out;
-        }
-        .model-popover-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 12px; font-size: 15px; font-weight: 600; color: var(--color-text);
-        }
-        .model-close-btn {
-            background: none; border: none; font-size: 18px; cursor: pointer;
-            color: var(--color-text-muted); transition: var(--transition);
-        }
-        .model-close-btn:hover { color: var(--color-error); }
-        .model-item {
-            display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 4px;
-            border-radius: var(--radius-tag); transition: var(--transition);
-        }
-        .model-item-active {
-            background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.2);
-        }
-        .model-item-inactive {
-            background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        .model-item-info { flex: 1; min-width: 0; }
-        .model-item-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
-        .model-item-meta { font-size: 11px; color: var(--color-text-muted); margin-top: 1px; }
-        .model-switch-btn {
-            height: 28px; padding: 0 12px; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: #fff;
-            border: none; border-radius: 8px; font-size: 12px; cursor: pointer; font-weight: 500;
-            transition: var(--transition); white-space: nowrap;
-        }
-        .model-switch-btn:hover { box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3); }
-        .model-delete-btn {
-            height: 28px; padding: 0 10px; background: transparent; color: var(--color-error);
-            border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; font-size: 12px;
-            cursor: pointer; transition: var(--transition); white-space: nowrap;
-        }
-        .model-delete-btn:hover { background: rgba(239, 68, 68, 0.06); }
-        .model-active-badge {
-            font-size: 11px; color: #fff; background: linear-gradient(135deg, #8b5cf6, #6366f1);
-            padding: 3px 10px; border-radius: 10px; font-weight: 600;
-        }
-        .model-add-section {
-            margin-top: 12px; padding-top: 12px;
-            border-top: 1px solid rgba(139, 92, 246, 0.08);
-        }
-        .model-add-section .label { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin-bottom: 8px; }
-        .model-add-row { display: flex; gap: 6px; margin-bottom: 6px; }
-        .model-add-row select, .model-add-row input {
-            height: 32px; padding: 0 8px; border: 1.5px solid rgba(139, 92, 246, 0.15);
-            border-radius: 8px; font-size: 12px; outline: none; background: rgba(255,255,255,0.6);
-            color: var(--color-text); transition: var(--transition);
-        }
-        .model-add-row select:focus, .model-add-row input:focus {
-            border-color: #8b5cf6; box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
-        }
-        .model-add-row input { flex: 1; }
-        .model-add-btn {
-            height: 32px; padding: 0 14px; background: linear-gradient(135deg, #8b5cf6, #6366f1); color: #fff;
-            border: none; border-radius: 8px; font-size: 12px; cursor: pointer; white-space: nowrap;
-            font-weight: 600; transition: var(--transition);
-        }
-        .model-add-btn:hover { box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3); }
-        #modelToast {
-            display: none; padding: 10px 16px; margin-top: 16px;
-            background: rgba(139, 92, 246, 0.08); border: 1px solid rgba(139, 92, 246, 0.2);
-            border-radius: var(--radius-card); font-size: 13px; color: #8b5cf6;
-            backdrop-filter: blur(12px); animation: fadeIn .3s ease;
-        }
-
-
+        .footer-links a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-
-<!-- ========== Top Bar ========== -->
-<nav class="glass-topbar">
-    <div class="topbar-logo">
-        <span class="icon">🤖</span>
-        <span>WCS 智能诊断</span>
-    </div>
-    <div class="topbar-center" id="envBar">
-        <div class="env-badge" onclick="toggleEnvPanel()">
-            <span class="env-dot"></span>
-            <span id="envName">default</span>
-            <span class="env-url-hint" id="envUrl"></span>
-            <span style="font-size:10px;opacity:.5">▼</span>
-        </div>
-        <!-- Env Popover -->
-        <div id="envPanel" class="glass-popover env-popover" style="display:none">
-            <div class="env-popover-header">
-                <span>⚙️ 环境管理</span>
-                <button class="env-close-btn" onclick="toggleEnvPanel()">✕</button>
-            </div>
-            <div id="envList"></div>
-            <div class="env-add-section">
-                <div class="label">➕ 添加新环境</div>
-                <div class="env-add-row">
-                    <input type="text" id="newEnvName" placeholder="环境名称">
-                    <input type="text" id="newEnvUrl" placeholder="WCS地址（如 http://192.168.1.100:8088）" style="flex:2">
-                    <button class="env-add-btn" onclick="addEnv()">添加</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="topbar-center" id="modelBar" style="position:relative;flex:none;">
-        <span class="glass-tag model-tag" onclick="toggleModelPanel()" style="cursor:pointer;">
-            <span style="width:8px;height:8px;border-radius:50%;background:#8b5cf6;display:inline-block;"></span>
-            <span id="modelName">加载中...</span>
-            <span style="font-size:10px;opacity:.5">▼</span>
+<nav class="nav">
+    <div class="nav-inner">
+        <span class="nav-brand">🔍 WCS 诊断平台</span>
+        <a href="/index.html" class="active">🏠 诊断</a>
+        <a href="/task.html">📋 任务查询</a>
+        <a href="/rules.html">⚙️ 规则管理</a>
+        <a href="/chat.html">💬 AI 对话</a>
+        <a href="/docs.html">📄 文档管理</a>
+        <a href="/map.html">🗺️ 地图</a>
+        <span id="envIndicator" style="margin-left:auto;font-size:12px;color:#6b7280;display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="toggleEnvPanel()" title="点击配置环境">
+            <span style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;"></span>
+            <span id="envLabel">-</span>
+            <span style="font-size:10px;color:#9ca3af">⚙</span>
         </span>
-        <!-- Model Popover -->
-        <div id="modelPopover" class="glass-popover" style="display:none">
-            <div class="model-popover-header">
-                <span>⚙️ 模型管理</span>
-                <button class="model-close-btn" onclick="toggleModelPanel()">✕</button>
-            </div>
-            <div id="modelList"></div>
-            <div id="modelToast"></div>
-            <div class="model-add-section">
-                <div class="label">➕ 添加模型</div>
-                <div class="model-add-row">
-                    <select id="newModelProvider" onchange="toggleBaseUrlField()">
-                        <option value="openai-compatible">OpenAI 兼容</option>
-                        <option value="zhipuai">智谱 ZhiPuAI</option>
-                    </select>
-                    <input type="text" id="newModelDisplayName" placeholder="显示名称">
-                    <input type="text" id="newModelName" placeholder="模型标识 (如 deepseek-chat)">
-                </div>
-                <div class="model-add-row">
-                    <input type="text" id="newModelBaseUrl" placeholder="API 地址 (如 https://api.deepseek.com)" style="flex:2">
-                    <input type="text" id="newModelApiKey" placeholder="API Key">
-                    <button class="model-add-btn" onclick="addModel()">添加</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="topbar-right">
-        <a href="rules.html" class="glass-btn-outline" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">
-            📋 规则管理
-        </a>
-        <a href="chat.html" class="glass-btn-outline" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">
-            💬 Agent 对话模式
-        </a>
-        <a href="docs.html" class="glass-btn-outline" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">
-            📚 知识库管理
-        </a>
     </div>
 </nav>
 
-<!-- ========== Hero Section ========== -->
-<div class="container hero-section">
-    <div class="glass-card hero-card animate-slideUp">
-        <span class="hero-icon">🤖</span>
-        <h1 class="hero-title">WCS 任务智能诊断</h1>
-        <p class="hero-subtitle">输入任务ID，逐步查询任务链路，AI 自动分析故障根因</p>
-        <div class="hero-input-row">
-            <input type="text" id="taskId" class="glass-input" placeholder="请输入任务ID或WMS任务号" autocomplete="off">
-            <div class="scope-switch" id="scopeSwitch">
-                <button class="scope-option active" type="button" data-scope="single" onclick="setDiagnoseScope('single')">单任务</button>
-                <button class="scope-option" type="button" data-scope="global" onclick="setDiagnoseScope('global')">全局关联</button>
-            </div>
-            <button class="glass-btn" id="diagnoseBtn" onclick="startDiagnose()">开始诊断</button>
-            <button class="glass-btn-outline" id="mapBtn" onclick="openMap()">🗺️ 地图查看</button>
+<!-- 环境配置面板 -->
+<div id="envPanel" style="display:none;position:fixed;top:52px;right:16px;z-index:500;background:#fff;border:1px solid rgba(99,102,241,0.2);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.12);padding:20px;min-width:360px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <span style="font-weight:700;font-size:14px;color:#1f2937">⚙️ 环境配置</span>
+        <button onclick="toggleEnvPanel()" style="background:none;border:none;cursor:pointer;font-size:16px;color:#9ca3af;padding:2px 6px;">✕</button>
+    </div>
+    <!-- 快速切换环境 -->
+    <div style="margin-bottom:14px;">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:6px;font-weight:600;">快速切换环境</div>
+        <div id="envBtnGroup" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    </div>
+    <!-- 自定义平台 URL -->
+    <div style="margin-bottom:14px;">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:6px;font-weight:600;">平台服务地址 (loong-platform)</div>
+        <div style="display:flex;gap:8px;">
+            <input id="platformUrlInput" type="text" placeholder="http://127.0.0.1:18081"
+                style="flex:1;height:34px;padding:0 10px;border:1.5px solid rgba(99,102,241,0.2);border-radius:8px;font-size:13px;outline:none;">
+            <button onclick="savePlatformUrl()" style="height:34px;padding:0 14px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">保存</button>
         </div>
     </div>
+    <!-- 地图 URL -->
+    <div style="margin-bottom:4px;">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:6px;font-weight:600;">地图服务地址（留空则与平台地址相同）</div>
+        <div style="display:flex;gap:8px;">
+            <input id="mapUrlInput" type="text" placeholder="留空则使用平台地址"
+                style="flex:1;height:34px;padding:0 10px;border:1.5px solid rgba(99,102,241,0.2);border-radius:8px;font-size:13px;outline:none;">
+            <button onclick="savePlatformUrl()" style="height:34px;padding:0 14px;background:rgba(99,102,241,0.1);color:#4f46e5;border:1.5px solid rgba(99,102,241,0.2);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">保存</button>
+        </div>
+    </div>
+    <div id="envSaveMsg" style="font-size:12px;color:#10b981;margin-top:8px;display:none;">✓ 已保存，立即生效</div>
+</div>
+<div class="container">
+    <div class="hero">
+        <span class="hero-icon">🔍</span>
+        <h1 class="hero-title">WCS 任务智能诊断</h1>
+        <p class="hero-subtitle">输入任务号，分析任务为何卡住并给出操作建议</p>
+        <div class="input-row">
+            <input id="taskIdInput" type="text" placeholder="请输入任务号（如 WMS_TASK_001）" autocomplete="off">
+            <button id="analyzeBtn" onclick="analyze()">开始诊断</button>
+        </div>
+        <div class="hint">调用 POST /api/v1/diagnosis/analyze</div>
+    </div>
 
-    <!-- Toast -->
-    <div id="envToast" class="env-toast">✅ 环境已切换</div>
-    <div id="modelToastGlobal" class="env-toast" style="background:rgba(139,92,246,0.08);border-color:rgba(139,92,246,0.2);color:#8b5cf6;"></div>
-
-    <!-- Error -->
     <div id="errorBox" class="error-box"></div>
+    <div id="spinner" class="spinner-wrap"><span class="spinner"></span>正在诊断，请稍候...</div>
+    <div id="resultCard" class="result-card"></div>
 
-    <!-- SOP Area -->
-    <div id="sopArea"></div>
-
-    <!-- Timeline -->
-    <div id="timeline"></div>
-
+    <div class="footer-links">
+        <a href="/swagger-ui.html" target="_blank">Swagger UI</a>
+        ·
+        <a href="/task.html">任务查询</a>
+        ·
+        <a href="/rules.html">规则管理</a>
+        ·
+        <a href="/chat.html">AI 对话</a>
+        ·
+        <a href="/docs.html">文档管理</a>
+        ·
+        <a href="/map.html">地图</a>
+    </div>
 </div>
 
 <script>
-/* ---- 环境配置 ---- */
-function toggleEnvPanel() {
-    var p = document.getElementById('envPanel');
-    p.style.display = p.style.display === 'none' ? 'block' : 'none';
-    if (p.style.display === 'block') loadEnvs();
-}
+    var taskIdInput = document.getElementById('taskIdInput');
+    var analyzeBtn = document.getElementById('analyzeBtn');
+    var errorBox = document.getElementById('errorBox');
+    var resultCard = document.getElementById('resultCard');
+    var spinner = document.getElementById('spinner');
 
-// 点击外部关闭 popover
-document.addEventListener('click', function(e) {
-    var panel = document.getElementById('envPanel');
-    var bar = document.getElementById('envBar');
-    if (panel.style.display === 'block' && !bar.contains(e.target)) {
-        panel.style.display = 'none';
+    taskIdInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') analyze();
+    });
+
+    function analyze() {
+        var taskId = (taskIdInput.value || '').trim();
+        if (!taskId) {
+            showError('请输入任务号');
+            return;
+        }
+        hideError();
+        resultCard.style.display = 'none';
+        spinner.style.display = 'block';
+        analyzeBtn.disabled = true;
+
+        fetch('/api/v1/diagnosis/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId: taskId })
+        }).then(function(r) {
+            return r.json().then(function(body) {
+                return { status: r.status, body: body };
+            });
+        }).then(function(resp) {
+            spinner.style.display = 'none';
+            analyzeBtn.disabled = false;
+            if (resp.body && resp.body.success && resp.body.data) {
+                renderResult(resp.body.data);
+            } else {
+                var msg = (resp.body && resp.body.message) || ('HTTP ' + resp.status);
+                var code = (resp.body && resp.body.code) || 'ERROR';
+                showError('[' + code + '] ' + msg);
+            }
+        }).catch(function(err) {
+            spinner.style.display = 'none';
+            analyzeBtn.disabled = false;
+            showError('网络错误: ' + (err.message || err));
+        });
     }
-    // 模型 popover
-    var modelPanel = document.getElementById('modelPopover');
-    var modelBar = document.getElementById('modelBar');
-    if (modelPanel.style.display === 'block' && !modelBar.contains(e.target)) {
-        modelPanel.style.display = 'none';
+
+    function showError(msg) {
+        errorBox.textContent = msg;
+        errorBox.style.display = 'block';
     }
-});
+    function hideError() {
+        errorBox.style.display = 'none';
+    }
 
-function updateEnvBar(name, url) {
-    document.getElementById('envName').textContent = name;
-    document.getElementById('envUrl').textContent = url || '';
-}
+    function renderResult(data) {
+        var mode = data.diagnosisMode || 'fallback';
+        var confidence = typeof data.confidence === 'number' ? (data.confidence * 100).toFixed(0) + '%' : '-';
+        var traceId = data.traceId || '-';
 
-function showEnvToast(name) {
-    var toast = document.getElementById('envToast');
-    toast.innerHTML = '✅ 已切换到 <b>' + esc(name) + '</b> 环境';
-    toast.style.display = 'block';
-    setTimeout(function() { toast.style.display = 'none'; }, 3000);
-}
+        var modeBadge;
+        if (mode === 'rule') modeBadge = '<span class="badge badge-rule">🎯 规则命中</span>';
+        else if (mode === 'llm') modeBadge = '<span class="badge badge-llm">🤖 LLM 分析</span>';
+        else modeBadge = '<span class="badge badge-fallback">⚠ 兜底</span>';
 
-function loadEnvs() {
-    fetch('/api/v1/env/list').then(r => r.json()).then(data => {
-        var active = data.active;
-        var activeUrl = '';
-        var html = '';
-        data.envs.forEach(function(e) {
+        var html = ''
+            + '<div class="result-badge-row">'
+            +   modeBadge
+            +   '<span class="badge badge-confidence">置信度 ' + confidence + '</span>'
+            +   '<span class="badge badge-trace">trace: ' + escapeHtml(traceId) + '</span>'
+            + '</div>'
+            + '<div class="summary">' + escapeHtml(data.summary || '无摘要') + '</div>';
+
+        if (data.rootCauses && data.rootCauses.length > 0) {
+            html += '<div class="section-title">根因分析</div>';
+            data.rootCauses.forEach(function(rc) {
+                html += '<div class="rc-item">'
+                    + '<div class="rc-title">' + escapeHtml(rc.title || '') + '</div>'
+                    + '<div class="rc-desc">' + escapeHtml(rc.description || '') + '</div>'
+                    + '</div>';
+            });
+        }
+
+        if (data.actions && data.actions.length > 0) {
+            html += '<div class="section-title">操作建议</div>';
+            html += '<ul class="action-list">';
+            data.actions.forEach(function(action) {
+                html += '<li>' + escapeHtml(action) + '</li>';
+            });
+            html += '</ul>';
+        }
+
+        resultCard.innerHTML = html;
+        resultCard.style.display = 'block';
+    }
+
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, function(c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    // 加载环境信息
+    fetch('/api/v1/env/list').then(function(r) { return r.json(); }).then(function(data) {
+        var active = data.active || '-';
+        var envs = data.envs || [];
+        var activeEnv = envs.find(function(e) { return e.name === active; });
+        var label = (activeEnv && activeEnv.label) ? activeEnv.label : active;
+        document.getElementById('envLabel').textContent = label;
+
+        // 填充平台 URL 输入框
+        if (data.platformUrl) document.getElementById('platformUrlInput').value = data.platformUrl;
+        if (data.mapUrl && data.mapUrl !== data.platformUrl) document.getElementById('mapUrlInput').value = data.mapUrl;
+
+        // 渲染环境切换按钮
+        var btnGroup = document.getElementById('envBtnGroup');
+        btnGroup.innerHTML = '';
+        envs.forEach(function(e) {
+            var btn = document.createElement('button');
+            btn.textContent = e.label || e.name;
+            btn.title = e.wcsUrl || '';
             var isActive = e.name === active;
-            if (isActive) activeUrl = e.wcsUrl;
-            html += '<div class="env-item' + (isActive ? ' active' : '') + '">';
-            html += '<div class="env-item-dot" style="background:' + (isActive ? 'var(--color-success)' : 'rgba(156,163,175,0.3)') + '"></div>';
-            html += '<div class="env-item-info">';
-            html += '<div class="env-item-name"' + (isActive ? ' style="font-weight:700"' : '') + '>' + esc(e.name) + '</div>';
-            html += '<div class="env-item-url">' + esc(e.wcsUrl) + '</div>';
-            html += '</div>';
-            html += '<div class="env-item-actions">';
-            if (!isActive) {
-                html += '<button class="env-switch-btn" onclick="switchEnv(\'' + esc(e.name) + '\')">切换</button>';
-                if (e.name !== 'default') html += '<button class="env-del-btn" onclick="deleteEnv(\'' + esc(e.name) + '\')">删除</button>';
-            } else {
-                html += '<span class="env-active-badge">当前</span>';
-            }
-            html += '</div></div>';
+            btn.style.cssText = 'height:30px;padding:0 14px;border-radius:8px;font-size:12px;font-weight:' + (isActive ? '700' : '500') + ';cursor:pointer;border:1.5px solid ' + (isActive ? '#6366f1' : 'rgba(99,102,241,0.2)') + ';background:' + (isActive ? 'rgba(99,102,241,0.12)' : 'transparent') + ';color:' + (isActive ? '#4f46e5' : '#6b7280') + ';';
+            btn.onclick = function() { switchEnv(e.name); };
+            btnGroup.appendChild(btn);
         });
-        document.getElementById('envList').innerHTML = html;
-        updateEnvBar(active, activeUrl);
+    }).catch(function() {
+        document.getElementById('envLabel').textContent = 'local';
     });
-}
 
-function switchEnv(name) {
-    fetch('/api/v1/env/switch', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: name}) })
-        .then(r => r.json()).then(function(data) {
-            loadEnvs();
-            showEnvToast(name);
-        });
-}
-
-function addEnv() {
-    var name = document.getElementById('newEnvName').value.trim();
-    var url = document.getElementById('newEnvUrl').value.trim();
-    if (!name || !url) { alert('请填写环境名称和WCS地址'); return; }
-    fetch('/api/v1/env/save', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: name, wcsUrl: url}) })
-        .then(r => r.json()).then(function() {
-            document.getElementById('newEnvName').value = '';
-            document.getElementById('newEnvUrl').value = '';
-            loadEnvs();
-        });
-}
-
-function deleteEnv(name) {
-    if (!confirm('确定删除环境 ' + name + '？')) return;
-    fetch('/api/v1/env/' + name, { method: 'DELETE' }).then(r => r.json()).then(function() { loadEnvs(); });
-}
-
-// 页面加载时获取当前环境
-fetch('/api/v1/env/list').then(r => r.json()).then(data => {
-    var activeUrl = '';
-    data.envs.forEach(function(e) { if (e.name === data.active) activeUrl = e.wcsUrl; });
-    updateEnvBar(data.active, activeUrl);
-}).catch(function(){});
-
-/* ---- 模型管理 ---- */
-function toggleModelPanel() {
-    var p = document.getElementById('modelPopover');
-    p.style.display = p.style.display === 'none' ? 'block' : 'none';
-    if (p.style.display === 'block') loadModels();
-}
-
-function toggleBaseUrlField() {
-    var provider = document.getElementById('newModelProvider').value;
-    document.getElementById('newModelBaseUrl').style.display = provider === 'zhipuai' ? 'none' : '';
-}
-
-function loadModels() {
-    fetch('/api/v2/diagnosis/models').then(function(r) { return r.json(); }).then(function(resp) {
-        if (!resp.success) return;
-        var active = resp.data.active;
-        var models = resp.data.models || [];
-        var html = '';
-        models.forEach(function(m) {
-            var isActive = m.name === active;
-            var providerLabel = m.provider === 'zhipuai' ? '智谱' : 'OpenAI兼容';
-            html += '<div class="model-item ' + (isActive ? 'model-item-active' : 'model-item-inactive') + '">';
-            html += '<div class="model-item-info">';
-            html += '<div class="model-item-name" style="font-weight:' + (isActive ? '700' : '400') + '">' + esc(m.displayName || m.model) + '</div>';
-            html += '<div class="model-item-meta">' + esc(providerLabel) + ' · ' + esc(m.model) + (m.baseUrl ? ' · ' + esc(m.baseUrl) : '') + '</div>';
-            html += '</div>';
-            if (!isActive) {
-                html += '<button class="model-switch-btn" onclick="switchModel(\'' + esc(m.name) + '\')">切换</button>';
-                if (m.name !== 'zhipuai-default') html += '<button class="model-delete-btn" onclick="deleteModel(\'' + esc(m.name) + '\')">删除</button>';
-            } else {
-                html += '<span class="model-active-badge">当前</span>';
-            }
-            html += '</div>';
-        });
-        document.getElementById('modelList').innerHTML = html;
-        // 更新顶栏模型名
-        models.forEach(function(m) {
-            if (m.name === active) {
-                document.getElementById('modelName').textContent = m.displayName || m.model;
-            }
-        });
-    }).catch(function(err) { console.error('加载模型失败', err); });
-}
-
-function switchModel(name) {
-    fetch('/api/v2/diagnosis/models/switch', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: name}) })
-        .then(function(r) { return r.json(); }).then(function() {
-            loadModels();
-            var toast = document.getElementById('modelToastGlobal');
-            toast.innerHTML = '✅ 模型已切换';
-            toast.style.display = 'block';
-            setTimeout(function() { toast.style.display = 'none'; }, 3000);
-        });
-}
-
-function addModel() {
-    var provider = document.getElementById('newModelProvider').value;
-    var displayName = document.getElementById('newModelDisplayName').value.trim();
-    var model = document.getElementById('newModelName').value.trim();
-    var baseUrl = document.getElementById('newModelBaseUrl').value.trim();
-    var apiKey = document.getElementById('newModelApiKey').value.trim();
-    if (!model) { alert('请填写模型标识'); return; }
-    if (!apiKey) { alert('请填写 API Key'); return; }
-    if (provider === 'openai-compatible' && !baseUrl) { alert('请填写 API 地址'); return; }
-    var name = provider + '-' + model.replace(/[^a-zA-Z0-9.-]/g, '-');
-    fetch('/api/v2/diagnosis/models/save', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ name: name, displayName: displayName || model, provider: provider, baseUrl: baseUrl, apiKey: apiKey, model: model, temperature: 0.1 })
-    }).then(function(r) { return r.json(); }).then(function() {
-        document.getElementById('newModelDisplayName').value = '';
-        document.getElementById('newModelName').value = '';
-        document.getElementById('newModelBaseUrl').value = '';
-        document.getElementById('newModelApiKey').value = '';
-        loadModels();
-    });
-}
-
-function deleteModel(name) {
-    if (!confirm('确定删除该模型配置？')) return;
-    fetch('/api/v2/diagnosis/models/' + encodeURIComponent(name), { method: 'DELETE' })
-        .then(function(r) { return r.json(); }).then(function() { loadModels(); });
-}
-
-// 初始加载模型信息
-loadModels();
-
-const STEP_LABELS = {
-    1: '主任务信息',
-    2: '子任务 & 执行单',
-    3: '子任务 & 执行单',
-    4: '路径占用检查',
-    5: '系统日志',
-    6: '规则引擎分析'
-};
-const STEP_ICONS = { 1: '①', 2: '②', 3: '③', 4: '④', 5: '⑤', 6: '⑥' };
-let diagnoseScope = 'single';
-
-function setDiagnoseScope(scope) {
-    diagnoseScope = scope === 'global' ? 'global' : 'single';
-    var options = document.querySelectorAll('.scope-option');
-    options.forEach(function(btn) {
-        btn.classList.toggle('active', btn.getAttribute('data-scope') === diagnoseScope);
-    });
-    document.getElementById('mapBtn').style.display = diagnoseScope === 'global' ? 'none' : '';
-}
-
-function startDiagnose() {
-    var taskId = document.getElementById('taskId').value.trim();
-    if (!taskId) { alert('请输入任务ID'); return; }
-
-    if (diagnoseScope === 'global') {
-        startGlobalDiagnose(taskId);
-        return;
+    function toggleEnvPanel() {
+        var panel = document.getElementById('envPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     }
 
-    var btn = document.getElementById('diagnoseBtn');
-    var errorBox = document.getElementById('errorBox');
-    var timeline = document.getElementById('timeline');
-
-    btn.disabled = true;
-    errorBox.style.display = 'none';
-    timeline.innerHTML = '';
-    document.getElementById('sopArea').innerHTML = '';
-
-    // 存储数据用于构建 SOP
-    var diagData = { task: null, items: null, tickets: null };
-    window._diagData = diagData;
-
-    var source = new EventSource('/api/v1/diagnosis/stream?taskId=' + encodeURIComponent(taskId));
-
-    source.addEventListener('step', function(e) {
-        var d = JSON.parse(e.data);
-        if (d.step === 3) return; // 执行单合并到子任务中，不单独显示
-        ensureStepCard(d.step, d.label);
-    });
-
-    source.addEventListener('task', function(e) {
-        var task = JSON.parse(e.data);
-        diagData.task = task;
-        var card = getStepContent(1);
-        card.innerHTML = renderTaskTable(task);
-        markStepDone(1);
-    });
-
-    source.addEventListener('taskItems', function(e) {
-        var items = JSON.parse(e.data);
-        diagData.items = items;
-        var card = getStepContent(2);
-        card.innerHTML = '<div class="subtask-area">' + renderTaskItems(items, null) + '</div>';
-        markStepDone(2);
-    });
-
-    source.addEventListener('tickets', function(e) {
-        var tickets = JSON.parse(e.data);
-        diagData.tickets = tickets;
-        // 重新渲染子任务（含执行单）
-        var card = getStepContent(2);
-        card.innerHTML = '<div class="subtask-area">' + renderTaskItems(diagData.items, tickets) + '</div>';
-        // step 3 直接标记完成，不单独显示
-        markStepDone(3);
-        // 渲染 SOP
-        renderSOP(diagData);
-    });
-
-    source.addEventListener('conflicts', function(e) {
-        var conflicts = JSON.parse(e.data);
-        var card = getStepContent(4);
-        card.innerHTML = renderConflicts(conflicts);
-        markStepDone(4);
-    });
-
-    source.addEventListener('logs', function(e) {
-        var logs = JSON.parse(e.data);
-        var card = getStepContent(5);
-        card.innerHTML = renderLogs(logs);
-        markStepDone(5);
-    });
-
-    source.addEventListener('ai', function(e) {
-        var ai = JSON.parse(e.data);
-        var card = getStepContent(6);
-        card.innerHTML = renderAI(ai);
-        markStepDone(6);
-    });
-
-    source.addEventListener('done', function() {
-        source.close();
-        btn.disabled = false;
-        document.getElementById('mapBtn').style.display = '';
-    });
-
-    source.addEventListener('error', function(e) {
-        if (e.data) {
-            var d = JSON.parse(e.data);
-            errorBox.textContent = '⚠️ ' + d.message;
-            errorBox.style.display = 'block';
+    // 点击面板外关闭
+    document.addEventListener('click', function(e) {
+        var panel = document.getElementById('envPanel');
+        var indicator = document.getElementById('envIndicator');
+        if (panel.style.display !== 'none' && !panel.contains(e.target) && !indicator.contains(e.target)) {
+            panel.style.display = 'none';
         }
-        source.close();
-        btn.disabled = false;
     });
 
-    source.onerror = function() {
-        source.close();
-        btn.disabled = false;
-    };
-}
-
-function startGlobalDiagnose(taskId) {
-    var btn = document.getElementById('diagnoseBtn');
-    var errorBox = document.getElementById('errorBox');
-    var timeline = document.getElementById('timeline');
-
-    btn.disabled = true;
-    errorBox.style.display = 'none';
-    timeline.innerHTML = '<div class="step-card active"><div class="step-header"><div class="step-icon active">◎</div><div class="step-label">全局关联诊断</div></div><div class="step-content"><div class="step-loading"><div class="spinner"></div><span>正在分析关联任务、阻塞链与瓶颈资源...</span></div></div></div>';
-    document.getElementById('sopArea').innerHTML = '';
-
-    fetch('/api/v1/diagnosis/task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: taskId, scope: 'global', timeWindowMinutes: 30 })
-    })
-        .then(function(r) { return r.json(); })
-        .then(function(resp) {
-            if (!resp || !resp.success || !resp.data) {
-                throw new Error(resp && resp.message ? resp.message : '全局诊断失败');
-            }
-            timeline.innerHTML = renderGlobalDiagnosis(resp.data);
-        })
-        .catch(function(err) {
-            errorBox.textContent = '⚠️ ' + (err && err.message ? err.message : '全局诊断失败');
-            errorBox.style.display = 'block';
-            timeline.innerHTML = '';
-        })
-        .finally(function() {
-            btn.disabled = false;
-        });
-}
-
-function ensureStepCard(step, label) {
-    if (document.getElementById('step-' + step)) {
-        return;
-    }
-    var timeline = document.getElementById('timeline');
-    var div = document.createElement('div');
-    div.className = 'step-card active';
-    div.id = 'step-' + step;
-    div.setAttribute('data-step', step);
-    div.innerHTML =
-        '<div class="step-header">' +
-            '<div class="step-icon active">' + STEP_ICONS[step] + '</div>' +
-            '<div class="step-label">' + esc(STEP_LABELS[step]) + '</div>' +
-        '</div>' +
-        '<div class="step-content" id="step-content-' + step + '">' +
-            '<div class="step-loading"><div class="spinner"></div><span>' + esc(label || '加载中...') + '</span></div>' +
-        '</div>';
-    timeline.appendChild(div);
-}
-
-function getStepContent(step) {
-    return document.getElementById('step-content-' + step);
-}
-
-function markStepDone(step) {
-    var card = document.getElementById('step-' + step);
-    if (card) {
-        card.className = 'step-card done';
-        card.setAttribute('data-step', step);
-        var icon = card.querySelector('.step-icon');
-        if (icon) { icon.className = 'step-icon done'; icon.textContent = '✓'; }
-        var lbl = card.querySelector('.step-label');
-        if (lbl) lbl.textContent = STEP_LABELS[step];
-    }
-}
-
-/* ---- 渲染函数 ---- */
-
-function renderTaskTable(t) {
-    return '<table class="data-table">' +
-        '<tr><th>任务ID</th><td>' + esc(t.taskId) + '</td><th>WMS任务号</th><td>' + esc(t.wmsTaskNo) + '</td></tr>' +
-        '<tr><th>任务状态</th><td>' + stateTag(t.taskState) + '</td><th>处理状态</th><td>' + stateTag(t.handleState) + '</td></tr>' +
-        '<tr><th>任务类型</th><td>' + esc(t.taskType) + '</td><th>业务类型</th><td>' + esc(t.businessType) + '</td></tr>' +
-        '<tr><th>业务起点</th><td title="' + esc(t.businessFrom) + '">' + esc(t.businessFrom) + '</td><th>业务终点</th><td title="' + esc(t.businessTo) + '">' + esc(t.businessTo) + '</td></tr>' +
-        '<tr><th>规划起点</th><td>' + esc(t.definiteFrom) + '</td><th>规划终点</th><td>' + esc(t.definiteTo) + '</td></tr>' +
-        '<tr><th>容器号</th><td>' + esc(t.containerCode) + '</td><th>任务来源</th><td>' + esc(t.taskSource) + '</td></tr>' +
-        '<tr><th>创建时间</th><td>' + fmtTime(t.createTime) + '</td><th>开始时间</th><td>' + fmtTime(t.startTime) + '</td></tr>' +
-        (t.errorMessage ? '<tr><th>错误信息</th><td colspan="3" style="color:var(--color-error)">' + esc(t.errorMessage) + '</td></tr>' : '') +
-    '</table>';
-}
-
-function renderTaskItems(items, tickets) {
-    if (!items || items.length === 0) return '<div class="empty-hint">无子任务数据</div>';
-
-    // 按子任务分组执行单
-    var ticketsByItem = {};
-    if (tickets && tickets.length > 0) {
-        tickets.forEach(function(t) {
-            var k = t.taskItemId || '_';
-            if (!ticketsByItem[k]) ticketsByItem[k] = [];
-            ticketsByItem[k].push(t);
-        });
-    }
-
-    var now = new Date();
-    var html = '';
-    items.forEach(function(it, idx) {
-        // 子任务信息
-        html += '<div style="' + (idx > 0 ? 'margin-top:16px;padding-top:14px;border-top:1px solid rgba(99,102,241,0.06)' : '') + '">';
-        html += '<table class="data-table"><thead><tr>' +
-            '<th>子任务ID</th><th>任务状态</th><th>起点</th><th>终点</th><th>设备</th><th>检查状态</th><th>创建时间</th>' +
-            '</tr></thead><tbody>';
-        html += '<tr>' +
-            '<td title="' + esc(it.id) + '">' + esc(it.id) + '</td>' +
-            '<td>' + stateTag(it.taskState) + '</td>' +
-            '<td title="' + esc(it.startPoint) + '">' + esc(it.startPoint) + '</td>' +
-            '<td title="' + esc(it.endPoint) + '">' + esc(it.endPoint) + '</td>' +
-            '<td title="' + esc(it.deviceCode) + '">' + esc(it.deviceCode) + '</td>' +
-            '<td>' + stateTag(it.checkStatus) + '</td>' +
-            '<td>' + fmtTime(it.createTime) + '</td>' +
-        '</tr></tbody></table>';
-
-        // 该子任务的执行单
-        var itTickets = ticketsByItem[it.id] || [];
-        if (itTickets.length > 0) {
-            html += '<div class="ticket-section">';
-            html += '<div class="ticket-section-title">执行单 (' + itTickets.length + ')</div>';
-            html += '<table class="data-table"><thead><tr>' +
-                '<th>PLC任务号</th><th>任务状态</th><th>起点</th><th>终点</th><th>设备类型</th><th>设备编码</th><th>开始时间</th><th>已耗时</th>' +
-                '</tr></thead><tbody>';
-            itTickets.forEach(function(t) {
-                var elapsed = '';
-                if (t.startTime && t.taskState === 'RUNNING') {
-                    elapsed = calcElapsed(t.startTime, now);
-                } else if (t.startTime && t.finishTime) {
-                    elapsed = calcElapsed(t.startTime, parseTime(t.finishTime));
-                }
-                var elapsedCls = '';
-                if (t.taskState === 'RUNNING' && t.startTime) {
-                    var mins = getElapsedMinutes(t.startTime, now);
-                    if (mins > 5) elapsedCls = ' style="color:var(--color-error);font-weight:600"';
-                    else if (mins > 2) elapsedCls = ' style="color:var(--color-warning);font-weight:600"';
-                }
-                html += '<tr>' +
-                    '<td>' + esc(t.plcTaskId) + '</td>' +
-                    '<td>' + stateTag(t.taskState) + '</td>' +
-                    '<td>' + esc(t.startPoint) + '</td>' +
-                    '<td>' + esc(t.endPoint) + '</td>' +
-                    '<td>' + esc(t.deviceType) + '</td>' +
-                    '<td>' + esc(t.deviceCode) + '</td>' +
-                    '<td>' + fmtTime(t.startTime) + '</td>' +
-                    '<td' + elapsedCls + '>' + elapsed + '</td>' +
-                '</tr>';
+    function switchEnv(name) {
+        fetch('/api/v1/env/switch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name })
+        }).then(function(r) { return r.json(); }).then(function(data) {
+            var active = data.active || name;
+            var envs = data.envs || [];
+            var activeEnv = envs.find(function(e) { return e.name === active; });
+            var label = (activeEnv && activeEnv.label) ? activeEnv.label : active;
+            document.getElementById('envLabel').textContent = label;
+            if (data.platformUrl) document.getElementById('platformUrlInput').value = data.platformUrl;
+            // 重新渲染按钮
+            var btnGroup = document.getElementById('envBtnGroup');
+            btnGroup.querySelectorAll('button').forEach(function(btn) {
+                var isActive = btn.textContent === label || btn.title === (activeEnv && activeEnv.wcsUrl);
+                btn.style.fontWeight = isActive ? '700' : '500';
+                btn.style.borderColor = isActive ? '#6366f1' : 'rgba(99,102,241,0.2)';
+                btn.style.background = isActive ? 'rgba(99,102,241,0.12)' : 'transparent';
+                btn.style.color = isActive ? '#4f46e5' : '#6b7280';
             });
-            html += '</tbody></table></div>';
-        }
-        html += '</div>';
-    });
-    return html;
-}
-
-function renderTickets(tickets) {
-    if (!tickets || tickets.length === 0) return '<div class="empty-hint">无执行单数据</div>';
-    var now = new Date();
-    var html = '<table class="data-table"><thead><tr>' +
-        '<th>PLC任务号</th><th>任务状态</th><th>起点</th><th>终点</th><th>设备类型</th><th>设备编码</th><th>开始时间</th><th>已耗时</th>' +
-        '</tr></thead><tbody>';
-    tickets.forEach(function(t) {
-        var elapsed = '';
-        if (t.startTime && t.taskState === 'RUNNING') {
-            elapsed = calcElapsed(t.startTime, now);
-        } else if (t.startTime && t.finishTime) {
-            elapsed = calcElapsed(t.startTime, parseTime(t.finishTime));
-        }
-        var elapsedCls = '';
-        if (t.taskState === 'RUNNING' && t.startTime) {
-            var mins = getElapsedMinutes(t.startTime, now);
-            if (mins > 5) elapsedCls = ' style="color:var(--color-error);font-weight:600"';
-            else if (mins > 2) elapsedCls = ' style="color:var(--color-warning);font-weight:600"';
-        }
-        html += '<tr>' +
-            '<td>' + esc(t.plcTaskId) + '</td>' +
-            '<td>' + stateTag(t.taskState) + '</td>' +
-            '<td>' + esc(t.startPoint) + '</td>' +
-            '<td>' + esc(t.endPoint) + '</td>' +
-            '<td>' + esc(t.deviceType) + '</td>' +
-            '<td>' + esc(t.deviceCode) + '</td>' +
-            '<td>' + fmtTime(t.startTime) + '</td>' +
-            '<td' + elapsedCls + '>' + elapsed + '</td>' +
-        '</tr>';
-    });
-    html += '</tbody></table>';
-    return html;
-}
-
-function renderLogs(logs) {
-    if (!logs || logs.length === 0) return '<div class="empty-hint">无相关日志</div>';
-    var html = '<div class="log-box">';
-    logs.forEach(function(line) {
-        html += '<div class="log-line">' + esc(line) + '</div>';
-    });
-    html += '</div>';
-    return html;
-}
-
-function renderConflicts(conflicts) {
-    if (!conflicts || conflicts.length === 0) return '<div class="empty-hint" style="color:var(--color-success)">✅ 路径点位无占用冲突</div>';
-    var html = '<div style="margin-bottom:8px;color:var(--color-error);font-size:13px;font-weight:500">⚠️ 发现以下点位被其他任务占用，可能导致当前任务无法推进：</div>';
-    html += '<table class="data-table"><thead><tr>' +
-        '<th>占用点位</th><th>锁类型</th><th>占用任务</th><th>过期时间</th>' +
-        '</tr></thead><tbody>';
-    conflicts.forEach(function(c) {
-        html += '<tr>' +
-            '<td style="font-weight:600;color:var(--color-error)">' + esc(c.lockValue) + '</td>' +
-            '<td>' + esc(c.lockType) + '</td>' +
-            '<td>' + esc(c.occupiedBy) + '</td>' +
-            '<td>' + fmtTime(c.expirationTime) + '</td>' +
-        '</tr>';
-    });
-    html += '</tbody></table>';
-    html += '<div class="conflict-tip">💡 建议操作：检查占用任务是否卡住，如已无效可手动释放锁或取消占用任务，释放后当前任务可自动继续执行。</div>';
-    return html;
-}
-
-function renderGlobalDiagnosis(result) {
-    var snapshot = result.relationSnapshot || {};
-    var html = '<div class="global-analysis-card">';
-    html += '<div class="global-header">';
-    html += '<div class="global-title"><span>🌐</span><span>全局关联诊断结果</span></div>';
-    html += '<div class="global-meta">';
-    html += '<span class="meta-pill">模式：' + esc(result.diagnosisMode || 'global-rule') + '</span>';
-    html += '<span class="meta-pill">置信度：' + esc(result.confidence == null ? '-' : result.confidence) + '</span>';
-    html += '</div></div>';
-    html += '<div class="ai-summary">' + esc(result.summary || '无全局诊断结论') + '</div>';
-    html += '<div class="global-grid">';
-    html += renderGlobalStat('当前任务', snapshot.focusTaskId || '-');
-    html += renderGlobalStat('直接阻塞候选', snapshot.directBlockerTaskId || '-');
-    html += renderGlobalStat('根阻塞候选', snapshot.rootBlockerTaskId || '-');
-    html += renderGlobalStat('影响任务数', String((snapshot.impactedTaskIds || []).length));
-    html += '</div>';
-
-    html += '<div class="global-section-title">阻塞链路</div>';
-    html += renderGlobalChain(snapshot);
-
-    if (result.rootCauses && result.rootCauses.length > 0) {
-        html += '<div class="global-section-title">根因判断</div>';
-        result.rootCauses.forEach(function(rc) {
-            html += '<div class="rc-item"><div class="rc-title">' + esc(rc.title) + '</div><div class="rc-desc">' + esc(rc.description) + '</div></div>';
-        });
+            showSaveMsg();
+        }).catch(function() {});
     }
 
-    if (result.actions && result.actions.length > 0) {
-        html += '<div class="global-section-title">建议动作</div>';
-        html += '<ol class="action-list">';
-        result.actions.forEach(function(a) { html += '<li>' + esc(a) + '</li>'; });
-        html += '</ol>';
+    function savePlatformUrl() {
+        var baseUrl = document.getElementById('platformUrlInput').value.trim();
+        var mapBaseUrl = document.getElementById('mapUrlInput').value.trim();
+        if (!baseUrl) return;
+        fetch('/api/v1/env/platform-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ baseUrl: baseUrl, mapBaseUrl: mapBaseUrl || null })
+        }).then(function() { showSaveMsg(); }).catch(function() {});
     }
 
-    html += '<div class="global-section-title">瓶颈资源</div>';
-    html += renderBottlenecks(snapshot.bottleneckResources || []);
-    html += '<div class="global-section-title">依赖链路</div>';
-    html += renderDependencyEdges(snapshot.dependencyEdges || []);
-    html += '<div class="global-section-title">关联任务</div>';
-    html += renderRelatedTasks(snapshot.relatedTasks || []);
-    html += '</div>';
-    return html;
-}
-
-function renderGlobalStat(label, value) {
-    return '<div class="global-stat"><div class="global-stat-label">' + esc(label) + '</div><div class="global-stat-value">' + esc(value) + '</div></div>';
-}
-
-function renderGlobalChain(snapshot) {
-    var html = '<div class="global-chain">';
-    var rootTask = findRelatedTaskById(snapshot, snapshot.rootBlockerTaskId);
-    var directTask = findRelatedTaskById(snapshot, snapshot.directBlockerTaskId);
-
-    html += renderChainNode('根阻塞源', rootTask || { taskId: snapshot.rootBlockerTaskId || '-', blockageType: 'UNKNOWN', blockageReason: '未识别到更早的明确异常任务。' }, 'root');
-    html += '<div class="global-chain-arrow">→</div>';
-    html += renderChainNode('直接阻塞者', directTask || { taskId: snapshot.directBlockerTaskId || '-', blockageType: 'UNKNOWN', blockageReason: '未识别到明确直接阻塞任务。' }, 'direct');
-    html += '<div class="global-chain-arrow">→</div>';
-    html += renderChainNode('当前任务', {
-        taskId: snapshot.focusTaskId || '-',
-        blockageType: directTask ? directTask.blockageType : 'UNKNOWN',
-        blockageReason: directTask ? ('当前任务可能受 ' + (directTask.taskId || '-') + ' 影响。') : '当前任务暂无明确直接阻塞候选。'
-    }, 'focus');
-    html += '</div>';
-
-    html += '<div class="global-section-title" style="margin-top:14px;">影响任务</div>';
-    if (snapshot.impactedTaskIds && snapshot.impactedTaskIds.length > 0) {
-        html += '<div class="global-impact-list">';
-        snapshot.impactedTaskIds.forEach(function(taskId) {
-            html += '<span class="impact-pill">' + esc(taskId) + '</span>';
-        });
-        html += '</div>';
-    } else {
-        html += '<div class="global-empty">暂未识别到明确受影响任务</div>';
+    function showSaveMsg() {
+        var msg = document.getElementById('envSaveMsg');
+        msg.style.display = 'block';
+        setTimeout(function() { msg.style.display = 'none'; }, 2000);
     }
-    return html;
-}
-
-function renderChainNode(title, task, type) {
-    var html = '<div class="global-chain-node ' + esc(type) + '">';
-    html += '<div class="global-chain-node-title">' + esc(title) + '</div>';
-    html += '<div class="global-chain-node-id">' + esc(task.taskId || '-') + '</div>';
-    html += '<div class="global-task-tags" style="margin-bottom:10px;">';
-    html += '<span class="tag ' + blockageTagClass(task.blockageType) + '">' + esc(formatBlockageType(task.blockageType)) + '</span>';
-    html += '</div>';
-    html += '<div class="global-chain-node-desc">' + esc(task.blockageReason || '无进一步说明') + '</div>';
-    if (task.taskId && task.taskId !== '-') {
-        html += '<div class="global-task-actions"><button class="mini-action-btn" type="button" data-task-id="' + escAttr(task.taskId) + '" data-switch-single="1" onclick="drillDownFromButton(this)">继续分析该任务</button></div>';
-    }
-    html += '</div>';
-    return html;
-}
-
-function findRelatedTaskById(snapshot, taskId) {
-    if (!snapshot || !snapshot.relatedTasks || !taskId) {
-        return null;
-    }
-    for (var i = 0; i < snapshot.relatedTasks.length; i++) {
-        if (snapshot.relatedTasks[i].taskId === taskId) {
-            return snapshot.relatedTasks[i];
-        }
-    }
-    return null;
-}
-
-function renderBottlenecks(items) {
-    if (!items || items.length === 0) {
-        return '<div class="global-empty">未识别到明确瓶颈资源</div>';
-    }
-    var html = '<div class="global-bottleneck-list">';
-    items.forEach(function(item) {
-        html += '<div class="global-bottleneck-item"><b>' + esc(item.resourceType) + ':' + esc(item.resourceKey) + '</b> - '
-            + esc(item.description || '') + '（关联任务数：' + esc(item.impactedTaskCount) + '）</div>';
-    });
-    html += '</div>';
-    return html;
-}
-
-function renderDependencyEdges(items) {
-    if (!items || items.length === 0) {
-        return '<div class="global-empty">未识别到明确依赖边</div>';
-    }
-    var html = '<div class="global-edge-list">';
-    items.forEach(function(item) {
-        html += '<div class="global-edge-item"><b>' + esc(item.fromTaskId) + '</b> → <b>' + esc(item.toTaskId) + '</b>'
-            + '，关系：' + esc(item.relationType || '-')
-            + '，资源：' + esc(item.resourceKey || '-')
-            + '。' + esc(item.description || '') + '</div>';
-    });
-    html += '</div>';
-    return html;
-}
-
-function renderRelatedTasks(items) {
-    if (!items || items.length === 0) {
-        return '<div class="global-empty">未查询到关联任务</div>';
-    }
-    var html = '<div class="global-task-list">';
-    items.forEach(function(item) {
-        html += '<div class="global-task-item" id="related-task-' + escAttr(item.taskId || '') + '">';
-        html += '<div class="global-task-top">';
-        html += '<div>';
-        html += '<div class="global-task-id">' + esc(item.taskId || '-') + '</div>';
-        html += '<div style="font-size:12px;color:var(--color-text-muted);margin-top:4px;">WMS任务号：' + esc(item.wmsTaskNo || '-') + '</div>';
-        html += '</div>';
-        html += '<div class="global-task-tags">';
-        html += '<span class="tag tag-running">' + esc(formatRelationType(item.relationType)) + '</span>';
-        html += '<span class="tag ' + blockageTagClass(item.blockageType) + '">' + esc(formatBlockageType(item.blockageType)) + '</span>';
-        html += stateTag(item.taskState || '-');
-        html += '</div></div>';
-        html += '<div class="global-task-reason">';
-        html += '<b>关联原因：</b>' + esc(item.relationReason || '无') + '<br>';
-        html += '<b>阻塞判断：</b>' + esc(item.blockageReason || '无') + '<br>';
-        html += '<b>处理状态：</b>' + esc(item.handleState || '-') + '，<b>设备：</b>' + esc(item.deviceCode || '-') + '，<b>容器：</b>' + esc(item.containerCode || '-') + '，<b>业务终点：</b>' + esc(item.businessTo || '-') + '。';
-        if (item.errorMessage) {
-            html += '<br><b style="color:var(--color-error)">异常信息：</b><span style="color:var(--color-error)">' + esc(item.errorMessage) + '</span>';
-        }
-        html += '</div>';
-        html += '<div class="global-task-actions">';
-        html += '<button class="mini-action-btn" type="button" data-task-id="' + escAttr(item.taskId || '') + '" data-switch-single="0" onclick="drillDownFromButton(this)">继续分析该任务</button>';
-        html += '<button class="mini-action-btn" type="button" data-task-id="' + escAttr(item.taskId || '') + '" onclick="highlightTaskFromButton(this)">定位此任务</button>';
-        html += '</div>';
-        html += '</div>';
-    });
-    html += '</div>';
-    return html;
-}
-
-function formatRelationType(type) {
-    switch (type) {
-        case 'same_container': return '同容器';
-        case 'same_device': return '同设备';
-        case 'same_source_point': return '同起点位';
-        case 'same_target_point': return '同目标点位';
-        case 'upstream_blocked': return '上游阻塞';
-        default: return type || '关联任务';
-    }
-}
-
-function formatBlockageType(type) {
-    switch (type) {
-        case 'SELF_ERROR': return '任务异常';
-        case 'RESOURCE_BUSY': return '资源繁忙';
-        case 'POINT_OCCUPIED': return '点位占用';
-        case 'CONTAINER_LOCKED': return '容器未释放';
-        case 'UPSTREAM_BLOCKED': return '上游阻塞';
-        default: return type || '待确认';
-    }
-}
-
-function blockageTagClass(type) {
-    switch (type) {
-        case 'SELF_ERROR': return 'tag-error';
-        case 'RESOURCE_BUSY': return 'tag-running';
-        case 'POINT_OCCUPIED': return 'tag-warn';
-        case 'CONTAINER_LOCKED': return 'tag-warn';
-        case 'UPSTREAM_BLOCKED': return 'tag-init';
-        default: return 'tag-init';
-    }
-}
-
-function drillDownTask(taskId, switchToSingle) {
-    if (!taskId) return;
-    document.getElementById('taskId').value = taskId;
-    if (switchToSingle) {
-        setDiagnoseScope('single');
-    }
-    startDiagnose();
-}
-
-function drillDownFromButton(btn) {
-    if (!btn) return;
-    var taskId = btn.getAttribute('data-task-id') || '';
-    var switchToSingle = btn.getAttribute('data-switch-single') === '1';
-    drillDownTask(taskId, switchToSingle);
-}
-
-function highlightRelatedTask(taskId) {
-    if (!taskId) return;
-    var el = document.getElementById('related-task-' + taskId.replace(/[^a-zA-Z0-9_-]/g, '_'));
-    if (!el) return;
-    document.querySelectorAll('.global-task-item.is-highlight').forEach(function(node) {
-        node.classList.remove('is-highlight');
-    });
-    el.classList.add('is-highlight');
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(function() {
-        el.classList.remove('is-highlight');
-    }, 2200);
-}
-
-function highlightTaskFromButton(btn) {
-    if (!btn) return;
-    highlightRelatedTask(btn.getAttribute('data-task-id') || '');
-}
-
-function escAttr(text) {
-    return String(text == null ? '' : text).replace(/[^a-zA-Z0-9_-]/g, '_');
-}
-
-function renderAI(ai) {
-    var html = '<div class="ai-result-wrapper">';
-    html += '<div class="rule-analysis-header" style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">';
-    html += '<span style="width:8px;height:8px;border-radius:50%;background:#06b6d4;display:inline-block;"></span>';
-    html += '<span style="font-size:15px;font-weight:600;color:#06b6d4;">规则引擎分析</span>';
-    html += '</div>';
-    html += '<div class="ai-summary">' + esc(ai.summary || '无') + '</div>';
-    if (ai.rootCauses && ai.rootCauses.length > 0) {
-        ai.rootCauses.forEach(function(rc) {
-            // 跳过旧数据中 title 为 "参考文档" 的项（已独立展示）
-            if (rc.title === '参考文档') return;
-            html += '<div class="rc-item">' +
-                '<div class="rc-title">' + esc(rc.title) + '</div>' +
-                '<div class="rc-desc">' + esc(rc.description) + '</div></div>';
-        });
-    }
-    if (ai.actions && ai.actions.length > 0) {
-        html += '<ol class="action-list">';
-        ai.actions.forEach(function(a) { html += '<li>' + esc(a) + '</li>'; });
-        html += '</ol>';
-    }
-    // 参考文档独立区域
-    if (ai.relevantDocs && ai.relevantDocs.length > 0) {
-        html += '<div class="ref-docs-section">';
-        html += '<div class="ref-docs-title">📖 参考文档</div>';
-        ai.relevantDocs.forEach(function(doc, idx) {
-            var content = doc.content || '';
-            var escaped = esc(content);
-            var needFold = content.length > 150;
-            html += '<div class="ref-doc-card">';
-            if (doc.source) {
-                html += '<div class="ref-doc-source">' + esc(doc.source) + '</div>';
-            }
-            if (needFold) {
-                var shortText = esc(content.substring(0, 150)) + '...';
-                html += '<div class="ref-doc-content" id="refDoc' + idx + '" data-full="' + escaped.replace(/"/g, '&quot;') + '" data-short="' + shortText.replace(/"/g, '&quot;') + '">' + shortText + '</div>';
-                html += '<button class="ref-doc-toggle" onclick="toggleRefDoc(' + idx + ', this)">▼ 展开全文</button>';
-            } else {
-                html += '<div class="ref-doc-content">' + escaped + '</div>';
-            }
-            html += '</div>';
-        });
-        html += '</div>';
-    }
-    html += '<div class="ai-actions-bar" style="margin-top:20px; text-align:center;">';
-    html += '<button class="glass-btn ai-deep-btn" onclick="startAiAnalyze()" id="aiAnalyzeBtn">';
-    html += '\uD83E\uDD16 使用 AI 大模型深度分析';
-    html += '</button>';
-    html += '</div>';
-    html += '<div id="aiDeepResult"></div>';
-    html += '</div>';
-    return html;
-}
-
-function toggleRefDoc(idx, btn) {
-    var el = document.getElementById('refDoc' + idx);
-    if (!el) return;
-    var expanded = btn.getAttribute('data-expanded') === '1';
-    if (expanded) {
-        el.innerHTML = el.getAttribute('data-short');
-        btn.textContent = '▼ 展开全文';
-        btn.setAttribute('data-expanded', '0');
-    } else {
-        el.innerHTML = el.getAttribute('data-full');
-        btn.textContent = '▲ 收起';
-        btn.setAttribute('data-expanded', '1');
-    }
-}
-
-function startAiAnalyze() {
-    var btn = document.getElementById('aiAnalyzeBtn');
-    var resultDiv = document.getElementById('aiDeepResult');
-    var taskId = document.getElementById('taskId').value.trim();
-    if (!taskId) return;
-
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;display:inline-block;vertical-align:middle;margin-right:6px;"></span> AI 分析中...';
-
-    // 先显示流式预览容器
-    resultDiv.innerHTML = '<div class="ai-deep-wrapper" style="margin-top:16px; padding:20px; background:rgba(139,92,246,0.06); backdrop-filter:blur(12px); border:1px solid rgba(139,92,246,0.15); border-radius:var(--radius-card);">' +
-        '<div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">' +
-        '<span style="width:8px;height:8px;border-radius:50%;background:#8b5cf6;display:inline-block;"></span>' +
-        '<span style="font-size:15px;font-weight:600;color:#8b5cf6;">AI 大模型分析</span>' +
-        '<span class="spinner" style="width:14px;height:14px;" id="aiStreamSpinner"></span>' +
-        '</div>' +
-        '<div id="aiStreamContent" style="font-size:14px;color:var(--color-text);line-height:1.8;white-space:pre-wrap;word-break:break-word;"></div>' +
-        '</div>';
-
-    var streamContent = document.getElementById('aiStreamContent');
-    var source = new EventSource('/api/v1/diagnosis/ai-analyze-stream?taskId=' + encodeURIComponent(taskId));
-
-    // 接收流式 token
-    source.addEventListener('ai-token', function(e) {
-        streamContent.textContent += e.data;
-        // 自动滚动到底部
-        resultDiv.scrollIntoView({behavior: 'smooth', block: 'end'});
-    });
-
-    // 接收最终结构化结果
-    source.addEventListener('ai-result', function(e) {
-        source.close();
-        try {
-            var data = JSON.parse(e.data);
-            // 用结构化视图替换原始流式文本
-            resultDiv.innerHTML = renderAiDeepResult(data);
-            resultDiv.style.animation = 'fadeIn 0.4s ease-out';
-        } catch(err) {
-            // JSON 解析失败，保留原始文本显示
-            var spinner = document.getElementById('aiStreamSpinner');
-            if (spinner) spinner.remove();
-        }
-        btn.disabled = false;
-        btn.innerHTML = '\uD83E\uDD16 重新 AI 分析';
-    });
-
-    // 错误处理
-    source.addEventListener('ai-error', function(e) {
-        source.close();
-        resultDiv.innerHTML = '<div style="color:var(--color-error);padding:12px;margin-top:12px;">AI分析失败：' + esc(e.data || '未知错误') + '</div>';
-        btn.disabled = false;
-        btn.innerHTML = '\uD83E\uDD16 使用 AI 大模型深度分析';
-    });
-
-    // EventSource 连接错误
-    source.onerror = function() {
-        // 检查是否是正常关闭后触发的 onerror
-        if (source.readyState === EventSource.CLOSED) return;
-        source.close();
-        // 如果流式内容已有内容，不覆盖
-        if (!streamContent.textContent.trim()) {
-            resultDiv.innerHTML = '<div style="color:var(--color-error);padding:12px;margin-top:12px;">AI分析连接异常，请重试</div>';
-        } else {
-            // 移除 spinner，保留已有内容
-            var spinner = document.getElementById('aiStreamSpinner');
-            if (spinner) spinner.remove();
-        }
-        btn.disabled = false;
-        btn.innerHTML = '\uD83E\uDD16 使用 AI 大模型深度分析';
-    };
-}
-
-function renderAiDeepResult(ai) {
-    var html = '<div class="ai-deep-wrapper" style="margin-top:16px; padding:20px; background:rgba(139,92,246,0.06); backdrop-filter:blur(12px); border:1px solid rgba(139,92,246,0.15); border-radius:var(--radius-card);">';
-    html += '<div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">';
-    html += '<span style="width:8px;height:8px;border-radius:50%;background:#8b5cf6;display:inline-block;"></span>';
-    html += '<span style="font-size:15px;font-weight:600;color:#8b5cf6;">AI 大模型分析</span>';
-    html += '</div>';
-    html += '<div class="ai-summary">' + esc(ai.summary || '无') + '</div>';
-    if (ai.rootCauses && ai.rootCauses.length > 0) {
-        ai.rootCauses.forEach(function(rc) {
-            html += '<div class="rc-item" style="border-left-color:#8b5cf6;">';
-            html += '<div class="rc-title">' + esc(rc.title) + '</div>';
-            html += '<div class="rc-desc">' + esc(rc.description) + '</div>';
-            html += '</div>';
-        });
-    }
-    if (ai.actions && ai.actions.length > 0) {
-        html += '<ol class="action-list">';
-        ai.actions.forEach(function(a) { html += '<li>' + esc(a) + '</li>'; });
-        html += '</ol>';
-    }
-    html += '</div>';
-    return html;
-}
-
-/* ---- 路径 SOP ---- */
-
-function renderSOP(data) {
-    var container = document.getElementById('sopArea');
-    var task = data.task, items = data.items || [], tickets = data.tickets || [];
-    if (items.length === 0) { container.innerHTML = ''; return; }
-
-    var ticketsByItem = {};
-    tickets.forEach(function(t) {
-        var k = t.taskItemId || '_';
-        if (!ticketsByItem[k]) ticketsByItem[k] = [];
-        ticketsByItem[k].push(t);
-    });
-    Object.keys(ticketsByItem).forEach(function(k) {
-        ticketsByItem[k].sort(function(a, b) { return (a.taskSort || 0) - (b.taskSort || 0); });
-    });
-
-    // 构建完整路径：把所有子任务的执行单串成一条线
-    var allLegs = []; // { from, to, device, deviceCode, action, plc, cls }
-    items.forEach(function(item) {
-        var tks = ticketsByItem[item.id] || [];
-        var itemDevLabel = mapDeviceType(item.deviceType);
-        var itemDevCode = item.deviceCode || '';
-        if (tks.length > 0) {
-            tks.forEach(function(tk) {
-                var tkDone = /SUCCESS/.test(tk.taskState || '');
-                var tkRun = tk.taskState === 'RUNNING';
-                var tkErr = /CANCEL/.test(tk.taskState || '');
-                var cls = tkDone ? 'done' : (tkRun ? 'active' : (tkErr ? 'error' : 'waiting'));
-                var action = mapFunction(tk.function || tk['function']);
-                // 优先用执行单的设备编码，没有再用子任务的
-                var tkDevCode = tk.deviceCode || itemDevCode;
-                var tkDevName = tk.deviceName || tkDevCode;
-                allLegs.push({
-                    from: tk.startNodeNum || tk.startPoint || '',
-                    to: tk.endNodeNum || tk.endPoint || '',
-                    device: tkDevName, deviceCode: tkDevCode,
-                    action: action, plc: tk.plcTaskId || '', cls: cls
-                });
-            });
-        } else {
-            allLegs.push({
-                from: item.startPoint || '', to: item.endPoint || '',
-                device: itemDevCode || itemDevLabel, deviceCode: itemDevCode,
-                action: item.taskState || 'INIT', plc: '', cls: 'waiting'
-            });
-        }
-    });
-
-    // 合并同设备的相邻 leg
-    var mergedLegs = [];
-    for (var m = 0; m < allLegs.length; m++) {
-        var cur = allLegs[m];
-        if (mergedLegs.length > 0) {
-            var prev = mergedLegs[mergedLegs.length - 1];
-            if (prev.deviceCode && prev.deviceCode === cur.deviceCode) {
-                prev.to = cur.to;
-                prev.action += ' → ' + cur.action;
-                if (cur.plc) prev.plc = prev.plc ? (prev.plc + ',' + cur.plc) : cur.plc;
-                var clsPriority = { error: 4, active: 3, waiting: 2, done: 1 };
-                if ((clsPriority[cur.cls] || 0) > (clsPriority[prev.cls] || 0)) {
-                    prev.cls = cur.cls;
-                }
-                continue;
-            }
-        }
-        mergedLegs.push({ from: cur.from, to: cur.to, device: cur.device, deviceCode: cur.deviceCode,
-            action: cur.action, plc: cur.plc, cls: cur.cls });
-    }
-    allLegs = mergedLegs;
-
-    // 生成交替的 node/leg 序列
-    var h = '<div class="sop-card">';
-    h += '<div class="sop-title">📊 任务路径 SOP</div>';
-    h += '<div class="sop-endpoints">';
-    h += '<span class="sop-ep sop-ep-s">起点 ' + esc(task.businessFrom || task.definiteFrom) + '</span>';
-    h += '<span style="color:var(--color-text-muted)">→→→</span>';
-    h += '<span class="sop-ep sop-ep-e">终点 ' + esc(task.businessTo || task.definiteTo) + '</span>';
-    h += '</div>';
-    h += '<div class="sop-rail">';
-
-    for (var i = 0; i < allLegs.length; i++) {
-        var leg = allLegs[i];
-        var isFirst = (i === 0);
-        var prevTo = i > 0 ? allLegs[i - 1].to : null;
-        var showFrom = isFirst || leg.from !== prevTo;
-
-        // 起点站
-        if (showFrom) {
-            var fromCls = getPointDotCls(i, allLegs, true);
-            var fromIcon = fromCls === 'done' ? '✓' : '';
-            h += '<div class="sop-stop">';
-            h += '<div class="sop-stop-dot ' + fromCls + '">' + fromIcon + '</div>';
-            h += '<div class="sop-stop-name">' + esc(leg.from) + '</div>';
-            h += '</div>';
-        }
-
-        // 连线段
-        h += '<div class="sop-conn">';
-        h += '<div class="sop-conn-bar ' + leg.cls + '"></div>';
-        h += '<div class="sop-conn-info">';
-        h += '<span class="sop-conn-badge ' + leg.cls + '">' + esc(leg.device) + '</span>';
-        h += '<span class="sop-conn-act">' + esc(leg.action);
-        if (leg.plc) h += ' #' + esc(leg.plc);
-        h += '</span>';
-        h += '</div>';
-        h += '</div>';
-
-        // 终点站
-        var isLast = (i === allLegs.length - 1);
-        var toCls = getPointDotCls(i, allLegs, false);
-        var toIcon = toCls === 'done' ? '✓' : (toCls === 'active' ? '▶' : (toCls === 'error' ? '✗' : ''));
-        h += '<div class="sop-stop">';
-        h += '<div class="sop-stop-dot ' + toCls + '">' + toIcon + '</div>';
-        h += '<div class="sop-stop-name">' + esc(leg.to) + '</div>';
-        // 交接标注
-        if (!isLast) {
-            var nextFrom = allLegs[i + 1].from;
-            if (leg.to === nextFrom && leg.device !== allLegs[i + 1].device) {
-                h += '<div class="sop-stop-sub">🔄 换 ' + esc(allLegs[i + 1].device) + '</div>';
-            }
-        }
-        h += '</div>';
-    }
-
-    h += '</div>';
-    h += '</div>';
-    container.innerHTML = h;
-}
-
-function getPointDotCls(legIdx, allLegs, isFrom) {
-    var leg = allLegs[legIdx];
-    if (isFrom) {
-        if (leg.cls === 'done' || leg.cls === 'active') return 'done';
-        if (legIdx > 0 && allLegs[legIdx - 1].cls === 'done') return 'done';
-        return 'waiting';
-    } else {
-        if (leg.cls === 'done') return 'done';
-        if (leg.cls === 'active') return 'active';
-        if (leg.cls === 'error') return 'error';
-        return 'waiting';
-    }
-}
-
-function mapDeviceType(dt) {
-    if (!dt) return '未知设备';
-    var s = dt.toUpperCase();
-    if (s.indexOf('STACKER') >= 0 || s.indexOf('CRANE') >= 0 || s === 'VRS') return '🏗️ 堆垛机';
-    if (s.indexOf('RGV') >= 0) return '🚃 RGV';
-    if (s.indexOf('CONVEYOR') >= 0 || s.indexOf('SSX') >= 0) return '🔄 输送线';
-    if (s.indexOf('AGV') >= 0) return '🤖 AGV';
-    if (s.indexOf('AMR') >= 0) return '🤖 AMR';
-    if (s.indexOf('ELEVATOR') >= 0 || s.indexOf('LIFT') >= 0) return '⬆️ 提升机';
-    return '⚙️ ' + dt;
-}
-
-function mapFunction(fn) {
-    if (!fn) return '执行';
-    var s = fn.toUpperCase();
-    if (s === 'CA') return '搬货';
-    if (s === 'CB') return '取货';
-    if (s === 'CC') return '放货';
-    if (s === 'CD') return '移动';
-    if (s === 'CE') return '让道';
-    if (s === 'CF') return '任务清除';
-    if (s === 'CG') return '紧急停车';
-    if (s === 'CH') return '取消停车';
-    if (s === 'BA') return '搬货回复';
-    if (s === 'BB') return '取货回复';
-    if (s === 'BC') return '放货回复';
-    if (s === 'BD') return '移动回复';
-    if (s === 'BE') return '让道回复';
-    if (s === 'AA') return '状态查询';
-    if (s.indexOf('MOVE') >= 0) return '移动';
-    if (s.indexOf('PICK') >= 0 || s.indexOf('FETCH') >= 0 || s.indexOf('RETRIEVE') >= 0) return '取货';
-    if (s.indexOf('PUT') >= 0 || s.indexOf('PLACE') >= 0 || s.indexOf('STORE') >= 0) return '放货';
-    if (s.indexOf('CONVEYOR') >= 0 || s.indexOf('TRANSPORT') >= 0 || s.indexOf('TRANSFER') >= 0) return '输送';
-    if (s.indexOf('CARRY') >= 0) return '搬运';
-    return fn;
-}
-
-/* ---- 工具函数 ---- */
-
-function stateTag(state) {
-    if (!state) return '<span class="tag tag-init">-</span>';
-    var cls = 'tag-init';
-    if (/SUCCESS/.test(state)) cls = 'tag-success';
-    else if (/RUNNING|ISSUED/.test(state)) cls = 'tag-running';
-    else if (/CANCEL|CLOSE|ERROR|FAIL/.test(state)) cls = 'tag-error';
-    else if (/PAUSE|PLANNING/.test(state)) cls = 'tag-warn';
-    return '<span class="tag ' + cls + '">' + esc(state) + '</span>';
-}
-
-function fmtTime(t) {
-    if (!t) return '-';
-    if (Array.isArray(t)) {
-        var y = t[0], mo = pad(t[1]), d = pad(t[2]);
-        var h = t.length > 3 ? pad(t[3]) : '00';
-        var mi = t.length > 4 ? pad(t[4]) : '00';
-        var s = t.length > 5 ? pad(t[5]) : '00';
-        return y + '-' + mo + '-' + d + ' ' + h + ':' + mi + ':' + s;
-    }
-    return String(t).replace('T', ' ').substring(0, 19);
-}
-
-function pad(n) { return n < 10 ? '0' + n : '' + n; }
-
-function parseTime(t) {
-    if (!t) return null;
-    if (t instanceof Date) return t;
-    if (Array.isArray(t)) {
-        return new Date(t[0], (t[1]||1)-1, t[2]||1, t[3]||0, t[4]||0, t[5]||0);
-    }
-    return new Date(String(t).replace('T', ' '));
-}
-
-function calcElapsed(start, end) {
-    var s = parseTime(start);
-    var e = end instanceof Date ? end : parseTime(end);
-    if (!s || !e) return '';
-    var diff = Math.floor((e - s) / 1000);
-    if (diff < 0) return '';
-    var h = Math.floor(diff / 3600);
-    var m = Math.floor((diff % 3600) / 60);
-    var sec = diff % 60;
-    if (h > 0) return h + '时' + m + '分' + sec + '秒';
-    if (m > 0) return m + '分' + sec + '秒';
-    return sec + '秒';
-}
-
-function getElapsedMinutes(start, end) {
-    var s = parseTime(start);
-    var e = end instanceof Date ? end : parseTime(end);
-    if (!s || !e) return 0;
-    return (e - s) / 60000;
-}
-
-function esc(s) {
-    if (s === null || s === undefined) return '';
-    var div = document.createElement('div');
-    div.appendChild(document.createTextNode(String(s)));
-    return div.innerHTML;
-}
-
-function openMap() {
-    // 收集路径节点编号，传给地图页面
-    var pathNodes = [];
-    console.log('openMap _diagData:', JSON.stringify(window._diagData, null, 2).substring(0, 500));
-    if (window._diagData) {
-        var d = window._diagData;
-        var items = d.items || [], tickets = d.tickets || [];
-        items.forEach(function(it) {
-            if (it.startPoint) pathNodes.push(it.startPoint);
-            if (it.endPoint) pathNodes.push(it.endPoint);
-        });
-        tickets.forEach(function(tk) {
-            if (tk.startNodeNum) pathNodes.push(tk.startNodeNum);
-            else if (tk.startPoint) pathNodes.push(tk.startPoint);
-            if (tk.endNodeNum) pathNodes.push(tk.endNodeNum);
-            else if (tk.endPoint) pathNodes.push(tk.endPoint);
-        });
-    }
-    // 去重
-    pathNodes = pathNodes.filter(function(v, i, a) { return a.indexOf(v) === i; });
-    // 构建路径段信息
-    var legs = [];
-    if (window._diagData) {
-        var tickets2 = window._diagData.tickets || [];
-        var items2 = window._diagData.items || [];
-        var ticketsByItem = {};
-        tickets2.forEach(function(t) {
-            var k = t.taskItemId || '_';
-            if (!ticketsByItem[k]) ticketsByItem[k] = [];
-            ticketsByItem[k].push(t);
-        });
-        items2.forEach(function(item) {
-            var tks = ticketsByItem[item.id] || [];
-            if (tks.length > 0) {
-                tks.forEach(function(tk) {
-                    legs.push({
-                        from: tk.startNodeNum || tk.startPoint || '',
-                        to: tk.endNodeNum || tk.endPoint || '',
-                        state: tk.taskState || ''
-                    });
-                });
-            } else {
-                legs.push({ from: item.startPoint || '', to: item.endPoint || '', state: item.taskState || '' });
-            }
-        });
-    }
-    console.log('pathNodes:', pathNodes);
-    console.log('legs:', legs);
-    sessionStorage.setItem('mapPathNodes', JSON.stringify(pathNodes));
-    sessionStorage.setItem('mapPathLegs', JSON.stringify(legs));
-    window.open('map.html', '_blank');
-}
-
-setDiagnoseScope('single');
-
-document.getElementById('taskId').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') startDiagnose();
-});
-
-
 </script>
 </body>
 </html>

@@ -1,19 +1,17 @@
 package cn.aimstek.loong.aidiag.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
+/**
+ * 诊断请求入参：仅需要一个 taskId。
+ */
 @Data
+@Schema(description = "诊断请求")
 public class DiagnoseRequest {
-    @Schema(description = "任务ID或WMS任务号", requiredMode = Schema.RequiredMode.REQUIRED)
+
+    @NotBlank(message = "taskId不能为空")
+    @Schema(description = "WCS 任务号（taskNo）", requiredMode = Schema.RequiredMode.REQUIRED, example = "WMS_TASK_001")
     private String taskId;
-
-    @Schema(description = "诊断范围：single=单任务，global=全局关联分析")
-    private String scope;
-
-    @Schema(description = "全局分析时间窗（分钟），默认30分钟")
-    private Integer timeWindowMinutes;
-
-    @Schema(description = "环境标识（可选，预留）")
-    private String env;
 }

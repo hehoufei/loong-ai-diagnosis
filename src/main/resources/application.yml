@@ -2,19 +2,12 @@ server:
   port: 18080
 
 spring:
-  servlet:
-    multipart:
-      max-file-size: 100MB
-      max-request-size: 200MB
-  config:
-    import: classpath:diagnosis-rules.yml
   application:
     name: loong-ai-diagnosis
-  datasource:
-    url: ${DB_URL:jdbc:mysql://192.168.53.206:3306/loong?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=Asia/Shanghai&autoReconnect=true}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:1}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+  config:
+    import:
+      - classpath:diagnosis-core.yml
+      - classpath:diagnosis-rules.yml
   ai:
     zhipuai:
       api-key: ${LLM_API_KEY:a8d7009ef16942cd81bf9c5e4aca4ea7.BYPjEQKRV0gD98yC}
@@ -22,16 +15,12 @@ spring:
         options:
           model: ${LLM_MODEL:glm-4.7-flash}
           temperature: 0.1
-      embedding:
-        options:
-          model: embedding-3
     retry:
-      max-attempts: 3
+      max-attempts: 2
       backoff:
-        initial-interval: 2s
+        initial-interval: 1s
         multiplier: 2
-        max-interval: 15s
-      on-http-codes: 429,500,502,503
+        max-interval: 5s
 
 springdoc:
   api-docs:
@@ -45,199 +34,3 @@ spring.web.resources:
     cachecontrol:
       no-cache: true
       no-store: true
-
-# 地图服务配置
-map:
-  api:
-    base-url: ${MAP_API_URL:http://192.168.53.206:8088}
-
-# Agent 配置
-agent:
-  max-tool-call-rounds: 10
-  max-memory-messages: 50
-  temperature: 0.1
-  rag-top-k: 5
-  vector-store-path: ""
-
-# 规则引擎配置
-rule-engine:
-  doc-search:
-    top-k: 3
-    similarity-threshold: 0.6
-    pre-search-enabled: true
-    hybrid-enabled: true
-    vector-weight: 0.6
-    keyword-weight: 0.4
-  rules:
-    handle-state-init:
-      enabled: true
-      priority: -1
-      description: "检查任务是否卡在初始化(INIT)阶段，WCS尚未调用引擎进行关键点规划"
-      output:
-        summary: "任务卡在初始阶段（INIT），WCS还未调用引擎进行关键点规划"
-        root-causes:
-          - title: "引擎未被调用"
-            description: "WCS还没有调用引擎获取关键点，任务停留在初始阶段"
-        actions:
-          - "检查引擎服务是否正常运行"
-          - "确认起终点配置是否正确"
-          - "查看系统日志是否有引擎调用失败记录"
-    handle-state-key-planning:
-      enabled: true
-      priority: -1
-      description: "检查任务是否卡在关键点规划(KEY_PLANNING)阶段，引擎未返回结果或处理失败"
-      output:
-        summary: "任务卡在关键点规划阶段（KEY_PLANNING），引擎未返回结果或处理失败"
-        root-causes:
-          - title: "引擎规划超时或失败"
-            description: "WCS已调用引擎但未成功完成关键点规划，可能超时或路径不通"
-        actions:
-          - "检查引擎服务状态和响应"
-          - "查看日志中引擎调用的返回结果"
-          - "检查起终点间的路径是否可达"
-    handle-state-unknown:
-      enabled: true
-      priority: -1
-      description: "检测任务处于未知的handleState阶段，需要AI大模型深度分析"
-      output:
-        summary: "任务处于非常规阶段（{handleState}），共{taskItemCount}个子任务，需要AI深度分析"
-        root-causes:
-          - title: "未知处理阶段"
-            description: "当前handleState为{handleState}，不在已知的INIT/KEY_PLANNING/PATH_PLANNING范围内"
-        actions:
-          - "使用AI大模型进行深度分析"
-          - "检查是否有新增的业务阶段未纳入规则"
-    no-task-items:
-      enabled: true
-      priority: -1
-      description: "检查路径规划完成但未生成子任务的异常情况"
-      output:
-        summary: "路径规划已完成（PATH_PLANNING）但未生成任何子任务，数据可能异常"
-        root-causes:
-          - title: "子任务生成失败"
-            description: "路径规划阶段已通过，但系统未能成功拆分和生成子任务"
-        actions:
-          - "查看日志中路径拆分相关记录"
-          - "检查引擎返回的路径数据是否正常"
-          - "确认数据库中子任务表数据"
-    all-completed-waiting-wms:
-      enabled: true
-      priority: -1
-      description: "检测所有子任务已完成且正在等待WMS下发更新任务的正常等待状态"
-      output:
-        summary: "所有子任务和执行单均已完成，正在等待WMS下发更新任务（正常业务等待）"
-        root-causes:
-          - title: "等待WMS响应"
-            description: "这是正常的业务等待状态，任务执行完成后等待WMS下发后续指令"
-        actions:
-          - "确认WMS是否已收到任务完成通知"
-          - "检查WMS是否有待下发的更新任务"
-          - "如等待过久，联系WMS侧排查"
-    all-completed-state-abnormal:
-      enabled: true
-      priority: -1
-      description: "检测所有子任务已完成但大任务状态更新失败的异常情况"
-      output:
-        summary: "所有子任务已完成但大任务状态仍为RUNNING，状态回写可能异常"
-        root-causes:
-          - title: "大任务状态更新失败"
-            description: "所有子任务均已完成，但大任务的状态未能正确更新为完成"
-        actions:
-          - "检查大任务完成回调逻辑"
-          - "确认数据库中是否可手动更新状态"
-          - "排查状态回写相关的异常日志"
-    all-items-init:
-      enabled: true
-      priority: -1
-      description: "检查子任务全部处于初始状态，定时调度尚未处理"
-      output:
-        summary: "所有{taskItemCount}个子任务均处于INIT状态，定时调度任务尚未开始处理"
-        root-causes:
-          - title: "调度任务未执行"
-            description: "子任务已生成但全部停留在初始状态，定时调度可能未运行或队列积压"
-        actions:
-          - "检查定时调度任务是否正常运行"
-          - "确认引擎服务是否可用"
-          - "查看任务队列是否有积压"
-    point-conflict:
-      enabled: true
-      priority: -1
-      description: "检测路径点位被其他任务占用导致当前任务无法推进"
-      output:
-        summary: "检测到点位冲突，路径点位被其他任务占用，当前设备可能无法推进"
-        root-causes:
-          - title: "点位资源冲突"
-            description: "当前任务的路径点位被其他任务占用，导致设备无法继续行驶"
-        actions:
-          - "检查占用点位的任务是否也卡住"
-          - "如占用任务已完成但未释放锁，手动清理点位"
-          - "考虑取消冲突任务释放资源"
-    task-item-cancelled:
-      enabled: true
-      priority: -1
-      description: "检测存在被取消的子任务，需查看取消原因"
-      output:
-        summary: "任务中存在被取消的子任务，可能是人工取消、系统异常或设备故障"
-        root-causes:
-          - title: "子任务被取消"
-            description: "部分子任务状态为CANCEL，需要排查取消原因"
-        actions:
-          - "查看被取消子任务的详细信息"
-          - "确认是否为人工主动取消"
-          - "检查是否有系统异常或设备故障导致自动取消"
-    ticket-timeout:
-      enabled: true
-      priority: -1
-      params:
-        timeout-minutes: "5"
-      description: "检测执行单运行超时，设备可能卡住或故障"
-      output:
-        summary: "检测到执行单运行超时，设备可能卡住、故障或PLC通信异常"
-        root-causes:
-          - title: "执行单超时"
-            description: "执行单长时间处于RUNNING状态，超过配置的超时阈值"
-        actions:
-          - "检查相关设备的运行状态"
-          - "确认PLC通信是否正常"
-          - "如设备故障需人工干预处理"
-    plc-communication:
-      enabled: true
-      priority: -1
-      description: "检测子任务已下发但PLC未接收，设备通信异常"
-      output:
-        summary: "子任务已下发到调度（ISSUED_DCS）但PLC未接收任务，设备通信可能异常"
-        root-causes:
-          - title: "PLC通信异常"
-            description: "子任务状态已更新为ISSUED_DCS但对应执行单仍为INIT，说明PLC未收到指令"
-        actions:
-          - "检查PLC通信连接状态"
-          - "确认设备是否在线"
-          - "检查网络和通信中间件状态"
-    error-message:
-      enabled: true
-      priority: -1
-      params:
-        max-errors: "5"
-      description: "检测系统错误信息或日志中的异常关键词"
-      output:
-        summary: "系统报告了明确的错误信息，需要根据错误内容进一步排查"
-        root-causes:
-          - title: "系统错误"
-            description: "任务数据或系统日志中包含错误信息"
-        actions:
-          - "根据错误信息定位具体问题"
-          - "查看完整系统日志获取更多上下文"
-          - "联系相关模块负责人排查"
-    fallback:
-      enabled: true
-      priority: -1
-      description: "兜底规则，所有精确规则都不匹配时触发，推荐使用AI深度分析"
-      output:
-        summary: "当前任务状态未匹配到已知的诊断模式，建议使用AI大模型进行深度分析"
-        root-causes:
-          - title: "无精确匹配"
-            description: "所有预定义的诊断规则均未命中，任务可能处于复杂或罕见的状态组合"
-        actions:
-          - "使用AI大模型进行深度分析"
-          - "手动检查任务各阶段数据"
-          - "如为新场景，考虑新增专项诊断规则"

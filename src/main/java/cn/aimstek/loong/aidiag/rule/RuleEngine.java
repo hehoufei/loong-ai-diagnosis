@@ -1,5 +1,6 @@
 package cn.aimstek.loong.aidiag.rule;
 
+import cn.aimstek.loong.aidiag.context.DiagnosisContext;
 import cn.aimstek.loong.aidiag.dto.DiagnoseResponse;
 
 /**

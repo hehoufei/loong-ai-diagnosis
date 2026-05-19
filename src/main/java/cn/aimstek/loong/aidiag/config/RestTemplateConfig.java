@@ -7,14 +7,21 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 
+/**
+ * 通用 RestTemplate 配置（用于 MapProxyController 等非平台调用）。
+ * 平台调用使用 HttpPlatformClient 内部的专用 RestTemplate。
+ */
 @Configuration
 public class RestTemplateConfig {
 
     @Bean
     public RestTemplate restTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofSeconds(10));   // 连接超时 10 秒
-        factory.setReadTimeout(Duration.ofSeconds(120));     // 读取超时 120 秒（LLM 需要较长时间）
+        factory.setConnectTimeout(Duration.ofSeconds(5));
+        factory.setReadTimeout(Duration.ofSeconds(30));
         return new RestTemplate(factory);
     }
+
+
+
 }

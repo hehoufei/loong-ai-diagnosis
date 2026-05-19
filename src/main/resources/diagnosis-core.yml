@@ -1,0 +1,30 @@
+loong:
+  ai:
+    diagnosis:
+      enable-llm-fallback: true
+      llm-timeout-ms: 5000
+      llm-max-retry: 1
+      confidence:
+        rule-match: 0.95
+        llm-match: 0.7
+        fallback: 0.3
+  platform:
+    base-url: ${PLATFORM_URL:http://127.0.0.1:18081}
+    connect-timeout-ms: 3000
+    read-timeout-ms: 5000
+    map-base-url: ${MAP_BASE_URL:}
+  env:
+    active: ${ENV_NAME:default}
+    envs:
+      - name: default
+        label: 本地开发
+        wcs-url: ${PLATFORM_URL:http://127.0.0.1:18081}
+        api-prefix: ""
+      - name: test
+        label: 测试环境
+        wcs-url: ${TEST_PLATFORM_URL:http://test-server:18081}
+        api-prefix: ""
+      - name: prod
+        label: 生产环境
+        wcs-url: ${PROD_PLATFORM_URL:http://prod-server:18081}
+        api-prefix: ""

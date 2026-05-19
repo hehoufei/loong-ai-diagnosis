@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WCS 智能诊断 - 任务查询</title>
+<link rel="stylesheet" href="common.css">
+<style>
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+    /* Topbar */
+    .topbar-logo { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--color-primary); white-space: nowrap; flex-shrink: 0; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
+    .topbar-link { text-decoration: none; display: inline-flex; align-items: center; gap: 4px; padding: 5px 14px; border-radius: var(--radius-tag); font-size: 13px; font-weight: 500; color: var(--color-primary); border: 1.5px solid rgba(99,102,241,0.25); transition: var(--transition); white-space: nowrap; }
+    .topbar-link:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); }
+    .topbar-link.active { background: rgba(99,102,241,0.1); border-color: var(--color-primary); font-weight: 700; }
+
+    /* Search bar */
+    .search-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; align-items: flex-end; }
+    .search-bar input, .search-bar select {
+        height: 38px; padding: 0 12px; border: 1.5px solid rgba(99,102,241,0.2);
+        border-radius: 8px; font-size: 14px; background: var(--bg-card); color: var(--color-text);
+        outline: none; transition: var(--transition);
+    }
+    .search-bar input:focus, .search-bar select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .search-bar input { min-width: 200px; }
+    .search-bar select { min-width: 140px; }
+    .btn { height: 38px; padding: 0 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: var(--transition); }
+    .btn-primary { background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); color: #fff; }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-ghost { background: transparent; color: var(--color-primary); border: 1.5px solid rgba(99,102,241,0.25); }
+    .btn-ghost:hover { background: rgba(99,102,241,0.08); }
+
+    /* Table */
+    .table-wrap { background: var(--bg-card); border-radius: var(--radius-card); border: 1px solid var(--border-color); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { background: rgba(99,102,241,0.06); padding: 12px 14px; text-align: left; font-weight: 700; color: var(--color-primary); border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid var(--border-color); transition: background .15s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(99,102,241,0.04); }
+    tbody td { padding: 11px 14px; color: var(--color-text); vertical-align: middle; }
+    .task-no-link { color: var(--color-primary); cursor: pointer; font-weight: 600; text-decoration: none; }
+    .task-no-link:hover { text-decoration: underline; }
+
+    /* Status badges */
+    .status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .status-running { background: rgba(59,130,246,0.12); color: #2563eb; }
+    .status-done { background: rgba(16,185,129,0.12); color: #059669; }
+    .status-wait { background: rgba(245,158,11,0.12); color: #d97706; }
+    .status-error { background: rgba(239,68,68,0.12); color: #dc2626; }
+    .status-cancel { background: rgba(107,114,128,0.1); color: #6b7280; }
+    .status-default { background: rgba(99,102,241,0.1); color: #4f46e5; }
+
+    /* Pagination */
+    .pagination { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-top: 1px solid var(--border-color); font-size: 13px; color: var(--color-muted); }
+    .page-btns { display: flex; gap: 6px; }
+    .page-btn { height: 30px; min-width: 30px; padding: 0 10px; border: 1.5px solid var(--border-color); border-radius: 6px; background: transparent; color: var(--color-text); font-size: 13px; cursor: pointer; transition: var(--transition); }
+    .page-btn:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-primary); }
+    .page-btn.active { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Detail drawer */
+    .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; }
+    .drawer-overlay.open { display: block; }
+    .drawer { position: fixed; top: 0; right: -700px; width: 680px; max-width: 95vw; height: 100vh; background: var(--bg-card); box-shadow: -8px 0 40px rgba(0,0,0,0.15); z-index: 201; transition: right .3s ease; overflow-y: auto; display: flex; flex-direction: column; }
+    .drawer.open { right: 0; }
+    .drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border-color); position: sticky; top: 0; background: var(--bg-card); z-index: 1; }
+    .drawer-title { font-size: 16px; font-weight: 700; color: var(--color-text); }
+    .drawer-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--color-muted); padding: 4px 8px; border-radius: 6px; }
+    .drawer-close:hover { background: rgba(99,102,241,0.08); color: var(--color-primary); }
+    .drawer-body { padding: 20px 24px; flex: 1; }
+
+    /* Detail sections */
+    .detail-section { margin-bottom: 24px; }
+    .detail-section-title { font-size: 13px; font-weight: 700; color: var(--color-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .detail-section-title::before { content: ''; width: 3px; height: 14px; background: var(--color-primary); border-radius: 2px; }
+    .kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .kv-item { background: rgba(99,102,241,0.04); border-radius: 8px; padding: 10px 14px; }
+    .kv-label { font-size: 11px; color: var(--color-muted); margin-bottom: 4px; }
+    .kv-value { font-size: 13px; font-weight: 600; color: var(--color-text); word-break: break-all; }
+
+    /* Item tree */
+    .item-tree { display: flex; flex-direction: column; gap: 8px; }
+    .item-node { border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden; }
+    .item-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(99,102,241,0.04); cursor: pointer; user-select: none; }
+    .item-header:hover { background: rgba(99,102,241,0.08); }
+    .item-toggle { font-size: 11px; color: var(--color-muted); transition: transform .2s; }
+    .item-toggle.open { transform: rotate(90deg); }
+    .item-name { font-weight: 600; font-size: 13px; flex: 1; }
+    .item-commands { padding: 0 14px 10px; display: none; }
+    .item-commands.open { display: block; }
+    .cmd-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-color); font-size: 12px; }
+    .cmd-row:last-child { border-bottom: none; }
+    .cmd-no { font-family: monospace; color: var(--color-muted); min-width: 80px; }
+    .cmd-type { color: var(--color-primary); font-weight: 600; min-width: 80px; }
+    .cmd-status { margin-left: auto; }
+
+    /* Loading / empty */
+    .loading-row td { text-align: center; padding: 40px; color: var(--color-muted); }
+    .spinner-sm { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(99,102,241,0.2); border-top-color: var(--color-primary); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-hint { text-align: center; padding: 48px 20px; color: var(--color-muted); font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<nav class="glass-topbar">
+    <div class="topbar-logo">
+        <span style="font-size:20px">📋</span>
+        <span>任务查询</span>
+    </div>
+    <div class="topbar-right">
+        <a href="index.html" class="topbar-link">🏠 诊断</a>
+        <a href="task.html" class="topbar-link active">📋 任务查询</a>
+        <a href="rules.html" class="topbar-link">⚙️ 规则管理</a>
+        <a href="chat.html" class="topbar-link">💬 AI 对话</a>
+        <a href="docs.html" class="topbar-link">📚 知识库管理</a>
+        <a href="map.html" class="topbar-link">🗺️ 地图</a>
+    </div>
+</nav>
+
+<div class="container">
+    <!-- Search bar -->
+    <div class="search-bar">
+        <input id="taskNoInput" type="text" placeholder="任务号（模糊搜索）" />
+        <select id="statusFilter"><option value="">全部状态</option></select>
+        <select id="typeFilter"><option value="">全部类型</option></select>
+        <select id="sourceFilter"><option value="">全部来源</option></select>
+        <input id="startDate" type="date" title="开始日期" />
+        <input id="endDate" type="date" title="结束日期" />
+        <button class="btn btn-primary" onclick="search(1)">🔍 查询</button>
+        <button class="btn btn-ghost" onclick="resetFilters()">重置</button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>任务号</th>
+                    <th>任务类型</th>
+                    <th>状态</th>
+                    <th>来源</th>
+                    <th>创建时间</th>
+                    <th>更新时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="taskTableBody">
+                <tr class="loading-row"><td colspan="7"><span class="spinner-sm"></span>加载中...</td></tr>
+            </tbody>
+        </table>
+        <div class="pagination" id="paginationBar" style="display:none">
+            <span id="pageInfo">共 0 条</span>
+            <div class="page-btns" id="pageBtns"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Detail Drawer -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="detailDrawer">
+    <div class="drawer-header">
+        <span class="drawer-title" id="drawerTitle">任务详情</span>
+        <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+    <div class="drawer-body" id="drawerBody">
+        <div class="empty-hint">加载中...</div>
+    </div>
+</div>
+
+<script>
+var currentPage = 1;
+var pageSize = 20;
+var totalCount = 0;
+
+// ===== 初始化 =====
+window.onload = function() {
+    loadQueryParams();
+    search(1);
+};
+
+function loadQueryParams() {
+    fetch('/api/v1/platform/task/queryParams')
+        .then(r => r.json())
+        .then(resp => {
+            if (!resp.success || !resp.data) return;
+            var data = resp.data;
+            fillSelect('statusFilter', data.statusList || data.taskStatusList || [], '全部状态');
+            fillSelect('typeFilter', data.typeList || data.taskTypeList || [], '全部类型');
+            fillSelect('sourceFilter', data.sourceList || data.scheduleChannelList || [], '全部来源');
+        })
+        .catch(() => {}); // 平台不可达时静默失败
+}
+
+function fillSelect(id, list, placeholder) {
+    var sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">' + placeholder + '</option>';
+    list.forEach(function(item) {
+        var opt = document.createElement('option');
+        if (typeof item === 'object') {
+            opt.value = item.code || item.value || item.key || '';
+            opt.textContent = item.name || item.label || item.text || opt.value;
+        } else {
+            opt.value = item; opt.textContent = item;
+        }
+        sel.appendChild(opt);
+    });
+}
+
+// ===== 查询 =====
+function search(page) {
+    currentPage = page || 1;
+    var body = {
+        pageNum: currentPage,
+        pageSize: pageSize,
+        taskNo: document.getElementById('taskNoInput').value.trim() || undefined,
+        taskState: document.getElementById('statusFilter').value || undefined,
+        taskType: document.getElementById('typeFilter').value || undefined,
+        scheduleChannel: document.getElementById('sourceFilter').value || undefined,
+        startTime: document.getElementById('startDate').value || undefined,
+        endTime: document.getElementById('endDate').value || undefined
+    };
+    // 清除 undefined
+    Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
+
+    setTableLoading(true);
+    fetch('/api/v1/platform/task/page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    })
+    .then(r => r.json())
+    .then(resp => {
+        setTableLoading(false);
+        if (!resp.success) { showTableError(resp.message || '查询失败'); return; }
+        var data = resp.data || {};
+        var records = data.records || data.list || data.rows || data.data || [];
+        totalCount = data.total || data.totalCount || records.length;
+        renderTable(records);
+        renderPagination(totalCount);
+    })
+    .catch(err => {
+        setTableLoading(false);
+        showTableError('网络错误: ' + err.message);
+    });
+}
+
+function resetFilters() {
+    document.getElementById('taskNoInput').value = '';
+    document.getElementById('statusFilter').value = '';
+    document.getElementById('typeFilter').value = '';
+    document.getElementById('sourceFilter').value = '';
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    search(1);
+}
+
+// ===== 渲染表格 =====
+function renderTable(records) {
+    var tbody = document.getElementById('taskTableBody');
+    if (!records || records.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-hint">暂无数据</div></td></tr>';
+        return;
+    }
+    tbody.innerHTML = records.map(function(r) {
+        return '<tr>'
+            + '<td><a class="task-no-link" onclick="openDetail(\'' + esc(r.taskNo || r.task_no || '') + '\')">' + esc(r.taskNo || r.task_no || '-') + '</a></td>'
+            + '<td>' + esc(r.taskType || r.task_type || '-') + '</td>'
+            + '<td>' + statusBadge(r.taskState || r.task_state || r.status || '') + '</td>'
+            + '<td>' + esc(r.scheduleChannel || r.schedule_channel || r.source || '-') + '</td>'
+            + '<td>' + esc(r.createTime || r.create_time || r.createdAt || '-') + '</td>'
+            + '<td>' + esc(r.updateTime || r.update_time || r.updatedAt || '-') + '</td>'
+            + '<td><button class="btn btn-ghost" style="height:28px;padding:0 12px;font-size:12px" onclick="openDetail(\'' + esc(r.taskNo || r.task_no || '') + '\')">详情</button></td>'
+            + '</tr>';
+    }).join('');
+}
+
+function statusBadge(state) {
+    var s = (state || '').toUpperCase();
+    var cls = 'status-default';
+    if (s.includes('RUNNING') || s.includes('执行')) cls = 'status-running';
+    else if (s.includes('DONE') || s.includes('FINISH') || s.includes('完成')) cls = 'status-done';
+    else if (s.includes('WAIT') || s.includes('等待')) cls = 'status-wait';
+    else if (s.includes('ERROR') || s.includes('FAIL') || s.includes('异常')) cls = 'status-error';
+    else if (s.includes('CANCEL') || s.includes('取消')) cls = 'status-cancel';
+    return '<span class="status-badge ' + cls + '">' + esc(state) + '</span>';
+}
+
+function setTableLoading(loading) {
+    if (loading) {
+        document.getElementById('taskTableBody').innerHTML = '<tr class="loading-row"><td colspan="7"><span class="spinner-sm"></span>加载中...</td></tr>';
+        document.getElementById('paginationBar').style.display = 'none';
+    }
+}
+
+function showTableError(msg) {
+    document.getElementById('taskTableBody').innerHTML = '<tr class="loading-row"><td colspan="7" style="color:#dc2626">⚠ ' + esc(msg) + '</td></tr>';
+}
+
+// ===== 分页 =====
+function renderPagination(total) {
+    var bar = document.getElementById('paginationBar');
+    bar.style.display = 'flex';
+    document.getElementById('pageInfo').textContent = '共 ' + total + ' 条';
+    var totalPages = Math.max(1, Math.ceil(total / pageSize));
+    var btns = document.getElementById('pageBtns');
+    btns.innerHTML = '';
+
+    var prevBtn = document.createElement('button');
+    prevBtn.className = 'page-btn';
+    prevBtn.textContent = '‹';
+    prevBtn.disabled = currentPage <= 1;
+    prevBtn.onclick = function() { search(currentPage - 1); };
+    btns.appendChild(prevBtn);
+
+    // Show up to 7 page buttons
+    var start = Math.max(1, currentPage - 3);
+    var end = Math.min(totalPages, start + 6);
+    for (var i = start; i <= end; i++) {
+        (function(p) {
+            var btn = document.createElement('button');
+            btn.className = 'page-btn' + (p === currentPage ? ' active' : '');
+            btn.textContent = p;
+            btn.onclick = function() { search(p); };
+            btns.appendChild(btn);
+        })(i);
+    }
+
+    var nextBtn = document.createElement('button');
+    nextBtn.className = 'page-btn';
+    nextBtn.textContent = '›';
+    nextBtn.disabled = currentPage >= totalPages;
+    nextBtn.onclick = function() { search(currentPage + 1); };
+    btns.appendChild(nextBtn);
+}
+
+// ===== 详情抽屉 =====
+function openDetail(taskNo) {
+    if (!taskNo) return;
+    document.getElementById('drawerTitle').textContent = '任务详情 — ' + taskNo;
+    document.getElementById('drawerBody').innerHTML = '<div class="empty-hint"><span class="spinner-sm"></span>加载中...</div>';
+    document.getElementById('drawerOverlay').classList.add('open');
+    document.getElementById('detailDrawer').classList.add('open');
+
+    // 并行加载大任务详情 + 子任务/指令
+    Promise.all([
+        fetch('/api/v1/platform/task/detail?taskNo=' + encodeURIComponent(taskNo)).then(r => r.json()),
+        fetch('/api/v1/platform/task/items?taskNo=' + encodeURIComponent(taskNo)).then(r => r.json())
+    ]).then(function(results) {
+        var detailResp = results[0];
+        var itemsResp = results[1];
+        renderDrawer(taskNo, detailResp, itemsResp);
+    }).catch(function(err) {
+        document.getElementById('drawerBody').innerHTML = '<div class="empty-hint" style="color:#dc2626">加载失败: ' + esc(err.message) + '</div>';
+    });
+}
+
+function closeDrawer() {
+    document.getElementById('drawerOverlay').classList.remove('open');
+    document.getElementById('detailDrawer').classList.remove('open');
+}
+
+function renderDrawer(taskNo, detailResp, itemsResp) {
+    var html = '';
+
+    // 大任务基本信息
+    var task = (detailResp.success && detailResp.data) ? (detailResp.data.task || detailResp.data) : null;
+    html += '<div class="detail-section">';
+    html += '<div class="detail-section-title">基本信息</div>';
+    if (task) {
+        html += '<div class="kv-grid">';
+        html += kv('任务号', task.taskNo || task.task_no || taskNo);
+        html += kv('任务类型', task.taskType || task.task_type || '-');
+        html += kv('任务状态', task.taskState || task.task_state || task.status || '-');
+        html += kv('来源', task.scheduleChannel || task.schedule_channel || '-');
+        html += kv('创建时间', task.createTime || task.create_time || '-');
+        html += kv('更新时间', task.updateTime || task.update_time || '-');
+        if (task.groupCode || task.group_code) html += kv('任务组', task.groupCode || task.group_code);
+        if (task.errorMessage || task.error_message) html += kv('错误信息', task.errorMessage || task.error_message);
+        html += '</div>';
+    } else {
+        html += '<div style="color:var(--color-muted);font-size:13px">详情加载失败或平台不可达</div>';
+    }
+    html += '</div>';
+
+    // 子任务 + 指令树
+    var items = [];
+    if (itemsResp.success && itemsResp.data) {
+        items = itemsResp.data.items || itemsResp.data.taskItems || itemsResp.data || [];
+    }
+    html += '<div class="detail-section">';
+    html += '<div class="detail-section-title">子任务 & 指令（' + items.length + ' 个子任务）</div>';
+    if (items.length === 0) {
+        html += '<div style="color:var(--color-muted);font-size:13px">暂无子任务数据</div>';
+    } else {
+        html += '<div class="item-tree">';
+        items.forEach(function(item, idx) {
+            var itemId = 'item_' + idx;
+            var cmds = item.commands || item.commandList || [];
+            html += '<div class="item-node">';
+            html += '<div class="item-header" onclick="toggleItem(\'' + itemId + '\')">';
+            html += '<span class="item-toggle" id="toggle_' + itemId + '">▶</span>';
+            html += '<span class="item-name">' + esc(item.itemNo || item.item_no || ('子任务' + (idx+1))) + '</span>';
+            html += statusBadge(item.itemState || item.item_state || item.status || '');
+            html += '<span style="font-size:12px;color:var(--color-muted);margin-left:8px">' + cmds.length + ' 条指令</span>';
+            html += '</div>';
+            html += '<div class="item-commands" id="' + itemId + '">';
+            if (cmds.length === 0) {
+                html += '<div style="padding:8px 0;font-size:12px;color:var(--color-muted)">无指令</div>';
+            } else {
+                cmds.forEach(function(cmd) {
+                    html += '<div class="cmd-row">';
+                    html += '<span class="cmd-no">' + esc(cmd.commandNo || cmd.command_no || '-') + '</span>';
+                    html += '<span class="cmd-type">' + esc(cmd.commandType || cmd.command_type || cmd.type || '-') + '</span>';
+                    html += '<span style="flex:1;color:var(--color-muted)">' + esc(cmd.deviceCode || cmd.device_code || '') + '</span>';
+                    html += '<span class="cmd-status">' + statusBadge(cmd.commandState || cmd.command_state || cmd.status || '') + '</span>';
+                    html += '</div>';
+                });
+            }
+            html += '</div></div>';
+        });
+        html += '</div>';
+    }
+    html += '</div>';
+
+    // 诊断入口
+    html += '<div class="detail-section">';
+    html += '<div class="detail-section-title">快速操作</div>';
+    html += '<button class="btn btn-primary" onclick="diagnoseTask(\'' + esc(taskNo) + '\')">🔍 诊断此任务</button>';
+    html += '</div>';
+
+    document.getElementById('drawerBody').innerHTML = html;
+}
+
+function toggleItem(id) {
+    var el = document.getElementById(id);
+    var toggle = document.getElementById('toggle_' + id);
+    if (el.classList.contains('open')) {
+        el.classList.remove('open');
+        toggle.classList.remove('open');
+    } else {
+        el.classList.add('open');
+        toggle.classList.add('open');
+    }
+}
+
+function diagnoseTask(taskNo) {
+    window.location.href = 'index.html?taskId=' + encodeURIComponent(taskNo);
+}
+
+// ===== Utils =====
+function esc(s) {
+    return String(s || '').replace(/[&<>"']/g, function(c) {
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+}
+function kv(label, value) {
+    return '<div class="kv-item"><div class="kv-label">' + label + '</div><div class="kv-value">' + esc(value) + '</div></div>';
+}
+</script>
+</body>
+</html>

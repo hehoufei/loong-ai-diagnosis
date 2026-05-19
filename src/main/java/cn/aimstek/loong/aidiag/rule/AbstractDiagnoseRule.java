@@ -1,8 +1,8 @@
 package cn.aimstek.loong.aidiag.rule;
 
+import cn.aimstek.loong.aidiag.context.DiagnosisContext;
 import cn.aimstek.loong.aidiag.dto.DiagnoseResponse;
 import cn.aimstek.loong.aidiag.dto.RootCauseItem;
-import cn.aimstek.loong.aidiag.dto.TaskDetail;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -12,16 +12,14 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 诊断规则抽象基类，提供通用辅助方法。
+ * 诊断规则抽象基类。
+ * 提供模板变量替换和从 YAML 配置构建响应的能力。
  */
 @Slf4j
 public abstract class AbstractDiagnoseRule implements DiagnoseRule {
 
     @Autowired(required = false)
-    private RuleProperties ruleProperties;
-
-    /** 规则描述（代码默认值，可被YAML配置覆盖） */
-    protected String description = "";
+    protected RuleProperties ruleProperties;
 
     @Override
     public String getDescription() {
@@ -31,11 +29,11 @@ public abstract class AbstractDiagnoseRule implements DiagnoseRule {
                 return config.getDescription();
             }
         }
-        return this.description;
+        return "";
     }
 
     /**
-     * 获取规则的自定义参数值
+     * 获取规则参数（字符串）。
      */
     protected String getParam(String key, String defaultValue) {
         if (ruleProperties == null) return defaultValue;
@@ -45,7 +43,7 @@ public abstract class AbstractDiagnoseRule implements DiagnoseRule {
     }
 
     /**
-     * 获取规则的自定义参数值（int类型）
+     * 获取规则参数（int）。
      */
     protected int getIntParam(String key, int defaultValue) {
         String value = getParam(key, null);
@@ -58,46 +56,7 @@ public abstract class AbstractDiagnoseRule implements DiagnoseRule {
     }
 
     /**
-     * 快速构建 DiagnoseResponse（单根因）
-     */
-    protected DiagnoseResponse buildResponse(String summary, String rootCauseTitle,
-                                              String rootCauseDesc, String... actions) {
-        DiagnoseResponse resp = new DiagnoseResponse();
-        resp.setSummary(summary);
-        List<RootCauseItem> causes = new ArrayList<>();
-        causes.add(new RootCauseItem(rootCauseTitle, rootCauseDesc));
-        resp.setRootCauses(causes);
-        resp.setActions(new ArrayList<>(Arrays.asList(actions)));
-        return resp;
-    }
-
-    /**
-     * 快速构建 DiagnoseResponse（多根因）
-     */
-    protected DiagnoseResponse buildResponse(String summary, List<RootCauseItem> rootCauses,
-                                              String... actions) {
-        DiagnoseResponse resp = new DiagnoseResponse();
-        resp.setSummary(summary);
-        resp.setRootCauses(rootCauses != null ? rootCauses : new ArrayList<>());
-        resp.setActions(new ArrayList<>(Arrays.asList(actions)));
-        return resp;
-    }
-
-    /**
-     * 检查子任务是否全部成功（AUTO_SUCCESS 或 MANUAL_SUCCESS）
-     */
-    protected boolean isItemSuccess(String taskState) {
-        return "AUTO_SUCCESS".equals(taskState) || "MANUAL_SUCCESS".equals(taskState);
-    }
-
-    /** null 安全字符串转换（null → 空串） */
-    protected String n(String v) {
-        return v == null ? "" : v;
-    }
-
-    /**
-     * 从配置的OutputConfig构建DiagnoseResponse（支持模板变量替换）
-     * @return 如果OutputConfig存在且summary非空，返回构建的响应；否则返回null（让子类用原有逻辑）
+     * 从 YAML OutputConfig 构建 DiagnoseResponse（支持模板变量替换）。
      */
     protected DiagnoseResponse buildResponseFromConfig(DiagnosisContext context) {
         if (ruleProperties == null) return null;
@@ -129,37 +88,39 @@ public abstract class AbstractDiagnoseRule implements DiagnoseRule {
     }
 
     /**
-     * 替换模板中的 {variable} 占位符为DiagnosisContext中的实际值
+     * 快速构建 DiagnoseResponse（单根因）。
+     */
+    protected DiagnoseResponse buildResponse(String summary, String rootCauseTitle,
+                                              String rootCauseDesc, String... actions) {
+        DiagnoseResponse resp = new DiagnoseResponse();
+        resp.setSummary(summary);
+        List<RootCauseItem> causes = new ArrayList<>();
+        causes.add(new RootCauseItem(rootCauseTitle, rootCauseDesc));
+        resp.setRootCauses(causes);
+        resp.setActions(new ArrayList<>(Arrays.asList(actions)));
+        return resp;
+    }
+
+    /**
+     * 替换模板中的 {variable} 占位符。
+     * 支持变量：taskNo, taskState, stuckSeconds, stuckMinutes, itemCount, runningItemCount, errorMessage
      */
     protected String resolveTemplate(String template, DiagnosisContext context) {
         if (template == null || template.isEmpty()) return template;
 
         String result = template;
-        result = result.replace("{handleState}", n(context.getHandleState()));
-        result = result.replace("{errorMessage}", n(context.getErrorMessage()));
-
-        List<TaskDetail.TaskItemDetail> items = context.getTaskItems();
-        result = result.replace("{taskItemCount}", String.valueOf(items.size()));
-
-        long completedCount = items.stream()
-                .filter(i -> "AUTO_SUCCESS".equals(i.getTaskState()) || "MANUAL_SUCCESS".equals(i.getTaskState()))
-                .count();
-        long runningCount = items.stream()
-                .filter(i -> "RUNNING".equals(i.getTaskState()))
-                .count();
-        long initCount = items.stream()
-                .filter(i -> "INIT".equals(i.getTaskState()))
-                .count();
-        long cancelledCount = items.stream()
-                .filter(i -> "CANCELLED".equals(i.getTaskState()))
-                .count();
-
-        result = result.replace("{taskState}", context.getDetail() != null && context.getDetail().getTaskState() != null ? context.getDetail().getTaskState() : "");
-        result = result.replace("{completedCount}", String.valueOf(completedCount));
-        result = result.replace("{runningCount}", String.valueOf(runningCount));
-        result = result.replace("{initCount}", String.valueOf(initCount));
-        result = result.replace("{cancelledCount}", String.valueOf(cancelledCount));
+        result = result.replace("{taskNo}", safe(context.getTask() != null ? context.getTask().getTaskNo() : null));
+        result = result.replace("{taskState}", safe(context.getTask() != null ? context.getTask().getTaskState() : null));
+        result = result.replace("{stuckSeconds}", String.valueOf(context.stuckSeconds()));
+        result = result.replace("{stuckMinutes}", String.valueOf(context.stuckSeconds() / 60));
+        result = result.replace("{itemCount}", String.valueOf(context.getItems() != null ? context.getItems().size() : 0));
+        result = result.replace("{runningItemCount}", String.valueOf(context.runningItems().size()));
+        result = result.replace("{errorMessage}", safe(context.getTask() != null ? context.getTask().getErrorMessage() : null));
 
         return result;
+    }
+
+    private String safe(String v) {
+        return v == null ? "" : v;
     }
 }
