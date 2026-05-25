@@ -15,9 +15,16 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 阻塞分析器：基于 loong-platform 的显式依赖关系（preStartTaskNo / preEndTaskNo /
+ * parentTaskNo / groupCode）优先识别阻塞，辅以隐式资源占用推断（设备/终点 node/任务组）。
+ */
 @Component
 @RequiredArgsConstructor
 public class BlockageAnalyzer {
+
+    /** 任务"已完成"状态集合（不再阻塞下游） */
+    private static final Set<String> FINISHED_STATES = Set.of("SUCCESS", "MANUAL_SUCCESS", "CANCEL");
 
     public TaskRelationSnapshot analyze(TaskDetail focusTask, List<TaskDetail> relatedTasks) {
         TaskRelationSnapshot snapshot = new TaskRelationSnapshot();
@@ -48,7 +55,7 @@ public class BlockageAnalyzer {
             snapshot.getDependencyEdges().add(new TaskRelationEdge(
                     rootBlocker.getTaskId(),
                     directBlocker.getTaskId(),
-                    "upstream_blocked",
+                    TaskRelationEdge.UPSTREAM_BLOCKED,
                     relationResourceKey(rootBlocker, directBlocker),
                     buildRootBlockDescription(rootBlocker, directBlocker)
             ));
@@ -64,12 +71,11 @@ public class BlockageAnalyzer {
         String relationType = inferRelationType(focusTask, candidate);
         String blockageType = inferBlockageType(focusTask, candidate);
         summary.setTaskId(candidate.getTaskId());
-        summary.setWmsTaskNo(candidate.getWmsTaskNo());
+        summary.setTaskNo(candidate.getTaskNo());
         summary.setTaskState(candidate.getTaskState());
-        summary.setHandleState(candidate.getHandleState());
         summary.setContainerCode(candidate.getContainerCode());
-        summary.setBusinessFrom(candidate.getBusinessFrom());
-        summary.setBusinessTo(candidate.getBusinessTo());
+        summary.setStartNode(candidate.getStartNode());
+        summary.setEndNode(candidate.getEndNode());
         summary.setDeviceCode(extractPrimaryDeviceCode(candidate));
         summary.setRelationType(relationType);
         summary.setRelationReason(buildRelationReason(focusTask, candidate, relationType));
@@ -79,12 +85,34 @@ public class BlockageAnalyzer {
         return summary;
     }
 
+    /**
+     * 直接阻塞者识别策略：
+     * 1. 显式依赖优先：focusTask.preStartTaskNo / preEndTaskNo / parentTaskNo 指向且未完成的任务
+     * 2. 资源推断兜底：评分最高的强关联未完成任务
+     */
     private TaskDetail selectDirectBlocker(TaskDetail focusTask, List<TaskDetail> candidates) {
+        // 第一优先：显式 pre 依赖（preStartTaskNo / preEndTaskNo）
+        TaskDetail explicitPre = findByTaskNo(candidates, focusTask.getPreStartTaskNo());
+        if (explicitPre == null) {
+            explicitPre = findByTaskNo(candidates, focusTask.getPreEndTaskNo());
+        }
+        if (explicitPre != null && !isFinished(explicitPre)) {
+            return explicitPre;
+        }
+
+        // 第二优先：父任务异常
+        TaskDetail parent = findByTaskNo(candidates, focusTask.getParentTaskNo());
+        if (parent != null && !isFinished(parent) && hasExplicitAbnormal(parent)) {
+            return parent;
+        }
+
+        // 第三优先：资源推断（高分优先）
         return candidates.stream()
+                .filter(candidate -> !sameTask(focusTask, candidate))
                 .filter(candidate -> isEarlierThanFocus(focusTask, candidate))
                 .filter(candidate -> !isFinished(candidate))
                 .filter(candidate -> hasStrongRelation(focusTask, candidate))
-                .min(Comparator.comparingInt(candidate -> directBlockerScore(focusTask, candidate)))
+                .max(Comparator.comparingInt(candidate -> directBlockerScore(focusTask, candidate)))
                 .orElse(null);
     }
 
@@ -94,7 +122,7 @@ public class BlockageAnalyzer {
         }
         return candidates.stream()
                 .filter(candidate -> !isFinished(candidate))
-                .filter(candidate -> hasExplicitAbnormal(candidate) || "FAILED".equalsIgnoreCase(candidate.getTaskState()))
+                .filter(this::hasExplicitAbnormal)
                 .min(Comparator.comparingInt(this::rootBlockerScore)
                         .thenComparing(TaskDetail::getCreateTime, Comparator.nullsLast(Comparator.naturalOrder())))
                 .orElse(directBlocker);
@@ -103,6 +131,16 @@ public class BlockageAnalyzer {
     private List<String> findImpactedTasks(TaskDetail focusTask, List<TaskDetail> candidates) {
         List<String> impacted = new ArrayList<>();
         for (TaskDetail candidate : candidates) {
+            if (sameTask(focusTask, candidate)) {
+                continue;
+            }
+            // 反向显式依赖：候选任务的 preStartTaskNo/preEndTaskNo 指向焦点任务，意味着候选受焦点阻塞
+            if (sameValue(candidate.getPreStartTaskNo(), focusTask.getTaskNo())
+                    || sameValue(candidate.getPreEndTaskNo(), focusTask.getTaskNo())
+                    || sameValue(candidate.getParentTaskNo(), focusTask.getTaskNo())) {
+                impacted.add(candidate.getTaskId());
+                continue;
+            }
             if (!hasStrongRelation(focusTask, candidate)) {
                 continue;
             }
@@ -116,60 +154,86 @@ public class BlockageAnalyzer {
 
     private List<ResourceBottleneck> findBottlenecks(TaskDetail focusTask, List<TaskDetail> candidates) {
         List<ResourceBottleneck> bottlenecks = new ArrayList<>();
-        String containerCode = focusTask.getContainerCode();
-        if (StringUtils.hasText(containerCode)) {
-            int impacted = (int) candidates.stream().filter(candidate -> containerCode.equals(candidate.getContainerCode())).count();
-            if (impacted > 0) {
-                bottlenecks.add(new ResourceBottleneck("container", containerCode, "同容器链路存在关联任务，可能存在容器未释放", impacted));
-            }
-        }
 
-        Set<String> pointKeys = new LinkedHashSet<>();
-        addIfHasText(pointKeys, focusTask.getBusinessFrom());
-        addIfHasText(pointKeys, focusTask.getDefiniteFrom());
-        addIfHasText(pointKeys, focusTask.getBusinessTo());
-        addIfHasText(pointKeys, focusTask.getDefiniteTo());
-        for (String pointKey : pointKeys) {
-            int impacted = (int) candidates.stream().filter(candidate -> pointKey.equals(candidate.getBusinessFrom())
-                    || pointKey.equals(candidate.getDefiniteFrom())
-                    || pointKey.equals(candidate.getBusinessTo())
-                    || pointKey.equals(candidate.getDefiniteTo())).count();
-            if (impacted > 0) {
-                bottlenecks.add(new ResourceBottleneck("point", pointKey, "同点位存在排队或占用候选，可能存在点位未释放", impacted));
-            }
-        }
-
+        // 设备瓶颈
         String deviceCode = extractPrimaryDeviceCode(focusTask);
         if (StringUtils.hasText(deviceCode)) {
-            int impacted = (int) candidates.stream().filter(candidate -> deviceCode.equals(extractPrimaryDeviceCode(candidate))).count();
+            int impacted = (int) candidates.stream()
+                    .filter(candidate -> !sameTask(focusTask, candidate))
+                    .filter(candidate -> deviceCode.equals(extractPrimaryDeviceCode(candidate)))
+                    .count();
             if (impacted > 0) {
-                bottlenecks.add(new ResourceBottleneck("device", deviceCode, "同设备存在关联任务，可能存在设备繁忙或故障", impacted));
+                bottlenecks.add(new ResourceBottleneck(ResourceBottleneck.TYPE_DEVICE, deviceCode,
+                        "同设备存在关联任务，可能存在设备繁忙或故障", impacted));
             }
         }
+
+        // 节点（点位 → node）瓶颈
+        Set<String> nodeKeys = new LinkedHashSet<>();
+        addIfHasText(nodeKeys, focusTask.getStartNode());
+        addIfHasText(nodeKeys, focusTask.getEndNode());
+        addIfHasText(nodeKeys, focusTask.getGoodsLocation());
+        for (String nodeKey : nodeKeys) {
+            int impacted = (int) candidates.stream()
+                    .filter(candidate -> !sameTask(focusTask, candidate))
+                    .filter(candidate -> nodeKey.equals(candidate.getStartNode())
+                            || nodeKey.equals(candidate.getEndNode())
+                            || nodeKey.equals(candidate.getGoodsLocation()))
+                    .count();
+            if (impacted > 0) {
+                bottlenecks.add(new ResourceBottleneck(ResourceBottleneck.TYPE_NODE, nodeKey,
+                        "同节点存在排队或占用候选，可能存在节点未释放", impacted));
+            }
+        }
+
+        // 任务组瓶颈
+        String groupCode = focusTask.getGroupCode();
+        if (StringUtils.hasText(groupCode)) {
+            int impacted = (int) candidates.stream()
+                    .filter(candidate -> !sameTask(focusTask, candidate))
+                    .filter(candidate -> groupCode.equals(candidate.getGroupCode()))
+                    .count();
+            if (impacted > 0) {
+                bottlenecks.add(new ResourceBottleneck(ResourceBottleneck.TYPE_GROUP, groupCode,
+                        "同任务组关联任务存在阻塞或排队", impacted));
+            }
+        }
+
         return bottlenecks;
     }
 
+    /**
+     * 直接阻塞评分（高分优先）：
+     * 显式依赖关系(preStartTaskNo/preEndTaskNo/parentTaskNo 指向): +60
+     * 同设备(deviceCode 相同): +40
+     * 同终点 node(endNode 相同): +30
+     * 同任务组(groupCode 相同): +20
+     * 异常/失败状态(SUCCESS/CANCEL/MANUAL_SUCCESS 之外的活跃状态有异常): +10
+     */
     private int directBlockerScore(TaskDetail focusTask, TaskDetail candidate) {
-        int score = 100;
+        int score = 0;
+        if (isExplicitDependency(focusTask, candidate)) {
+            score += 60;
+        }
         if (sameValue(extractPrimaryDeviceCode(focusTask), extractPrimaryDeviceCode(candidate))) {
-            score -= 40;
+            score += 40;
         }
-        if (sameValue(focusTask.getBusinessTo(), candidate.getBusinessTo()) || sameValue(focusTask.getDefiniteTo(), candidate.getDefiniteTo())) {
-            score -= 30;
+        if (sameValue(focusTask.getEndNode(), candidate.getEndNode())) {
+            score += 30;
         }
-        if (sameValue(focusTask.getContainerCode(), candidate.getContainerCode())) {
-            score -= 20;
+        if (sameValue(focusTask.getGroupCode(), candidate.getGroupCode())) {
+            score += 20;
         }
         if (hasExplicitAbnormal(candidate)) {
-            score -= 10;
+            score += 10;
         }
         return score;
     }
 
     private int rootBlockerScore(TaskDetail candidate) {
         int score = 100;
-        if ("FAILED".equalsIgnoreCase(candidate.getTaskState())) {
-            score -= 40;
+        if (hasFailedCommand(candidate)) {
+            score -= 50;
         }
         if (hasExplicitAbnormal(candidate)) {
             score -= 30;
@@ -177,22 +241,62 @@ public class BlockageAnalyzer {
         if (!isFinished(candidate)) {
             score -= 20;
         }
+        if ("Y".equalsIgnoreCase(candidate.getPaused())) {
+            score -= 10;
+        }
         return score;
     }
 
-    private boolean hasExplicitAbnormal(TaskDetail candidate) {
-        return StringUtils.hasText(candidate.getErrorMessage())
-                || "FAILED".equalsIgnoreCase(candidate.getTaskState())
-                || "ERROR".equalsIgnoreCase(candidate.getHandleState());
+    /** 判断候选是否属于焦点任务的显式依赖（被依赖方） */
+    private boolean isExplicitDependency(TaskDetail focusTask, TaskDetail candidate) {
+        if (focusTask == null || candidate == null) {
+            return false;
+        }
+        String candNo = candidate.getTaskNo();
+        if (!StringUtils.hasText(candNo)) {
+            return false;
+        }
+        return candNo.equals(focusTask.getPreStartTaskNo())
+                || candNo.equals(focusTask.getPreEndTaskNo())
+                || candNo.equals(focusTask.getParentTaskNo());
     }
 
+    private boolean hasExplicitAbnormal(TaskDetail candidate) {
+        if (candidate == null) {
+            return false;
+        }
+        if (StringUtils.hasText(candidate.getErrorMessage())) {
+            return true;
+        }
+        if ("Y".equalsIgnoreCase(candidate.getPaused())) {
+            return true;
+        }
+        return hasFailedCommand(candidate);
+    }
+
+    /** 候选任务是否存在 FAILED 指令 */
+    private boolean hasFailedCommand(TaskDetail candidate) {
+        if (candidate == null || candidate.getCommands() == null) {
+            return false;
+        }
+        for (TaskDetail.CommandDetail command : candidate.getCommands()) {
+            if ("FAILED".equalsIgnoreCase(command.getCommandState())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 强关系判定：显式依赖 OR 同设备 OR 同起点 node OR 同终点 node OR 同任务组
+     */
     private boolean hasStrongRelation(TaskDetail focusTask, TaskDetail candidate) {
-        return sameValue(focusTask.getContainerCode(), candidate.getContainerCode())
-                || sameValue(focusTask.getBusinessFrom(), candidate.getBusinessFrom())
-                || sameValue(focusTask.getDefiniteFrom(), candidate.getDefiniteFrom())
-                || sameValue(focusTask.getBusinessTo(), candidate.getBusinessTo())
-                || sameValue(focusTask.getDefiniteTo(), candidate.getDefiniteTo())
-                || sameValue(extractPrimaryDeviceCode(focusTask), extractPrimaryDeviceCode(candidate));
+        return isExplicitDependency(focusTask, candidate)
+                || isExplicitDependency(candidate, focusTask)
+                || sameValue(focusTask.getStartNode(), candidate.getStartNode())
+                || sameValue(focusTask.getEndNode(), candidate.getEndNode())
+                || sameValue(extractPrimaryDeviceCode(focusTask), extractPrimaryDeviceCode(candidate))
+                || sameValue(focusTask.getGroupCode(), candidate.getGroupCode());
     }
 
     private boolean isEarlierThanFocus(TaskDetail focusTask, TaskDetail candidate) {
@@ -202,48 +306,92 @@ public class BlockageAnalyzer {
         return !candidate.getCreateTime().isAfter(focusTask.getCreateTime());
     }
 
+    /** 任务"已完成"判断：状态为 SUCCESS / MANUAL_SUCCESS / CANCEL */
     private boolean isFinished(TaskDetail task) {
-        return "FINISHED".equalsIgnoreCase(task.getTaskState()) || task.getFinishTime() != null;
+        if (task == null) {
+            return true;
+        }
+        String state = task.getTaskState();
+        if (StringUtils.hasText(state) && FINISHED_STATES.contains(state.toUpperCase())) {
+            return true;
+        }
+        return task.getFinishTime() != null;
     }
 
     private String inferRelationType(TaskDetail focusTask, TaskDetail candidate) {
-        if (sameValue(focusTask.getContainerCode(), candidate.getContainerCode())) {
-            return "same_container";
+        // 显式依赖优先识别
+        if (StringUtils.hasText(candidate.getTaskNo())) {
+            if (candidate.getTaskNo().equals(focusTask.getPreStartTaskNo())) {
+                return TaskRelationEdge.PRE_START_DEPENDENCY;
+            }
+            if (candidate.getTaskNo().equals(focusTask.getPreEndTaskNo())) {
+                return TaskRelationEdge.PRE_END_DEPENDENCY;
+            }
+            if (candidate.getTaskNo().equals(focusTask.getParentTaskNo())
+                    || (StringUtils.hasText(focusTask.getTaskNo())
+                        && focusTask.getTaskNo().equals(candidate.getParentTaskNo()))) {
+                return TaskRelationEdge.PARENT_CHILD;
+            }
         }
         if (sameValue(extractPrimaryDeviceCode(focusTask), extractPrimaryDeviceCode(candidate))) {
-            return "same_device";
+            return TaskRelationEdge.SAME_DEVICE;
         }
-        if (sameValue(focusTask.getBusinessTo(), candidate.getBusinessTo()) || sameValue(focusTask.getDefiniteTo(), candidate.getDefiniteTo())) {
-            return "same_target_point";
+        if (sameValue(focusTask.getEndNode(), candidate.getEndNode())) {
+            return TaskRelationEdge.SAME_TARGET_POINT;
         }
-        if (sameValue(focusTask.getBusinessFrom(), candidate.getBusinessFrom()) || sameValue(focusTask.getDefiniteFrom(), candidate.getDefiniteFrom())) {
-            return "same_source_point";
+        if (sameValue(focusTask.getStartNode(), candidate.getStartNode())) {
+            return TaskRelationEdge.SAME_SOURCE_POINT;
         }
-        return "time_window_related";
+        if (sameValue(focusTask.getGroupCode(), candidate.getGroupCode())) {
+            return TaskRelationEdge.SAME_GROUP;
+        }
+        return TaskRelationEdge.TIME_WINDOW_RELATED;
     }
 
     private String buildRelationReason(TaskDetail focusTask, TaskDetail candidate, String relationType) {
         return switch (relationType) {
-            case "same_container" -> "共享容器 " + candidate.getContainerCode();
-            case "same_device" -> "共享设备 " + extractPrimaryDeviceCode(candidate);
-            case "same_target_point" -> "共享目标点位 " + firstNonBlank(candidate.getBusinessTo(), candidate.getDefiniteTo());
-            case "same_source_point" -> "共享起点位 " + firstNonBlank(candidate.getBusinessFrom(), candidate.getDefiniteFrom());
+            case TaskRelationEdge.PRE_START_DEPENDENCY ->
+                    "焦点任务的开始依赖任务 " + candidate.getTaskNo() + "（preStartTaskNo）";
+            case TaskRelationEdge.PRE_END_DEPENDENCY ->
+                    "焦点任务的结束依赖任务 " + candidate.getTaskNo() + "（preEndTaskNo）";
+            case TaskRelationEdge.PARENT_CHILD ->
+                    "父子任务关系：parentTaskNo=" + firstNonBlank(focusTask.getParentTaskNo(), candidate.getParentTaskNo());
+            case TaskRelationEdge.SAME_DEVICE ->
+                    "共享设备 " + extractPrimaryDeviceCode(candidate);
+            case TaskRelationEdge.SAME_TARGET_POINT ->
+                    "共享终点节点 " + candidate.getEndNode();
+            case TaskRelationEdge.SAME_SOURCE_POINT ->
+                    "共享起点节点 " + candidate.getStartNode();
+            case TaskRelationEdge.SAME_GROUP ->
+                    "同任务组 " + candidate.getGroupCode();
             default -> "同时间窗内候选关联任务";
         };
     }
 
+    /**
+     * 阻塞类型推断：显式依赖未完成 → DEPENDENCY_BLOCKED；
+     * 焦点任务被暂停 → PAUSED；候选有 FAILED 指令 → COMMAND_FAILED；
+     * 自身异常 → SELF_ERROR；同设备 → RESOURCE_BUSY；同终点 → POINT_OCCUPIED；
+     * 强关联 → UPSTREAM_BLOCKED；其余 → UNKNOWN。
+     */
     private String inferBlockageType(TaskDetail focusTask, TaskDetail candidate) {
+        if (isExplicitDependency(focusTask, candidate) && !isFinished(candidate)) {
+            return "DEPENDENCY_BLOCKED";
+        }
+        if ("Y".equalsIgnoreCase(focusTask.getPaused())) {
+            return "PAUSED";
+        }
+        if (hasFailedCommand(candidate)) {
+            return "COMMAND_FAILED";
+        }
         if (hasExplicitAbnormal(candidate)) {
             return "SELF_ERROR";
         }
         if (sameValue(extractPrimaryDeviceCode(focusTask), extractPrimaryDeviceCode(candidate))) {
             return "RESOURCE_BUSY";
         }
-        if (sameValue(focusTask.getBusinessTo(), candidate.getBusinessTo()) || sameValue(focusTask.getDefiniteTo(), candidate.getDefiniteTo())) {
+        if (sameValue(focusTask.getEndNode(), candidate.getEndNode())) {
             return "POINT_OCCUPIED";
-        }
-        if (sameValue(focusTask.getContainerCode(), candidate.getContainerCode())) {
-            return "CONTAINER_LOCKED";
         }
         if (hasStrongRelation(focusTask, candidate)) {
             return "UPSTREAM_BLOCKED";
@@ -253,10 +401,15 @@ public class BlockageAnalyzer {
 
     private String buildBlockageReason(TaskDetail focusTask, TaskDetail candidate, String blockageType) {
         return switch (blockageType) {
-            case "SELF_ERROR" -> "候选任务自身存在明确异常或失败状态，可能是当前阻塞链的起点。";
-            case "RESOURCE_BUSY" -> "候选任务与当前任务共享设备 " + extractPrimaryDeviceCode(candidate) + "，可能因设备繁忙导致等待。";
-            case "POINT_OCCUPIED" -> "候选任务与当前任务共享目标点位 " + firstNonBlank(candidate.getBusinessTo(), candidate.getDefiniteTo()) + "，可能存在点位占用未释放。";
-            case "CONTAINER_LOCKED" -> "候选任务与当前任务共享容器 " + candidate.getContainerCode() + "，可能存在容器链路未释放。";
+            case "DEPENDENCY_BLOCKED" -> "焦点任务通过 preStartTaskNo/preEndTaskNo/parentTaskNo 显式依赖任务 "
+                    + candidate.getTaskNo() + "，但其状态 " + candidate.getTaskState() + " 尚未完成。";
+            case "PAUSED" -> "焦点任务被人工暂停（paused=Y），需要先恢复后再继续。";
+            case "COMMAND_FAILED" -> "候选任务存在 FAILED 状态指令（commandState=FAILED），需要先处理失败指令。";
+            case "SELF_ERROR" -> "候选任务自身存在明确异常（错误消息或暂停标记），可能是当前阻塞链的起点。";
+            case "RESOURCE_BUSY" -> "候选任务与当前任务共享设备 " + extractPrimaryDeviceCode(candidate)
+                    + "，可能因设备繁忙导致等待。";
+            case "POINT_OCCUPIED" -> "候选任务与当前任务共享终点节点 " + candidate.getEndNode()
+                    + "，可能存在节点占用未释放。";
             case "UPSTREAM_BLOCKED" -> "候选任务与当前任务存在强关联，可能处于上游阻塞链。";
             default -> "当前仅识别为时间窗内关联任务，阻塞类型仍待进一步确认。";
         };
@@ -275,10 +428,13 @@ public class BlockageAnalyzer {
     private String relationResourceKey(TaskDetail focusTask, TaskDetail candidate) {
         String relationType = inferRelationType(focusTask, candidate);
         return switch (relationType) {
-            case "same_container" -> focusTask.getContainerCode();
-            case "same_device" -> extractPrimaryDeviceCode(focusTask);
-            case "same_target_point" -> firstNonBlank(focusTask.getBusinessTo(), focusTask.getDefiniteTo());
-            case "same_source_point" -> firstNonBlank(focusTask.getBusinessFrom(), focusTask.getDefiniteFrom());
+            case TaskRelationEdge.PRE_START_DEPENDENCY -> focusTask.getPreStartTaskNo();
+            case TaskRelationEdge.PRE_END_DEPENDENCY -> focusTask.getPreEndTaskNo();
+            case TaskRelationEdge.PARENT_CHILD -> firstNonBlank(focusTask.getParentTaskNo(), candidate.getParentTaskNo());
+            case TaskRelationEdge.SAME_DEVICE -> extractPrimaryDeviceCode(focusTask);
+            case TaskRelationEdge.SAME_TARGET_POINT -> focusTask.getEndNode();
+            case TaskRelationEdge.SAME_SOURCE_POINT -> focusTask.getStartNode();
+            case TaskRelationEdge.SAME_GROUP -> focusTask.getGroupCode();
             default -> focusTask.getTaskId();
         };
     }
@@ -287,10 +443,14 @@ public class BlockageAnalyzer {
         if (task == null) {
             return null;
         }
-        if (task.getTickets() != null) {
-            for (TaskDetail.TicketDetail ticket : task.getTickets()) {
-                if (StringUtils.hasText(ticket.getDeviceCode())) {
-                    return ticket.getDeviceCode();
+        // 优先返回当前货物所在设备
+        if (StringUtils.hasText(task.getGoodsDeviceCode())) {
+            return task.getGoodsDeviceCode();
+        }
+        if (task.getCommands() != null) {
+            for (TaskDetail.CommandDetail command : task.getCommands()) {
+                if (StringUtils.hasText(command.getDeviceCode())) {
+                    return command.getDeviceCode();
                 }
             }
         }
@@ -302,6 +462,25 @@ public class BlockageAnalyzer {
             }
         }
         return null;
+    }
+
+    private TaskDetail findByTaskNo(List<TaskDetail> candidates, String taskNo) {
+        if (!StringUtils.hasText(taskNo) || candidates == null) {
+            return null;
+        }
+        for (TaskDetail candidate : candidates) {
+            if (taskNo.equals(candidate.getTaskNo())) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private boolean sameTask(TaskDetail left, TaskDetail right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        return Objects.equals(left.getTaskId(), right.getTaskId());
     }
 
     private boolean sameValue(String left, String right) {

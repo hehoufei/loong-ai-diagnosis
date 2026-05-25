@@ -11,14 +11,14 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 场景6：所有子任务都是INIT，还没开始调度。
+ * 场景：所有子任务都处于 WAIT_SPLIT / WAIT_PLAN（尚未进入运行阶段），调度器尚未处理。
  */
 @Slf4j
 @Component
 public class AllItemsInitRule extends AbstractDiagnoseRule {
 
     public AllItemsInitRule() {
-        this.description = "检查子任务全部处于初始状态，定时调度尚未处理";
+        this.description = "检查子任务全部处于 WAIT_SPLIT/WAIT_PLAN 状态，调度尚未推进";
     }
 
     @Override
@@ -35,25 +35,28 @@ public class AllItemsInitRule extends AbstractDiagnoseRule {
     public boolean match(DiagnosisContext ctx) {
         List<TaskDetail.TaskItemDetail> items = ctx.getTaskItems();
         if (items.isEmpty()) return false;
-        return items.stream().allMatch(i -> "INIT".equals(i.getTaskState()));
+        return items.stream().allMatch(i -> "WAIT_SPLIT".equals(i.getTaskItemState())
+                || "WAIT_PLAN".equals(i.getTaskItemState()));
     }
 
     @Override
     public DiagnoseResponse diagnose(DiagnosisContext ctx) {
-        // 检查是否有配置覆盖
         DiagnoseResponse configResponse = buildResponseFromConfig(ctx);
         if (configResponse != null) {
             return configResponse;
         }
-        // 以下保持原有逻辑不变
         List<TaskDetail.TaskItemDetail> items = ctx.getTaskItems();
+        long waitSplit = items.stream().filter(i -> "WAIT_SPLIT".equals(i.getTaskItemState())).count();
+        long waitPlan = items.stream().filter(i -> "WAIT_PLAN".equals(i.getTaskItemState())).count();
 
         DiagnoseResponse resp = new DiagnoseResponse();
-        resp.setSummary("子任务已生成但全部处于INIT状态，定时调度任务尚未处理");
+        resp.setSummary("所有子任务尚未进入运行阶段（WAIT_SPLIT=" + waitSplit + ", WAIT_PLAN=" + waitPlan
+                + "），调度器尚未对子任务进行下发");
         resp.setRootCauses(List.of(new RootCauseItem("子任务未被调度",
-            "共" + items.size() + "个子任务均为INIT状态，定时任务尚未调用引擎查询可用设备。"
-            + "可能原因：定时任务未执行、调度队列积压、引擎查询可用设备失败")));
-        resp.setActions(List.of("检查定时调度任务是否正常运行", "查看引擎服务是否可用", "检查是否有大量任务排队"));
+                "共" + items.size() + "个子任务均处于 WAIT_SPLIT/WAIT_PLAN 状态，调度器尚未触发拆分或路径规划。"
+                        + "可能原因：定时任务未执行、调度队列积压、引擎查询可用设备失败、依赖任务阻塞")));
+        resp.setActions(List.of("检查定时调度任务是否正常运行", "查看引擎/规划服务是否可用",
+                "检查是否有大量任务排队", "确认子任务是否存在依赖未满足"));
         return resp;
     }
 }

@@ -10,14 +10,14 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 场景4：路径规划已完成但未生成子任务。
+ * 场景：主任务 task_state=RUNNING 但没有任何子任务，数据异常。
  */
 @Slf4j
 @Component
 public class NoTaskItemsRule extends AbstractDiagnoseRule {
 
     public NoTaskItemsRule() {
-        this.description = "检查路径规划完成但未生成子任务的异常情况";
+        this.description = "检查主任务已进入 RUNNING 但未生成子任务的异常情况";
     }
 
     @Override
@@ -32,22 +32,22 @@ public class NoTaskItemsRule extends AbstractDiagnoseRule {
 
     @Override
     public boolean match(DiagnosisContext ctx) {
-        return "PATH_PLANNING".equals(ctx.getHandleState()) && ctx.getTaskItems().isEmpty();
+        return "RUNNING".equals(ctx.getTaskState()) && ctx.getTaskItems().isEmpty();
     }
 
     @Override
     public DiagnoseResponse diagnose(DiagnosisContext ctx) {
-        // 检查是否有配置覆盖
         DiagnoseResponse configResponse = buildResponseFromConfig(ctx);
         if (configResponse != null) {
             return configResponse;
         }
-        // 以下保持原有逻辑不变
         DiagnoseResponse resp = new DiagnoseResponse();
-        resp.setSummary("路径规划已完成但未生成子任务，数据异常");
+        resp.setSummary("主任务已进入 RUNNING 但未生成任何子任务，数据异常");
         resp.setRootCauses(List.of(new RootCauseItem("子任务未生成",
-            "handle_state=PATH_PLANNING表示路径规划完成，但没有子任务记录，可能是路径拆分逻辑异常")));
-        resp.setActions(List.of("查看日志中路径拆分相关记录", "检查引擎返回的路径数据是否正常"));
+                "task_state=RUNNING 表示任务应已进入执行阶段，但 task_items 为空，可能是任务拆分逻辑异常或子任务持久化失败")));
+        resp.setActions(List.of("查看任务拆分服务日志",
+                "检查 sc_task_item 表是否有对应数据",
+                "确认引擎返回的路径数据是否正常"));
         return resp;
     }
 }

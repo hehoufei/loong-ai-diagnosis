@@ -119,10 +119,12 @@ public class GlobalDiagnosisService {
             return "待进一步确认";
         }
         return switch (blockageType) {
+            case "DEPENDENCY_BLOCKED" -> "显式依赖未完成";
+            case "PAUSED" -> "任务已暂停";
+            case "COMMAND_FAILED" -> "指令执行失败";
             case "SELF_ERROR" -> "任务自身异常";
             case "RESOURCE_BUSY" -> "资源繁忙";
-            case "POINT_OCCUPIED" -> "点位占用";
-            case "CONTAINER_LOCKED" -> "容器未释放";
+            case "POINT_OCCUPIED" -> "节点占用";
             case "UPSTREAM_BLOCKED" -> "上游阻塞";
             default -> "待进一步确认";
         };
@@ -133,10 +135,12 @@ public class GlobalDiagnosisService {
             return "任务状态与资源占用情况";
         }
         return switch (blockageType) {
+            case "DEPENDENCY_BLOCKED" -> "preStartTaskNo / preEndTaskNo / parentTaskNo 指向任务的完成状态";
+            case "PAUSED" -> "任务暂停原因与恢复条件";
+            case "COMMAND_FAILED" -> "FAILED 状态指令的错误信息与设备反馈";
             case "SELF_ERROR" -> "任务自身报错、异常码和执行状态";
             case "RESOURCE_BUSY" -> "设备状态、排队情况和可用性";
-            case "POINT_OCCUPIED" -> "目标点位占用与释放情况";
-            case "CONTAINER_LOCKED" -> "容器状态与前序任务释放情况";
+            case "POINT_OCCUPIED" -> "终点节点占用与释放情况";
             case "UPSTREAM_BLOCKED" -> "上游任务执行状态和资源释放情况";
             default -> "任务状态与资源占用情况";
         };
@@ -148,8 +152,8 @@ public class GlobalDiagnosisService {
         }
         return switch (resourceType) {
             case "device" -> "设备故障、设备繁忙或排队积压";
-            case "point" -> "点位占用未释放或路径冲突";
-            case "container" -> "容器状态异常或前序链路未释放";
+            case "node" -> "节点占用未释放或路径冲突";
+            case "group" -> "同任务组内其他任务阻塞或排队";
             default -> "占用未释放或调度积压";
         };
     }

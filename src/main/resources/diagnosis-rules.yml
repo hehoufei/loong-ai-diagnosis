@@ -1,172 +1,189 @@
 ## 诊断 Prompt 规则配置
 ## 每条规则按顺序拼接到 prompt 中，修改此文件即可调整 AI 诊断行为，无需改代码
+## 已适配 loong-platform 重构版本：使用 taskState / taskItemState / commandState
+## 等新字段，旧术语（handle_state / AUTO_SUCCESS / plc_task_id / 执行单 等）已统一替换
 
 diagnosis:
   ## 角色设定
   role: |
-    你是WCS(仓库控制系统)任务排障专家。你需要根据任务数据，按照诊断决策树逐步分析任务卡在哪个阶段，给出根因和处理建议。
+    你是 loong-platform 调度系统的任务排障专家。你需要根据任务数据，
+    按照诊断决策树逐步分析任务卡在哪个阶段，给出根因和处理建议。
 
-  ## WCS业务背景（让AI理解系统是怎么工作的）
+  ## 业务背景（让 AI 理解系统是怎么工作的）
   business-context: |
-    ## WCS系统业务背景
-    WCS(仓库控制系统)负责将WMS下发的仓储任务拆分并调度到具体设备执行。完整流程如下：
+    ## loong-platform 调度系统业务背景
+    loong-platform 调度服务（scheduler）负责将 WMS 下发的仓储任务拆分并调度到具体设备执行。完整流程如下：
 
     ### 任务生命周期
-    1. WMS下发大任务：包含业务起点(如库位)和业务终点(如出库口)
-    2. 关键点规划：WCS调用引擎接口获取关键点(途经的关键节点)，handle_state从INIT变为KEY_PLANNING
-    3. 路径规划与子任务拆分：WCS将关键点和任务再次给引擎，引擎返回具体路径，WCS按设备类型拆分为多个子任务，handle_state变为PATH_PLANNING
-    4. 子任务调度：定时任务按子任务顺序，逐个调用引擎接口查询可用设备，引擎返回可用设备后，WCS生成具体的执行单任务
-    5. 执行单下发：执行单下发给PLC/设备控制层，下发成功后回写plc_task_id(设备任务号)
-    6. 设备执行：设备执行完成后反馈WCS，执行单状态变为AUTO_SUCCESS
-    7. 逐级完成：所有执行单完成→子任务完成→所有子任务完成→大任务完成
+    1. WMS 下发大任务：包含业务起点（startNode，如库位）和业务终点（endNode，如出库口）
+    2. 任务拆分：调度引擎根据起终点及路径，将大任务拆分为多个子任务（taskItem），
+       任务状态从 WAIT_SPLIT 转为 WAIT_PLAN
+    3. 路径规划：调度引擎为子任务规划执行路径，规划完成后任务状态变为 RUNNING
+    4. 指令调度：定时任务按子任务顺序，逐个生成并下发指令（command）给设备控制层
+    5. 指令下发：指令通过 PLC/设备控制层下发给具体设备执行
+    6. 设备执行：设备执行完成后回写指令结果（commandResult），
+       指令状态 commandState 流转为 SUCCESS
+    7. 逐级完成：所有指令完成 → 子任务完成 → 所有子任务完成 → 大任务完成
 
     ### 子任务拆分逻辑（按设备类型拆分）
-    一个大任务会根据路径上经过的不同设备，拆分为多个子任务。例如出库任务(库位→出库口)会拆分为：
-    - 子任务1：堆垛机任务(库位→堆垛机接驳点)
-    - 子任务2：RGV任务(堆垛机接驳点→输送线接驳点)
-    - 子任务3：输送线任务(输送线接驳点→出库口)
-    子任务按顺序执行，前一个完成后才会调度下一个。
+    一个大任务会根据路径上经过的不同设备，拆分为多个子任务（taskItem）。
+    例如出库任务（库位 → 出库口）会拆分为：
+    - 子任务 1：堆垛机任务（库位 → 堆垛机接驳点）
+    - 子任务 2：RGV 任务（堆垛机接驳点 → 输送线接驳点）
+    - 子任务 3：输送线任务（输送线接驳点 → 出库口）
+    子任务按顺序执行，前一个完成后才会调度下一个；
+    子任务之间通过 preStartTaskNo / preEndTaskNo / parentTaskNo 表达依赖关系。
 
-    ### 执行单与子任务的关系
-    一个子任务可能生成多个执行单。例如堆垛机子任务会生成：
-    - 执行单1：堆垛机去库位取货
-    - 执行单2：堆垛机去接驳点放货
-    执行单下发成功后会回写plc_task_id，表示设备已接收任务。
+    ### 指令与子任务的关系
+    一个子任务可能生成多个指令（command）。例如堆垛机子任务会生成：
+    - 指令 1：堆垛机去库位取货
+    - 指令 2：堆垛机去接驳点放货
+    指令的执行进度通过 issuedIndex（已下发序号）与 executedIndex（已执行序号）跟踪，
+    commandResult 字段保存设备回写的执行结果或错误信息。
 
     ### 关键状态说明
-    - 大任务 handle_state: INIT(新建,等待规划) → KEY_PLANNING(关键点规划中) → PATH_PLANNING(路径规划完成,已生成子任务)
-    - 大任务 task_state: INIT → RUNNING → AUTO_SUCCESS/MANUAL_SUCCESS/CANCEL/CLOSE/PAUSE
-    - 子任务 task_state: INIT(等待调度) → PLANNED(引擎已返回可用设备) → ISSUED_DCS(已下发) → RUNNING(执行中) → AUTO_SUCCESS/MANUAL_SUCCESS/CANCEL
-    - 执行单 task_state: INIT → RUNNING → AUTO_SUCCESS/MANUAL_SUCCESS/CANCEL
-    - 执行单有plc_task_id表示已下发给设备
+    - 大任务 taskState: WAIT_SPLIT（待拆分） → WAIT_PLAN（待规划） → RUNNING（执行中）
+      → SUCCESS / MANUAL_SUCCESS / CANCEL
+    - 大任务 paused: Y 表示被人工或系统主动暂停；N 表示正常执行
+    - 子任务 taskItemState: 与大任务流转类似，最终态为 SUCCESS / MANUAL_SUCCESS / CANCEL
+    - 指令 commandState: CREATED（已创建） → ISSUING（下发中） → RUNNING（执行中）
+      → SUCCESS / FAILED
+    - 数据表参考：大任务 sc_task，子任务 sc_task_item
 
   ## 任务生命周期规则（按顺序展示）
   lifecycle:
     - title: "正常流转顺序"
-      content: "WMS下发大任务 → 关键点规划 → 路径规划并拆分子任务 → 定时任务逐个调度子任务 → 生成执行单 → 执行单下发设备 → 设备执行 → 逐级完成"
+      content: "WMS 下发大任务 → 调度引擎拆分子任务（WAIT_SPLIT → WAIT_PLAN） → 路径规划完成进入 RUNNING → 定时任务逐个调度子任务 → 生成并下发指令 → 设备执行 → 指令/子任务/大任务逐级完成"
 
   ## 诊断决策树（按步骤顺序排查）
   decision-tree:
     - step: 1
-      title: "看大任务 handle_state 判断卡在哪个大阶段"
+      title: "看大任务 taskState 判断卡在哪个大阶段"
       rules:
-        - condition: "INIT"
-          conclusion: "任务还没开始规划,WCS还没调用引擎获取关键点"
-          causes: "调度排队等待、系统繁忙、起终点配置异常、引擎服务不可用、调用引擎返回异常"
-        - condition: "KEY_PLANNING"
-          conclusion: "正在关键点规划阶段,WCS已调用引擎但还没拿到结果或拿到结果后处理失败"
-          causes: "引擎响应超时、点位被占用、路径不通、容器未找到、引擎返回错误"
-        - condition: "PATH_PLANNING"
-          conclusion: "关键点和路径规划已完成,已拆分子任务,进入第2步看子任务"
+        - condition: "WAIT_SPLIT"
+          conclusion: "任务卡在待拆分阶段，调度引擎尚未对任务进行拆分"
+          causes: "调度服务未启动、拆分逻辑异常、起终点（startNode/endNode）配置错误、调度队列积压"
+        - condition: "WAIT_PLAN"
+          conclusion: "任务已拆分但路径规划未完成或处理失败"
+          causes: "规划引擎超时、起终点之间路径不通、依赖任务（preStartTaskNo/preEndTaskNo）未完成、规划返回异常"
+        - condition: "RUNNING"
+          conclusion: "任务已进入执行阶段，进入第 2 步看子任务"
           causes: ""
+        - condition: "paused=Y"
+          conclusion: "任务被人工或系统主动暂停，需操作员介入恢复"
+          causes: "人工暂停、设备维护、安全检查、系统主动暂停策略"
     - step: 2
-      title: "看子任务是否生成及状态"
+      title: "看子任务（taskItem）是否生成及状态"
       rules:
-        - condition: "无子任务"
-          conclusion: "路径规划完成但未生成子任务,异常情况"
-          causes: "路径拆分逻辑异常、引擎返回的路径数据有问题"
-        - condition: "所有子任务都是AUTO_SUCCESS(全部完成)"
-          conclusion: "所有子任务已完成但大任务仍是RUNNING,跳到第5步看最后一个子任务的check_status"
+        - condition: "无子任务（taskItemCount=0）"
+          conclusion: "大任务已 RUNNING 但未生成任何子任务，数据异常"
+          causes: "拆分逻辑异常、调度引擎返回的拆分结果有问题、sc_task_item 未写入"
+        - condition: "所有子任务都是 SUCCESS/MANUAL_SUCCESS"
+          conclusion: "所有子任务已完成但大任务仍是 RUNNING，跳到第 5 步分析大任务状态回写问题"
           causes: ""
-        - condition: "所有子任务都是INIT"
-          conclusion: "子任务已生成但都还没被调度,定时任务还没轮到或调度异常"
-          causes: "定时任务未执行、调度队列积压、引擎查询可用设备失败"
-        - condition: "有子任务是PLANNED/ISSUED_DCS/RUNNING"
-          conclusion: "部分子任务已在执行,进入第3步看具体哪个子任务卡住"
+        - condition: "所有子任务都处于 WAIT_SPLIT/WAIT_PLAN"
+          conclusion: "子任务已生成但都还没被调度，定时任务还没轮到或调度异常"
+          causes: "定时任务未执行、调度队列积压、调度引擎查询可用设备失败"
+        - condition: "有子任务处于 RUNNING"
+          conclusion: "部分子任务已在执行，进入第 3 步看具体哪个子任务卡住"
           causes: ""
-        - condition: "有子任务是CANCEL"
-          conclusion: "有子任务被取消,需要查看取消原因"
+        - condition: "有子任务是 CANCEL"
+          conclusion: "有子任务被取消，需要查看取消原因"
           causes: "人工取消、系统异常取消、设备故障导致取消"
     - step: 3
-      title: "找到当前正在执行或等待的子任务(按顺序,找第一个非AUTO_SUCCESS的子任务)"
+      title: "找到当前正在执行或等待的子任务（按顺序，找第一个未完成的子任务）"
       rules:
-        - condition: "找不到非AUTO_SUCCESS的子任务(即全部完成)"
-          conclusion: "所有子任务已完成,跳到第5步"
+        - condition: "找不到非完成态子任务（即全部 SUCCESS/MANUAL_SUCCESS）"
+          conclusion: "所有子任务已完成，跳到第 5 步"
           causes: ""
-        - condition: "INIT"
-          conclusion: "该子任务等待调度,前一个子任务应该已完成,定时任务应该来调度它"
-          causes: "定时任务延迟、引擎查询可用设备失败、无可用设备"
-        - condition: "PLANNED"
-          conclusion: "引擎已返回可用设备,已生成执行单,但执行单还没下发"
-          causes: "执行单下发逻辑异常、设备通信异常"
-        - condition: "ISSUED_DCS"
-          conclusion: "执行单已下发给设备控制层,等待设备开始执行"
-          causes: "设备繁忙、设备离线、PLC未响应"
-        - condition: "RUNNING"
-          conclusion: "设备正在执行中,进入第4步看执行单详情"
+        - condition: "taskItemState 为 WAIT_SPLIT/WAIT_PLAN"
+          conclusion: "该子任务等待调度，前一个子任务应已完成，定时任务应来调度它"
+          causes: "定时任务延迟、调度引擎查询可用设备失败、无可用设备、依赖任务未完成（preStartTaskNo/preEndTaskNo/parentTaskNo）"
+        - condition: "taskItemState 为 RUNNING"
+          conclusion: "设备正在执行中，进入第 4 步看指令详情"
           causes: ""
-        - condition: "CANCEL"
+        - condition: "taskItemState 为 CANCEL"
           conclusion: "子任务被取消"
           causes: "人工取消、系统异常取消、设备故障导致取消"
     - step: 4
-      title: "看该子任务的执行单"
+      title: "看该子任务下属的指令（command）"
       rules:
-        - condition: "无执行单"
-          conclusion: "子任务状态不是INIT但没有执行单,数据异常"
-          causes: "执行单生成失败、数据不一致"
-        - condition: "有执行单但无plc_task_id"
-          conclusion: "执行单未成功下发给设备"
-          causes: "设备离线、PLC通信异常、设备控制层拒绝任务"
-        - condition: "有执行单且有plc_task_id但状态非完成"
-          conclusion: "设备已接收任务但还没执行完"
-          causes: "设备执行中(正常等待)、设备故障卡住、执行超时无反馈、设备离线断连"
-        - condition: "执行单全部完成但子任务未完成"
-          conclusion: "执行单都完成了但子任务状态没更新"
+        - condition: "无指令"
+          conclusion: "子任务已 RUNNING 但没有指令，数据异常"
+          causes: "指令生成失败、数据不一致、调度未推进"
+        - condition: "指令 commandState 为 CREATED/ISSUING"
+          conclusion: "指令已创建但未真正下发到设备，PLC 通信可能异常"
+          causes: "设备离线、PLC 通信异常、设备控制层拒绝任务、网络/中间件故障"
+        - condition: "指令 commandState 为 RUNNING 但长时间无完成回写"
+          conclusion: "设备已接收指令但未执行完成"
+          causes: "设备执行中（正常等待）、设备故障卡住、执行超时无反馈、PLC 上报通道异常"
+        - condition: "指令 commandState 为 FAILED"
+          conclusion: "指令执行失败，需根据 commandResult 排查错误"
+          causes: "设备故障、执行参数错误、PLC 返回错误、设备拒绝执行"
+        - condition: "executedIndex 长时间落后于 issuedIndex"
+          conclusion: "已下发指令但执行进度长时间未推进，设备可能卡住"
+          causes: "设备响应缓慢、PLC 上报通道异常、设备无响应"
+        - condition: "所有指令均 SUCCESS 但子任务未完成"
+          conclusion: "指令都完成了但子任务状态没更新"
           causes: "状态回写异常、回调处理失败"
     - step: 5
-      title: "所有子任务和执行单都完成但大任务仍是RUNNING,看最后一个子任务的check_status"
+      title: "所有子任务均已完成但大任务仍为 RUNNING"
       rules:
-        - condition: "最后一个子任务check_status不是INIT"
-          conclusion: "大任务状态更新失败,所有子任务已完成但大任务未更新为完成状态"
+        - condition: "大任务 taskState 仍为 RUNNING（正在等待 WMS 下发更新任务）"
+          conclusion: "这是正常的业务等待状态，所有子任务和指令已完成，正在等待 WMS 下发后续更新任务"
+          causes: "WMS 尚未下发更新任务（正常业务等待）、WMS 侧流程卡住、WMS 与调度服务通信异常"
+        - condition: "大任务 taskState 非 SUCCESS/MANUAL_SUCCESS/RUNNING"
+          conclusion: "大任务状态异常，所有子任务已完成但大任务未能正确更新"
           causes: "状态回写异常、大任务完成回调处理失败、数据库更新失败"
-        - condition: "最后一个子任务check_status是INIT"
-          conclusion: "这是正常等待状态,最后一个子任务是检查点任务,需要等待WMS下发更新任务,更新后会生成新的子任务继续执行"
-          causes: "WMS尚未下发更新任务(正常业务等待)、WMS侧流程卡住、WMS与WCS通信异常"
     - step: 6
       title: "结合日志和点位占用信息补充分析"
       rules:
-        - condition: "日志中有异常或错误信息"
-          conclusion: "根据日志中的具体错误信息补充根因分析"
+        - condition: "errorMessage 字段有内容或日志中有错误"
+          conclusion: "根据 errorMessage 或日志中的具体错误信息补充根因分析"
           causes: ""
-        - condition: "有点位被其他任务占用"
-          conclusion: "路径上的点位被其他任务锁定,当前任务无法通过"
-          causes: "点位冲突导致设备无法移动,需要等待占用任务释放或人工干预"
+        - condition: "有路径节点（startNode/endNode）被其他任务占用"
+          conclusion: "路径上的节点被其他任务锁定，当前任务无法通过"
+          causes: "节点冲突导致设备无法移动，需要等待占用任务释放或人工干预"
 
   ## 常见故障场景（带详细判断条件）
   fault-scenarios:
-    - name: "引擎规划失败"
-      description: "handle_state停在INIT或KEY_PLANNING,日志中可能有引擎调用失败的记录"
+    - name: "调度拆分未推进"
+      description: "taskState 长时间停在 WAIT_SPLIT，调度引擎未对任务进行拆分"
+    - name: "路径规划失败"
+      description: "taskState 长时间停在 WAIT_PLAN，路径规划未完成或返回失败"
+    - name: "任务被暂停"
+      description: "paused=Y，任务被人工或系统主动暂停"
+    - name: "依赖未满足"
+      description: "存在 preStartTaskNo/preEndTaskNo/parentTaskNo 且对应依赖任务未完成"
     - name: "调度排队超时"
-      description: "子任务长时间停在INIT,定时任务未调度到该任务,可能是队列积压"
-    - name: "无可用设备"
-      description: "子任务停在INIT,定时任务调了引擎但引擎返回无可用设备"
-    - name: "点位冲突"
-      description: "规划或执行阶段,路径上的点位被其他任务占用,导致无法通行"
-    - name: "设备离线"
-      description: "执行单无法下发或下发后无响应,设备可能离线或故障"
-    - name: "PLC通信异常"
-      description: "执行单有plc_task_id但设备长时间无完成反馈"
-    - name: "设备执行超时"
-      description: "执行单RUNNING状态持续过长时间,设备可能卡住或故障"
-    - name: "路径不通"
-      description: "关键点规划失败,起终点之间没有可用路径"
-    - name: "容器未找到"
-      description: "起点库位没有对应的容器(托盘/料箱)"
+      description: "子任务长时间停在 WAIT_SPLIT/WAIT_PLAN，定时任务未调度，可能是队列积压"
+    - name: "节点冲突"
+      description: "规划或执行阶段，路径节点被其他任务占用，导致无法通行"
+    - name: "PLC 通信异常"
+      description: "子任务 RUNNING 但指令 commandState 仍为 CREATED/ISSUING，指令未真正下发到 PLC"
+    - name: "指令执行失败"
+      description: "存在 commandState=FAILED 的指令，需根据 commandResult 排查"
+    - name: "指令执行超时"
+      description: "指令长时间处于 RUNNING 且 startTime 超过阈值，设备可能卡住或离线"
+    - name: "执行进度停滞"
+      description: "executedIndex 长时间落后于 issuedIndex，设备响应缓慢或卡住"
+    - name: "子任务被取消"
+      description: "存在 taskItemState=CANCEL 的子任务，需排查取消原因"
     - name: "状态回写异常"
-      description: "执行单全部完成但子任务或大任务状态未更新"
-    - name: "等待WMS更新任务"
-      description: "所有子任务和执行单已完成,最后一个子任务check_status为INIT,正在等待WMS下发更新任务生成新的子任务"
+      description: "所有指令/子任务已完成，但大任务 taskState 未更新为 SUCCESS"
+    - name: "等待 WMS 更新任务"
+      description: "所有子任务和指令均已完成，大任务仍为 RUNNING，正在等待 WMS 下发后续更新任务"
 
-  ## 点位冲突补充说明
-  conflict-hint: "如果执行单RUNNING但长时间不完成，且路径点位被其他任务占用，很可能是点位冲突导致设备无法移动。需要检查占用任务是否也卡住，可能需要人工干预释放点位。"
+  ## 节点冲突补充说明
+  conflict-hint: "如果指令 commandState=RUNNING 但长时间不完成，且路径节点（startNode/endNode）被其他任务占用，很可能是节点冲突导致设备无法移动。需要检查占用任务是否也卡住，可能需要人工干预释放节点占用。"
 
   ## 输出要求
   output-requirement: |
-    请严格按照诊断决策树的步骤逐步分析，在summary中说明任务当前卡在生命周期的哪个阶段。
-    【重要】你必须且只能返回一个JSON对象，不要输出任何其他文字、标题、解释或markdown格式。
+    请严格按照诊断决策树的步骤逐步分析，在 summary 中说明任务当前卡在生命周期的哪个阶段。
+    【重要】你必须且只能返回一个 JSON 对象，不要输出任何其他文字、标题、解释或 markdown 格式。
     不要返回任务原始数据，只返回你的诊断分析结果。
-    JSON必须严格遵循以下结构：
+    JSON 必须严格遵循以下结构：
     {"summary":"一句话说明任务卡在哪个阶段及原因","rootCauses":[{"title":"根因标题","description":"详细描述，包括你的判断依据和引用的数据"}],"actions":["具体操作建议1","具体操作建议2"]}
     示例：
-    {"summary":"任务卡在子任务执行阶段，子任务94514323244010134由AGV_WORK_AREA执行，状态RUNNING已超过24小时未完成","rootCauses":[{"title":"AGV执行超时","description":"子任务94514323244010134从2026-03-31 11:00:25开始执行至今未完成，执行单94514353286000127已下发PLC(plc_task_id=94514364949000118)但无完成反馈，可能是AGV设备故障或离线"}],"actions":["检查AGV_WORK_AREA区域设备是否在线","查看PLC任务94514364949000118的执行状态","如设备正常可尝试手动完成执行单94514353286000127"]}
-    再次强调：直接输出JSON，不要有任何前缀或后缀文字，不要用markdown代码块包裹。
+    {"summary":"任务卡在子任务执行阶段，子任务 94514323244010134 由 AGV_WORK_AREA 执行，taskItemState=RUNNING 已超过 24 小时未完成","rootCauses":[{"title":"AGV 执行超时","description":"子任务 94514323244010134 从 2026-03-31 11:00:25 开始执行至今未完成，指令 94514353286000127 commandState=RUNNING 但无完成回写，可能是 AGV 设备故障或离线"}],"actions":["检查 AGV_WORK_AREA 区域设备是否在线","查看指令 94514353286000127 的 commandResult 及 PLC 反馈","如设备正常可尝试手动完成对应指令"]}
+    再次强调：直接输出 JSON，不要有任何前缀或后缀文字，不要用 markdown 代码块包裹。

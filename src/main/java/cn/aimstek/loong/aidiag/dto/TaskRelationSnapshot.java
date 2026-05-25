@@ -18,12 +18,15 @@ public class TaskRelationSnapshot {
     @Data
     public static class TaskSummary {
         private String taskId;
-        private String wmsTaskNo;
+        /** 任务号（原 wmsTaskNo） */
+        private String taskNo;
+        /** 任务状态：WAIT_SPLIT/WAIT_PLAN/RUNNING/SUCCESS/CANCEL/MANUAL_SUCCESS */
         private String taskState;
-        private String handleState;
         private String containerCode;
-        private String businessFrom;
-        private String businessTo;
+        /** 起点节点（原 businessFrom） */
+        private String startNode;
+        /** 终点节点（原 businessTo） */
+        private String endNode;
         private String deviceCode;
         private String relationType;
         private String relationReason;

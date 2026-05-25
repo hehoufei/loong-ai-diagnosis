@@ -29,8 +29,8 @@ public class DiagnosisContextAssembler {
     private final DocSearchService docSearchService;
 
     public DiagnosisContext assemble(DiagnoseRequest request) {
-        TaskDetail taskDetail = taskClient.getTaskDetail(request.getTaskId(), request.getEnv());
-        List<String> logs = safeLogs(logClient.queryLogs(request.getTaskId(), request.getEnv()));
+        TaskDetail taskDetail = taskClient.getTaskDetail(request.getTaskNo(), request.getEnv());
+        List<String> logs = safeLogs(logClient.queryLogs(request.getTaskNo(), request.getEnv()));
         List<String> relevantDocs = buildRelevantDocs(taskDetail, logs);
 
         return DiagnosisContext.builder()
@@ -38,7 +38,7 @@ public class DiagnosisContextAssembler {
                 .logs(logs)
                 .conflicts(Collections.<PointConflict>emptyList())
                 .relevantDocs(new ArrayList<>(relevantDocs))
-                .traceId(buildTraceId(request.getTaskId()))
+                .traceId(buildTraceId(request.getTaskNo()))
                 .diagnosisMode("hybrid")
                 .build();
     }

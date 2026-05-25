@@ -24,13 +24,14 @@ public class GlobalDiagnosisContextAssembler {
     private final BlockageAnalyzer blockageAnalyzer;
 
     public GlobalDiagnosisContext assemble(DiagnoseRequest request) {
-        TaskDetail focusTask = taskClient.getTaskDetail(request.getTaskId(), request.getEnv());
+        TaskDetail focusTask = taskClient.getTaskDetail(request.getTaskNo(), request.getEnv());
+        // 时间锚点统一基于 createTime
         LocalDateTime anchor = focusTask.getCreateTime() != null ? focusTask.getCreateTime() : LocalDateTime.now();
         int windowMinutes = request.getTimeWindowMinutes() != null && request.getTimeWindowMinutes() > 0
                 ? request.getTimeWindowMinutes()
                 : DEFAULT_WINDOW_MINUTES;
         LocalDateTime windowStart = anchor.minusMinutes(windowMinutes);
-        LocalDateTime windowEnd = anchor.plusMinutes(5);
+        LocalDateTime windowEnd = anchor.plusMinutes(windowMinutes);
 
         List<TaskDetail> relatedTasks = taskClient.findRelatedTasks(focusTask, windowStart, windowEnd, request.getEnv());
         TaskRelationSnapshot snapshot = blockageAnalyzer.analyze(focusTask, relatedTasks);
@@ -50,8 +51,25 @@ public class GlobalDiagnosisContextAssembler {
 
     private List<String> buildEvidence(TaskDetail focusTask, TaskRelationSnapshot snapshot, LocalDateTime windowStart, LocalDateTime windowEnd) {
         List<String> evidence = new ArrayList<>();
-        evidence.add("分析任务: " + focusTask.getTaskId());
+        evidence.add("分析任务: taskId=" + focusTask.getTaskId() + ", taskNo=" + focusTask.getTaskNo());
         evidence.add("时间窗: " + windowStart + " ~ " + windowEnd);
+        evidence.add("任务状态: " + focusTask.getTaskState()
+                + ("Y".equalsIgnoreCase(focusTask.getPaused()) ? "（已暂停）" : ""));
+        if (StringUtils.hasText(focusTask.getStartNode()) || StringUtils.hasText(focusTask.getEndNode())) {
+            evidence.add("路径: " + focusTask.getStartNode() + " → " + focusTask.getEndNode());
+        }
+        if (StringUtils.hasText(focusTask.getGroupCode())) {
+            evidence.add("任务组: " + focusTask.getGroupCode());
+        }
+        if (StringUtils.hasText(focusTask.getPreStartTaskNo())) {
+            evidence.add("开始依赖任务: " + focusTask.getPreStartTaskNo());
+        }
+        if (StringUtils.hasText(focusTask.getPreEndTaskNo())) {
+            evidence.add("结束依赖任务: " + focusTask.getPreEndTaskNo());
+        }
+        if (StringUtils.hasText(focusTask.getParentTaskNo())) {
+            evidence.add("父任务: " + focusTask.getParentTaskNo());
+        }
         evidence.add("候选关联任务数: " + snapshot.getRelatedTasks().size());
         if (StringUtils.hasText(snapshot.getDirectBlockerTaskId())) {
             evidence.add("直接阻塞候选: " + snapshot.getDirectBlockerTaskId());

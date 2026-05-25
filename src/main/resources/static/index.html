@@ -6,6 +6,213 @@
     <title>WCS 任务智能诊断</title>
     <link rel="stylesheet" href="common.css">
     <style>
+        /* ========== Polished Overrides (放在最前以确保优先级) ========== */
+        /* 顶栏：三栏对齐、文字层次 */
+        .glass-topbar { padding: 0 28px; gap: 18px; }
+        .topbar-logo { font-size: 15px; gap: 10px; color: var(--color-primary-dark); letter-spacing: .01em; }
+        .topbar-logo img { width: 26px; height: 26px; }
+        .topbar-center { gap: 8px; }
+        .topbar-right { gap: 8px; }
+
+        /* 环境徽标 */
+        .env-badge {
+            padding: 6px 14px; gap: 8px;
+            background: rgba(99,102,241,0.08);
+            border: 1px solid rgba(99,102,241,0.18);
+            color: var(--color-primary-dark);
+            font-weight: 600;
+        }
+        .env-badge:hover { background: rgba(99,102,241,0.14); border-color: rgba(99,102,241,.32); }
+        .env-dot {
+            width: 8px; height: 8px; box-shadow: 0 0 0 2px rgba(16,185,129,.18);
+            animation: pulseGlow 1.8s ease-in-out infinite;
+        }
+        .env-url-hint { color: var(--color-text-muted); font-weight: 500; max-width: 220px; }
+        .env-arrow { font-size: 10px; opacity: .55; transition: var(--transition); }
+        .env-badge:hover .env-arrow { opacity: 1; }
+
+        /* 模型徽标 */
+        .model-tag {
+            padding: 6px 14px; gap: 8px;
+            background: rgba(139,92,246,0.10);
+            border: 1px solid rgba(139,92,246,0.20);
+            color: #6d28d9;
+            font-weight: 600;
+        }
+        .model-tag:hover { background: rgba(139,92,246,.16); border-color: rgba(139,92,246,.32); }
+        .model-tag .model-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+            box-shadow: 0 0 0 2px rgba(139,92,246,.18);
+        }
+
+        /* 顶栏右侧操作按钮 */
+        .topbar-right .glass-btn-outline {
+            padding: 7px 14px; font-size: 13px; gap: 6px;
+            background: rgba(255,255,255,.55);
+            border: 1px solid rgba(99,102,241,.16);
+            color: var(--color-text-secondary);
+        }
+        .topbar-right .glass-btn-outline:hover {
+            background: rgba(255,255,255,.85);
+            border-color: rgba(99,102,241,.32);
+            color: var(--color-primary-dark);
+            transform: translateY(-1px);
+        }
+
+        /* Hero */
+        .hero-section { margin-top: 40px; margin-bottom: 28px; }
+        .hero-card {
+            padding: 44px 36px 36px;
+            border-radius: 22px;
+            background: linear-gradient(180deg, rgba(255,255,255,.78), rgba(255,255,255,.58));
+        }
+        .hero-icon {
+            font-size: 44px; margin-bottom: 14px;
+            filter: drop-shadow(0 6px 16px rgba(99,102,241,.25));
+        }
+        .hero-title {
+            font-size: 32px; font-weight: 800; line-height: 1.2;
+            background: var(--gradient-text);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .hero-subtitle { font-size: 14px; color: var(--color-text-secondary); margin-bottom: 26px; }
+        .hero-input-row { gap: 12px; }
+        .hero-input-row .glass-input {
+            min-width: 260px; height: 46px; font-size: 14.5px;
+            box-shadow: 0 1px 0 rgba(255,255,255,.5) inset;
+        }
+        .hero-input-row .glass-btn { height: 46px; padding: 0 22px; }
+        .hero-input-row .glass-btn-outline { height: 46px; padding: 0 18px; font-size: 14px; }
+
+        /* Scope 切换 */
+        .scope-switch {
+            padding: 4px;
+            background: rgba(255,255,255,.6);
+            border: 1px solid rgba(99,102,241,.14);
+            border-radius: 14px;
+            box-shadow: 0 1px 0 rgba(255,255,255,.55) inset;
+        }
+        .scope-option {
+            padding: 9px 14px; font-size: 13px; border-radius: 10px;
+            color: var(--color-text-secondary);
+        }
+        .scope-option:hover { color: var(--color-primary-dark); }
+        .scope-option.active {
+            background: #fff;
+            color: var(--color-primary-dark);
+            box-shadow: 0 1px 2px rgba(15,23,42,.06), inset 0 0 0 1px rgba(99,102,241,.18);
+        }
+
+        /* 错误条 */
+        .error-box {
+            margin-top: 16px;
+            background: rgba(254, 242, 242, 0.85);
+            border: 1px solid rgba(239,68,68,0.20);
+            border-left: 3px solid var(--color-error);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: #7f1d1d;
+            font-size: 13.5px; font-weight: 500;
+            display: none;
+            box-shadow: 0 1px 0 rgba(255,255,255,.4) inset;
+        }
+
+        /* Step 卡片：克制柔和 */
+        .step-card {
+            background: rgba(255,255,255,0.62);
+            border: 1px solid rgba(99,102,241,.10);
+            border-radius: 16px;
+            padding: 16px 18px;
+            box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+            transition: var(--transition);
+        }
+        .step-card:hover {
+            border-color: rgba(99,102,241,.18);
+            box-shadow: 0 8px 22px rgba(99,102,241,.08);
+        }
+        .step-icon {
+            width: 28px; height: 28px; font-size: 12.5px; font-weight: 800;
+        }
+        .step-icon.pending {
+            background: #e5e7eb; color: #9ca3af;
+        }
+        .step-label { font-size: 14px; font-weight: 700; }
+        .step-content { padding-left: 40px; }
+        .step-loading { gap: 10px; color: var(--color-text-secondary); }
+        .spinner { width: 16px; height: 16px; border-width: 2px; }
+
+        /* 空数据提示统一 */
+        .empty-hint {
+            padding: 14px 16px;
+            border: 1px dashed rgba(99,102,241,.20);
+            border-radius: 10px;
+            background: rgba(255,255,255,.45);
+            color: var(--color-text-muted);
+            font-size: 13.5px;
+            text-align: center;
+        }
+
+        /* AI 结果 */
+        .ai-result-wrapper {
+            background: linear-gradient(180deg, rgba(139,92,246,.08), rgba(99,102,241,.05));
+            border: 1px solid rgba(139,92,246,0.16);
+            border-radius: 16px;
+            padding: 20px 22px;
+        }
+        .ai-summary {
+            font-size: 15px; line-height: 1.75;
+            background: rgba(255,255,255,.55);
+            border-radius: 12px;
+            padding: 12px 14px;
+            border: 1px solid rgba(255,255,255,.7);
+        }
+        .rc-item {
+            background: rgba(255,255,255,.7);
+            border: 1px solid rgba(139,92,246,.14);
+            border-left: 3px solid var(--color-secondary);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            transition: var(--transition);
+        }
+        .rc-item:hover { transform: translateX(2px); border-left-color: var(--color-primary); }
+        .rc-title { font-weight: 700; color: var(--color-primary-dark); }
+        .rc-desc { color: var(--color-text-secondary); }
+
+        /* 表格 */
+        .data-table th {
+            font-size: 11.5px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .04em;
+            color: var(--color-text-muted);
+            padding: 8px 12px;
+        }
+        .data-table td { padding: 8px 12px; }
+        .data-table tr:hover td { background: rgba(99,102,241,.04); }
+
+        /* 标签胶囊 */
+        .tag {
+            display: inline-block; padding: 3px 10px;
+            border-radius: 999px; font-size: 11.5px; font-weight: 700;
+            letter-spacing: .02em;
+        }
+
+        /* 日志暗色卡片 */
+        .platform-log-card, .log-box {
+            background: #0f1226;
+            color: #e2e8f0;
+            border: 1px solid rgba(99,102,241,.18);
+            border-radius: 12px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            padding: 12px 14px;
+        }
+        .platform-log-card .log-error, .log-box .log-error { color: #fca5a5; }
+        .platform-log-card .log-warn, .log-box .log-warn { color: #fcd34d; }
+    </style>
+    <style>
         /* ========== Page-specific Styles ========== */
         .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
 
@@ -260,6 +467,20 @@
             overflow-y: auto; margin-top: 8px;
             border: 1px solid rgba(99,102,241,0.1);
         }
+
+        /* -- Platform Log Card -- */
+        .platform-log-card {
+            background: #1e1e2e; color: #cdd6f4;
+            border-radius: 8px; padding: 16px;
+            font-family: 'Consolas', 'Cascadia Code', monospace;
+            font-size: 12px; line-height: 1.6;
+            max-height: 300px; overflow-y: auto;
+            margin-top: 8px;
+            border: 1px solid rgba(99,102,241,0.1);
+        }
+        .platform-log-card .log-line { white-space: pre-wrap; word-break: break-all; padding: 1px 0; }
+        .platform-log-card .log-error { color: #f38ba8; }
+        .platform-log-card .log-warn { color: #fab387; }
 
         /* -- Subtask area scrollable -- */
         .subtask-area {
@@ -557,6 +778,52 @@
             border-radius: 10px; font-size: 13px; color: var(--color-warning);
         }
 
+        /* -- 上报事件历史时间线 -- */
+        .report-tl {
+            position: relative; margin: 6px 0 4px 0; padding-left: 18px;
+            border-left: 2px dashed rgba(99,102,241,0.25);
+        }
+        .report-tl-item {
+            position: relative; margin-bottom: 12px; padding: 10px 14px;
+            background: rgba(255,255,255,0.6); border: 1px solid rgba(99,102,241,0.10);
+            border-radius: 10px;
+        }
+        .report-tl-item::before {
+            content: ''; position: absolute; left: -25px; top: 14px;
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+        }
+        .report-tl-item.has-retry::before { background: var(--color-error); box-shadow: 0 0 0 3px rgba(239,68,68,0.18); }
+        .report-tl-item.fail::before { background: var(--color-error); box-shadow: 0 0 0 3px rgba(239,68,68,0.18); }
+        .report-tl-item.success::before { background: var(--color-success); box-shadow: 0 0 0 3px rgba(16,185,129,0.18); }
+        .report-tl-head {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+            font-size: 13px; margin-bottom: 4px;
+        }
+        .report-tl-time { font-family: 'JetBrains Mono', Consolas, monospace; color: var(--color-text-secondary); font-size: 12px; }
+        .report-tl-type {
+            padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+            background: rgba(99,102,241,0.10); color: var(--color-primary);
+        }
+        .report-tl-state {
+            padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+            background: rgba(148,163,184,0.12); color: var(--color-text-secondary);
+        }
+        .report-tl-state.ok { background: rgba(16,185,129,0.1); color: var(--color-success); }
+        .report-tl-state.bad { background: rgba(239,68,68,0.1); color: var(--color-error); }
+        .report-tl-state.warn { background: rgba(245,158,11,0.12); color: var(--color-warning); }
+        .report-tl-retry {
+            padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+            background: rgba(239,68,68,0.10); color: var(--color-error);
+        }
+        .report-tl-tag {
+            padding: 2px 7px; border-radius: 6px; font-size: 11px;
+            background: rgba(0,0,0,0.04); color: var(--color-text-secondary);
+            font-family: 'JetBrains Mono', Consolas, monospace;
+        }
+        .report-tl-detail { font-size: 12.5px; color: var(--color-text-secondary); margin-top: 2px; word-break: break-all; }
+        .report-tl-empty { padding: 14px; text-align: center; color: var(--color-text-muted); font-size: 13px; }
+
         /* AI deep analyze button */
         .ai-deep-btn {
             background: linear-gradient(135deg, #8b5cf6, #6366f1);
@@ -651,6 +918,132 @@
             backdrop-filter: blur(12px); animation: fadeIn .3s ease;
         }
 
+        /* ===== 新增诊断数据源样式 ===== */
+        /* DCS 设备状态卡片 */
+        .dcs-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 10px; margin-top: 4px;
+        }
+        .dcs-card {
+            background: rgba(255,255,255,0.55); border: 1px solid rgba(99,102,241,0.10);
+            border-radius: 12px; padding: 12px 14px;
+            box-shadow: 0 2px 8px rgba(99,102,241,0.04);
+        }
+        .dcs-card.has-alarm { border-color: rgba(239,68,68,0.28); background: rgba(239,68,68,0.04); }
+        .dcs-card-head {
+            display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;
+        }
+        .dcs-card-code { font-size: 13px; font-weight: 700; color: var(--color-text); }
+        .dcs-card-type { font-size: 11px; color: var(--color-text-muted); }
+        .dcs-card-meta {
+            display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 11.5px; color: var(--color-text-secondary);
+        }
+        .dcs-meta-pill {
+            padding: 2px 8px; border-radius: 10px; background: rgba(99,102,241,0.06);
+            border: 1px solid rgba(99,102,241,0.10); color: var(--color-text-secondary);
+        }
+        .dcs-state-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+        .dcs-alarm-box {
+            margin-top: 8px; padding: 8px 10px;
+            background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.18);
+            border-left: 3px solid var(--color-error); border-radius: 8px;
+        }
+        .dcs-alarm-title { font-size: 12px; font-weight: 700; color: var(--color-error); margin-bottom: 4px; }
+        .dcs-alarm-item {
+            font-size: 12px; color: var(--color-error); line-height: 1.65; word-break: break-all;
+        }
+        .dcs-alarm-item + .dcs-alarm-item { margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(239,68,68,0.18); }
+        .tag-state-idle    { background: rgba(156,163,175,0.15); color: var(--color-text-muted); }
+        .tag-state-running { background: rgba(99,102,241,0.10);  color: var(--color-primary); }
+        .tag-state-fault   { background: rgba(239,68,68,0.10);   color: var(--color-error); }
+        .tag-state-stopped { background: rgba(245,158,11,0.12);  color: var(--color-warning); }
+        .tag-state-offline { background: rgba(75,85,99,0.18);    color: #4b5563; }
+
+        /* 设备锁定 */
+        .lock-row-locked    { background: rgba(245,158,11,0.05); }
+        .lock-row-conflict  { background: rgba(239,68,68,0.06); }
+        .lock-conflict-tag {
+            display: inline-block; padding: 2px 8px; border-radius: 8px;
+            background: rgba(239,68,68,0.10); color: var(--color-error);
+            font-size: 11px; font-weight: 700; margin-left: 6px;
+        }
+
+        /* 数据采集 */
+        .collect-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 10px; margin-top: 4px;
+        }
+        .collect-card {
+            background: rgba(255,255,255,0.55); border: 1px solid rgba(99,102,241,0.10);
+            border-radius: 12px; padding: 12px 14px;
+        }
+        .collect-card.failed   { border-color: rgba(239,68,68,0.28); background: rgba(239,68,68,0.04); }
+        .collect-card.collecting { border-color: rgba(99,102,241,0.28); }
+        .collect-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+        .collect-progress {
+            font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px;
+            color: var(--color-text-secondary);
+        }
+        .collect-meta { font-size: 12px; color: var(--color-text-secondary); line-height: 1.7; word-break: break-all; }
+        .collect-content {
+            margin-top: 6px; padding: 6px 8px; font-family: 'JetBrains Mono', Consolas, monospace;
+            font-size: 11.5px; color: var(--color-text); background: rgba(99,102,241,0.04);
+            border-radius: 6px; word-break: break-all;
+        }
+        @keyframes collectPulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+        .tag-collect-collecting { background: rgba(99,102,241,0.10); color: var(--color-primary); animation: collectPulse 1.4s ease-in-out infinite; }
+        .tag-collect-success    { background: rgba(16,185,129,0.10); color: var(--color-success); }
+        .tag-collect-failed     { background: rgba(239,68,68,0.10);  color: var(--color-error); }
+        .tag-collect-canceled   { background: rgba(156,163,175,0.15); color: var(--color-text-muted); }
+
+        /* 任务组联动 */
+        .group-rail {
+            display: flex; align-items: stretch; gap: 0; overflow-x: auto;
+            padding: 8px 4px 4px;
+        }
+        .group-node {
+            min-width: 200px; flex-shrink: 0;
+            background: rgba(255,255,255,0.55); border: 1px solid rgba(99,102,241,0.10);
+            border-radius: 12px; padding: 10px 12px;
+        }
+        .group-node.is-current {
+            background: rgba(99,102,241,0.06); border-color: rgba(99,102,241,0.28);
+            box-shadow: 0 4px 14px rgba(99,102,241,0.10);
+        }
+        .group-node-arrow {
+            display: flex; align-items: center; justify-content: center;
+            min-width: 24px; color: var(--color-text-muted); font-weight: 700;
+        }
+        .group-node-id { font-size: 13px; font-weight: 700; color: var(--color-text); margin-bottom: 4px; word-break: break-all; }
+        .group-node-meta { font-size: 11.5px; color: var(--color-text-secondary); margin-bottom: 4px; }
+        .group-node-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+
+        /* 货物位置 */
+        .goods-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 10px; margin-top: 4px;
+        }
+        .goods-card {
+            background: rgba(255,255,255,0.55); border: 1px solid rgba(99,102,241,0.10);
+            border-radius: 12px; padding: 12px 14px;
+        }
+        .goods-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+        .goods-card-code { font-size: 13px; font-weight: 700; color: var(--color-text); }
+        .goods-card-loc {
+            font-size: 12.5px; color: var(--color-primary); font-weight: 600;
+            margin: 4px 0 4px;
+        }
+        .goods-card-meta { font-size: 11.5px; color: var(--color-text-secondary); line-height: 1.7; word-break: break-all; }
+
+        /* 指令错误信息 */
+        .cmd-error-box {
+            margin: 4px 0 0;
+            padding: 8px 10px;
+            background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.18);
+            border-left: 3px solid var(--color-error); border-radius: 6px;
+            font-size: 12px; color: var(--color-error); line-height: 1.7; word-break: break-all;
+        }
+        .cmd-error-label { font-weight: 700; margin-right: 4px; }
 
     </style>
 </head>
@@ -659,15 +1052,15 @@
 <!-- ========== Top Bar ========== -->
 <nav class="glass-topbar">
     <div class="topbar-logo">
-        <span class="icon">🤖</span>
+        <span class="icon" aria-hidden="true">🤖</span>
         <span>WCS 智能诊断</span>
     </div>
     <div class="topbar-center" id="envBar">
-        <div class="env-badge" onclick="toggleEnvPanel()">
-            <span class="env-dot"></span>
-            <span id="envName">default</span>
+        <div class="env-badge" onclick="toggleEnvPanel()" role="button" tabindex="0" aria-label="切换环境">
+            <span class="env-dot" aria-hidden="true"></span>
+            <span id="envName">加载中…</span>
             <span class="env-url-hint" id="envUrl"></span>
-            <span style="font-size:10px;opacity:.5">▼</span>
+            <span class="env-arrow" aria-hidden="true">▼</span>
         </div>
         <!-- Env Popover -->
         <div id="envPanel" class="glass-popover env-popover" style="display:none">
@@ -677,20 +1070,55 @@
             </div>
             <div id="envList"></div>
             <div class="env-add-section">
-                <div class="label">➕ 添加新环境</div>
+                <div class="label" id="envFormLabel">➕ 添加/更新环境</div>
                 <div class="env-add-row">
                     <input type="text" id="newEnvName" placeholder="环境名称">
                     <input type="text" id="newEnvUrl" placeholder="WCS地址（如 http://192.168.1.100:8088）" style="flex:2">
-                    <button class="env-add-btn" onclick="addEnv()">添加</button>
+                    <button class="env-add-btn" onclick="addEnv()">保存</button>
+                    <button class="env-del-btn" id="envEditCancel" onclick="resetEnvForm()" style="display:none">取消</button>
+                </div>
+                <div style="margin-top:8px;font-size:12px;color:var(--color-text-muted);cursor:pointer;user-select:none"
+                     onclick="toggleEnvDbFields()">
+                    <span id="envDbToggle">▶</span> 数据库连接配置（可选，不填则沿用默认连接）
+                </div>
+                <div id="envDbFields" style="display:none;margin-top:8px;">
+                    <div class="env-add-row" style="margin-bottom:6px">
+                        <input type="text" id="newEnvJdbcUrl"
+                               placeholder="jdbc:mysql://192.168.x.x:3306/loong_platform"
+                               style="flex:1">
+                    </div>
+                    <div class="env-add-row">
+                        <input type="text" id="newEnvDbUser" placeholder="用户名（如 root）">
+                        <input type="password" id="newEnvDbPwd" placeholder="密码" style="flex:1">
+                    </div>
+                </div>
+                <div style="margin-top:8px;font-size:12px;color:var(--color-text-muted);cursor:pointer;user-select:none"
+                     onclick="toggleEnvSshFields()">
+                    <span id="envSshToggle">▶</span> SSH 日志配置（可选，用于远程查询平台日志）
+                </div>
+                <div id="envSshFields" style="display:none;margin-top:8px;">
+                    <div class="env-add-row" style="margin-bottom:6px">
+                        <input type="text" id="newEnvSshUser" placeholder="SSH用户名（如 root）">
+                        <input type="password" id="newEnvSshPwd" placeholder="SSH密码" style="flex:1">
+                        <input type="text" id="newEnvSshPort" placeholder="端口(22)" style="flex:0.5">
+                    </div>
+                    <div class="env-add-row" style="margin-bottom:6px">
+                        <input type="text" id="newEnvSshHost" placeholder="SSH主机（默认同WCS地址IP）" style="flex:1">
+                    </div>
+                    <div class="env-add-row">
+                        <input type="text" id="newEnvLogPath"
+                               placeholder="/aims/loong/loong-main/logs/schedule_loong-platform_all.log"
+                               style="flex:1">
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     <div class="topbar-center" id="modelBar" style="position:relative;flex:none;">
-        <span class="glass-tag model-tag" onclick="toggleModelPanel()" style="cursor:pointer;">
-            <span style="width:8px;height:8px;border-radius:50%;background:#8b5cf6;display:inline-block;"></span>
-            <span id="modelName">加载中...</span>
-            <span style="font-size:10px;opacity:.5">▼</span>
+        <span class="glass-tag model-tag" onclick="toggleModelPanel()" role="button" tabindex="0" aria-label="切换模型" style="cursor:pointer;">
+            <span class="model-dot" aria-hidden="true"></span>
+            <span id="modelName">加载中…</span>
+            <span class="env-arrow" aria-hidden="true">▼</span>
         </span>
         <!-- Model Popover -->
         <div id="modelPopover" class="glass-popover" style="display:none">
@@ -721,6 +1149,9 @@
     <div class="topbar-right">
         <a href="rules.html" class="glass-btn-outline" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">
             📋 规则管理
+        </a>
+        <a href="storage-task.html" class="glass-btn-outline" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+            🏗️ 立库测试
         </a>
         <a href="chat.html" class="glass-btn-outline" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">
             💬 Agent 对话模式
@@ -803,16 +1234,27 @@ function loadEnvs() {
         var active = data.active;
         var activeUrl = '';
         var html = '';
+        window._envCache = {};
         data.envs.forEach(function(e) {
+            window._envCache[e.name] = e;
             var isActive = e.name === active;
             if (isActive) activeUrl = e.wcsUrl;
             html += '<div class="env-item' + (isActive ? ' active' : '') + '">';
             html += '<div class="env-item-dot" style="background:' + (isActive ? 'var(--color-success)' : 'rgba(156,163,175,0.3)') + '"></div>';
             html += '<div class="env-item-info">';
             html += '<div class="env-item-name"' + (isActive ? ' style="font-weight:700"' : '') + '>' + esc(e.name) + '</div>';
-            html += '<div class="env-item-url">' + esc(e.wcsUrl) + '</div>';
+            html += '<div class="env-item-url">' + esc(e.wcsUrl || '') + '</div>';
+            if (e.jdbcUrl) {
+                html += '<div class="env-item-url" style="font-size:11px;opacity:.8">🗄️ ' + esc(e.jdbcUrl) + '</div>';
+            }
+            if (e.sshUsername) {
+                var sshHost = e.sshHost || '(同 WCS 主机)';
+                var sshPort = e.sshPort || 22;
+                html += '<div class="env-item-url" style="font-size:11px;opacity:.8">🔐 ' + esc(e.sshUsername) + '@' + esc(sshHost) + ':' + sshPort + '</div>';
+            }
             html += '</div>';
             html += '<div class="env-item-actions">';
+            html += '<button class="env-switch-btn" onclick="editEnv(\'' + esc(e.name) + '\')" style="background:rgba(99,102,241,0.12);color:#6366f1">编辑</button>';
             if (!isActive) {
                 html += '<button class="env-switch-btn" onclick="switchEnv(\'' + esc(e.name) + '\')">切换</button>';
                 if (e.name !== 'default') html += '<button class="env-del-btn" onclick="deleteEnv(\'' + esc(e.name) + '\')">删除</button>';
@@ -824,6 +1266,90 @@ function loadEnvs() {
         document.getElementById('envList').innerHTML = html;
         updateEnvBar(active, activeUrl);
     });
+}
+
+function resetEnvForm() {
+    window._editingEnvName = null;
+    document.getElementById('newEnvName').value = '';
+    document.getElementById('newEnvName').disabled = false;
+    document.getElementById('newEnvUrl').value = '';
+    document.getElementById('newEnvJdbcUrl').value = '';
+    document.getElementById('newEnvDbUser').value = '';
+    document.getElementById('newEnvDbPwd').value = '';
+    document.getElementById('newEnvDbPwd').placeholder = '密码';
+    document.getElementById('newEnvSshUser').value = '';
+    document.getElementById('newEnvSshPwd').value = '';
+    document.getElementById('newEnvSshPwd').placeholder = 'SSH密码';
+    document.getElementById('newEnvSshPort').value = '';
+    document.getElementById('newEnvSshHost').value = '';
+    document.getElementById('newEnvLogPath').value = '';
+    var btn = document.querySelector('.env-add-btn');
+    if (btn) btn.textContent = '保存';
+    var cancelBtn = document.getElementById('envEditCancel');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    var sectionLabel = document.getElementById('envFormLabel');
+    if (sectionLabel) sectionLabel.textContent = '➕ 添加/更新环境';
+}
+
+function editEnv(name) {
+    var e = (window._envCache || {})[name];
+    if (!e) return;
+    window._editingEnvName = name;
+    document.getElementById('newEnvName').value = e.name;
+    document.getElementById('newEnvName').disabled = true; // 名称作为主键，不允许在编辑时改名
+    document.getElementById('newEnvUrl').value = e.wcsUrl || '';
+    document.getElementById('newEnvJdbcUrl').value = e.jdbcUrl || '';
+    document.getElementById('newEnvDbUser').value = e.dbUsername || '';
+    document.getElementById('newEnvDbPwd').value = '';
+    document.getElementById('newEnvDbPwd').placeholder = e.dbPassword ? '已设置（留空保持不变）' : '密码';
+    document.getElementById('newEnvSshUser').value = e.sshUsername || '';
+    document.getElementById('newEnvSshPwd').value = '';
+    document.getElementById('newEnvSshPwd').placeholder = e.sshPassword ? '已设置（留空保持不变）' : 'SSH密码';
+    document.getElementById('newEnvSshPort').value = e.sshPort || '';
+    document.getElementById('newEnvSshHost').value = e.sshHost || '';
+    document.getElementById('newEnvLogPath').value = e.logFilePath || '';
+
+    // 自动展开有数据的分区
+    if (e.jdbcUrl || e.dbUsername) {
+        document.getElementById('envDbFields').style.display = '';
+        document.getElementById('envDbToggle').textContent = '▼';
+    }
+    if (e.sshUsername || e.logFilePath || e.sshHost) {
+        document.getElementById('envSshFields').style.display = '';
+        document.getElementById('envSshToggle').textContent = '▼';
+    }
+
+    var btn = document.querySelector('.env-add-btn');
+    if (btn) btn.textContent = '更新';
+    var cancelBtn = document.getElementById('envEditCancel');
+    if (cancelBtn) cancelBtn.style.display = '';
+    var sectionLabel = document.getElementById('envFormLabel');
+    if (sectionLabel) sectionLabel.textContent = '✏️ 编辑环境：' + name;
+    document.getElementById('newEnvUrl').focus();
+}
+
+function toggleEnvDbFields() {
+    var box = document.getElementById('envDbFields');
+    var arrow = document.getElementById('envDbToggle');
+    if (box.style.display === 'none') {
+        box.style.display = '';
+        arrow.textContent = '▼';
+    } else {
+        box.style.display = 'none';
+        arrow.textContent = '▶';
+    }
+}
+
+function toggleEnvSshFields() {
+    var box = document.getElementById('envSshFields');
+    var arrow = document.getElementById('envSshToggle');
+    if (box.style.display === 'none') {
+        box.style.display = '';
+        arrow.textContent = '▼';
+    } else {
+        box.style.display = 'none';
+        arrow.textContent = '▶';
+    }
 }
 
 function switchEnv(name) {
@@ -838,10 +1364,43 @@ function addEnv() {
     var name = document.getElementById('newEnvName').value.trim();
     var url = document.getElementById('newEnvUrl').value.trim();
     if (!name || !url) { alert('请填写环境名称和WCS地址'); return; }
-    fetch('/api/v1/env/save', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: name, wcsUrl: url}) })
+
+    var editing = window._editingEnvName === name;
+    var existing = editing ? ((window._envCache || {})[name] || {}) : {};
+
+    var jdbcUrl = document.getElementById('newEnvJdbcUrl').value.trim();
+    var dbUser = document.getElementById('newEnvDbUser').value.trim();
+    var dbPwd = document.getElementById('newEnvDbPwd').value;
+    var sshUser = document.getElementById('newEnvSshUser').value.trim();
+    var sshPwd = document.getElementById('newEnvSshPwd').value;
+    var sshPort = document.getElementById('newEnvSshPort').value.trim();
+    var sshHost = document.getElementById('newEnvSshHost').value.trim();
+    var logPath = document.getElementById('newEnvLogPath').value.trim();
+
+    var payload = { name: name, wcsUrl: url };
+
+    // 数据库：留空字段保留现有值（仅在编辑时）
+    if (jdbcUrl || editing && existing.jdbcUrl) {
+        payload.jdbcUrl = jdbcUrl || existing.jdbcUrl;
+        payload.dbUsername = dbUser || existing.dbUsername || '';
+        payload.dbPassword = dbPwd !== '' ? dbPwd : (existing.dbPassword || '');
+    }
+
+    // SSH：用户名为空且原本无配置 → 不发；否则保留/合并
+    if (sshUser || editing && existing.sshUsername) {
+        payload.sshUsername = sshUser || existing.sshUsername;
+        payload.sshPassword = sshPwd !== '' ? sshPwd : (existing.sshPassword || '');
+        var port = sshPort || (existing.sshPort != null ? String(existing.sshPort) : '');
+        if (port) payload.sshPort = parseInt(port);
+        var host = sshHost || existing.sshHost || '';
+        if (host) payload.sshHost = host;
+        var lp = logPath || existing.logFilePath || '';
+        if (lp) payload.logFilePath = lp;
+    }
+
+    fetch('/api/v1/env/save', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
         .then(r => r.json()).then(function() {
-            document.getElementById('newEnvName').value = '';
-            document.getElementById('newEnvUrl').value = '';
+            resetEnvForm();
             loadEnvs();
         });
 }
@@ -851,12 +1410,61 @@ function deleteEnv(name) {
     fetch('/api/v1/env/' + name, { method: 'DELETE' }).then(r => r.json()).then(function() { loadEnvs(); });
 }
 
-// 页面加载时获取当前环境
-fetch('/api/v1/env/list').then(r => r.json()).then(data => {
-    var activeUrl = '';
-    data.envs.forEach(function(e) { if (e.name === data.active) activeUrl = e.wcsUrl; });
-    updateEnvBar(data.active, activeUrl);
-}).catch(function(){});
+// 页面加载时获取当前环境（含轻量重试，避免后端冷启动期 AJAX 拿到失败结果就显示 default）
+function bootstrapLoadEnv(retry) {
+    fetch('/api/v1/env/list')
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(data) {
+            var activeUrl = '';
+            (data.envs || []).forEach(function(e) {
+                if (e.name === data.active) activeUrl = e.wcsUrl;
+            });
+            updateEnvBar(data.active || 'default', activeUrl);
+        })
+        .catch(function() {
+            if (retry > 0) {
+                setTimeout(function() { bootstrapLoadEnv(retry - 1); }, 1000);
+            } else {
+                document.getElementById('envName').textContent = '加载失败';
+            }
+        });
+}
+bootstrapLoadEnv(8);
+
+// 页面加载时获取当前模型（同样带重试）
+function bootstrapLoadModel(retry) {
+    fetch('/api/v2/diagnosis/models')
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(resp) {
+            if (!resp || !resp.success || !resp.data) {
+                throw new Error('bad response');
+            }
+            var active = resp.data.active;
+            var models = resp.data.models || [];
+            var label = '未配置';
+            for (var i = 0; i < models.length; i++) {
+                if (models[i].name === active) {
+                    label = models[i].displayName || models[i].model;
+                    break;
+                }
+            }
+            document.getElementById('modelName').textContent = label;
+        })
+        .catch(function() {
+            if (retry > 0) {
+                setTimeout(function() { bootstrapLoadModel(retry - 1); }, 1000);
+            } else {
+                document.getElementById('modelName').textContent = '加载失败';
+            }
+        });
+}
+bootstrapLoadModel(8);
 
 /* ---- 模型管理 ---- */
 function toggleModelPanel() {
@@ -983,14 +1591,14 @@ function startDiagnose() {
     document.getElementById('sopArea').innerHTML = '';
 
     // 存储数据用于构建 SOP
-    var diagData = { task: null, items: null, tickets: null };
+    var diagData = { task: null, items: null, commands: null };
     window._diagData = diagData;
 
     var source = new EventSource('/api/v1/diagnosis/stream?taskId=' + encodeURIComponent(taskId));
 
     source.addEventListener('step', function(e) {
         var d = JSON.parse(e.data);
-        if (d.step === 3) return; // 执行单合并到子任务中，不单独显示
+        if (d.step === 3) return; // 命令合并到子任务中，不单独显示
         ensureStepCard(d.step, d.label);
     });
 
@@ -1010,12 +1618,12 @@ function startDiagnose() {
         markStepDone(2);
     });
 
-    source.addEventListener('tickets', function(e) {
-        var tickets = JSON.parse(e.data);
-        diagData.tickets = tickets;
-        // 重新渲染子任务（含执行单）
+    source.addEventListener('commands', function(e) {
+        var commands = JSON.parse(e.data);
+        diagData.commands = commands;
+        // 重新渲染子任务（含命令）
         var card = getStepContent(2);
-        card.innerHTML = '<div class="subtask-area">' + renderTaskItems(diagData.items, tickets) + '</div>';
+        card.innerHTML = '<div class="subtask-area">' + renderTaskItems(diagData.items, commands) + '</div>';
         // step 3 直接标记完成，不单独显示
         markStepDone(3);
         // 渲染 SOP
@@ -1029,11 +1637,51 @@ function startDiagnose() {
         markStepDone(4);
     });
 
+    source.addEventListener('devices', function(e) {
+        var devices = JSON.parse(e.data);
+        renderDeviceInfo(devices);
+    });
+
     source.addEventListener('logs', function(e) {
         var logs = JSON.parse(e.data);
         var card = getStepContent(5);
         card.innerHTML = renderLogs(logs);
         markStepDone(5);
+    });
+
+    source.addEventListener('reportEvents', function(e) {
+        var events = JSON.parse(e.data);
+        renderReportEvents(events);
+    });
+
+    source.addEventListener('deviceRunningStates', function(e) {
+        var states = JSON.parse(e.data);
+        renderDcsRunningStates(states);
+    });
+
+    source.addEventListener('deviceLocks', function(e) {
+        var locks = JSON.parse(e.data);
+        renderDeviceLocks(locks, taskId);
+    });
+
+    source.addEventListener('collectedData', function(e) {
+        var collected = JSON.parse(e.data);
+        renderCollectedData(collected);
+    });
+
+    source.addEventListener('taskGroup', function(e) {
+        var group = JSON.parse(e.data);
+        renderTaskGroup(group, taskId);
+    });
+
+    source.addEventListener('goodsStates', function(e) {
+        var goods = JSON.parse(e.data);
+        renderGoodsStates(goods);
+    });
+
+    source.addEventListener('platformLogs', function(e) {
+        var logs = JSON.parse(e.data);
+        renderPlatformLogs(logs);
     });
 
     source.addEventListener('ai', function(e) {
@@ -1078,7 +1726,7 @@ function startGlobalDiagnose(taskId) {
     fetch('/api/v1/diagnosis/task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId: taskId, scope: 'global', timeWindowMinutes: 30 })
+        body: JSON.stringify({ taskNo: taskId, scope: 'global', timeWindowMinutes: 30 })
     })
         .then(function(r) { return r.json(); })
         .then(function(resp) {
@@ -1137,27 +1785,26 @@ function markStepDone(step) {
 
 function renderTaskTable(t) {
     return '<table class="data-table">' +
-        '<tr><th>任务ID</th><td>' + esc(t.taskId) + '</td><th>WMS任务号</th><td>' + esc(t.wmsTaskNo) + '</td></tr>' +
-        '<tr><th>任务状态</th><td>' + stateTag(t.taskState) + '</td><th>处理状态</th><td>' + stateTag(t.handleState) + '</td></tr>' +
-        '<tr><th>任务类型</th><td>' + esc(t.taskType) + '</td><th>业务类型</th><td>' + esc(t.businessType) + '</td></tr>' +
-        '<tr><th>业务起点</th><td title="' + esc(t.businessFrom) + '">' + esc(t.businessFrom) + '</td><th>业务终点</th><td title="' + esc(t.businessTo) + '">' + esc(t.businessTo) + '</td></tr>' +
-        '<tr><th>规划起点</th><td>' + esc(t.definiteFrom) + '</td><th>规划终点</th><td>' + esc(t.definiteTo) + '</td></tr>' +
-        '<tr><th>容器号</th><td>' + esc(t.containerCode) + '</td><th>任务来源</th><td>' + esc(t.taskSource) + '</td></tr>' +
+        '<tr><th>任务ID</th><td>' + esc(t.taskId) + '</td><th>任务号</th><td>' + esc(t.taskNo) + '</td></tr>' +
+        '<tr><th>任务状态</th><td>' + stateTag(t.taskState) + '</td><th>任务类型</th><td>' + esc(t.taskType) + '</td></tr>' +
+        '<tr><th>业务类型</th><td>' + esc(t.bizType) + '</td><th>任务来源</th><td>' + esc(t.taskSource) + '</td></tr>' +
+        '<tr><th>起点节点</th><td title="' + esc(t.startNode) + '">' + esc(t.startNode) + '</td><th>终点节点</th><td title="' + esc(t.endNode) + '">' + esc(t.endNode) + '</td></tr>' +
+        '<tr><th>容器信息</th><td colspan="3">' + esc(t.containerCode || t.containerList) + '</td></tr>' +
         '<tr><th>创建时间</th><td>' + fmtTime(t.createTime) + '</td><th>开始时间</th><td>' + fmtTime(t.startTime) + '</td></tr>' +
         (t.errorMessage ? '<tr><th>错误信息</th><td colspan="3" style="color:var(--color-error)">' + esc(t.errorMessage) + '</td></tr>' : '') +
     '</table>';
 }
 
-function renderTaskItems(items, tickets) {
+function renderTaskItems(items, commands) {
     if (!items || items.length === 0) return '<div class="empty-hint">无子任务数据</div>';
 
-    // 按子任务分组执行单
-    var ticketsByItem = {};
-    if (tickets && tickets.length > 0) {
-        tickets.forEach(function(t) {
-            var k = t.taskItemId || '_';
-            if (!ticketsByItem[k]) ticketsByItem[k] = [];
-            ticketsByItem[k].push(t);
+    // 按子任务分组命令
+    var commandsByItem = {};
+    if (commands && commands.length > 0) {
+        commands.forEach(function(t) {
+            var k = t.taskItemNo || '_';
+            if (!commandsByItem[k]) commandsByItem[k] = [];
+            commandsByItem[k].push(t);
         });
     }
 
@@ -1167,49 +1814,53 @@ function renderTaskItems(items, tickets) {
         // 子任务信息
         html += '<div style="' + (idx > 0 ? 'margin-top:16px;padding-top:14px;border-top:1px solid rgba(99,102,241,0.06)' : '') + '">';
         html += '<table class="data-table"><thead><tr>' +
-            '<th>子任务ID</th><th>任务状态</th><th>起点</th><th>终点</th><th>设备</th><th>检查状态</th><th>创建时间</th>' +
+            '<th>子任务号</th><th>任务状态</th><th>起点</th><th>终点</th><th>设备</th><th>动作</th><th>创建时间</th>' +
             '</tr></thead><tbody>';
         html += '<tr>' +
-            '<td title="' + esc(it.id) + '">' + esc(it.id) + '</td>' +
-            '<td>' + stateTag(it.taskState) + '</td>' +
-            '<td title="' + esc(it.startPoint) + '">' + esc(it.startPoint) + '</td>' +
-            '<td title="' + esc(it.endPoint) + '">' + esc(it.endPoint) + '</td>' +
+            '<td title="' + esc(it.taskItemNo || it.id) + '">' + esc(it.taskItemNo || it.id) + '</td>' +
+            '<td>' + stateTag(it.taskItemState) + '</td>' +
+            '<td title="' + esc(it.startNode) + '">' + esc(it.startNode) + '</td>' +
+            '<td title="' + esc(it.endNode) + '">' + esc(it.endNode) + '</td>' +
             '<td title="' + esc(it.deviceCode) + '">' + esc(it.deviceCode) + '</td>' +
-            '<td>' + stateTag(it.checkStatus) + '</td>' +
+            '<td>' + esc(it.taskAction) + '</td>' +
             '<td>' + fmtTime(it.createTime) + '</td>' +
         '</tr></tbody></table>';
 
-        // 该子任务的执行单
-        var itTickets = ticketsByItem[it.id] || [];
-        if (itTickets.length > 0) {
+        // 该子任务的命令
+        var itCommands = commandsByItem[it.taskItemNo] || commandsByItem[it.id] || [];
+        if (itCommands.length > 0) {
             html += '<div class="ticket-section">';
-            html += '<div class="ticket-section-title">执行单 (' + itTickets.length + ')</div>';
+            html += '<div class="ticket-section-title">命令 (' + itCommands.length + ')</div>';
             html += '<table class="data-table"><thead><tr>' +
-                '<th>PLC任务号</th><th>任务状态</th><th>起点</th><th>终点</th><th>设备类型</th><th>设备编码</th><th>开始时间</th><th>已耗时</th>' +
+                '<th>PLC任务号</th><th>命令状态</th><th>起点</th><th>终点</th><th>设备类型</th><th>设备编码</th><th>开始时间</th><th>已耗时</th>' +
                 '</tr></thead><tbody>';
-            itTickets.forEach(function(t) {
+            itCommands.forEach(function(t) {
                 var elapsed = '';
-                if (t.startTime && t.taskState === 'RUNNING') {
+                if (t.startTime && t.commandState === 'RUNNING') {
                     elapsed = calcElapsed(t.startTime, now);
                 } else if (t.startTime && t.finishTime) {
                     elapsed = calcElapsed(t.startTime, parseTime(t.finishTime));
                 }
                 var elapsedCls = '';
-                if (t.taskState === 'RUNNING' && t.startTime) {
+                if (t.commandState === 'RUNNING' && t.startTime) {
                     var mins = getElapsedMinutes(t.startTime, now);
                     if (mins > 5) elapsedCls = ' style="color:var(--color-error);font-weight:600"';
                     else if (mins > 2) elapsedCls = ' style="color:var(--color-warning);font-weight:600"';
                 }
                 html += '<tr>' +
-                    '<td>' + esc(t.plcTaskId) + '</td>' +
-                    '<td>' + stateTag(t.taskState) + '</td>' +
-                    '<td>' + esc(t.startPoint) + '</td>' +
-                    '<td>' + esc(t.endPoint) + '</td>' +
+                    '<td>' + esc(t.plcTaskNo) + '</td>' +
+                    '<td>' + stateTag(t.commandState) + '</td>' +
+                    '<td>' + esc(t.startNode) + '</td>' +
+                    '<td>' + esc(t.endNode) + '</td>' +
                     '<td>' + esc(t.deviceType) + '</td>' +
                     '<td>' + esc(t.deviceCode) + '</td>' +
                     '<td>' + fmtTime(t.startTime) + '</td>' +
                     '<td' + elapsedCls + '>' + elapsed + '</td>' +
                 '</tr>';
+                var errorHtml = renderCommandErrorRow(t);
+                if (errorHtml) {
+                    html += '<tr><td colspan="8" style="padding:0 6px 6px;border-bottom:none;">' + errorHtml + '</td></tr>';
+                }
             });
             html += '</tbody></table></div>';
         }
@@ -1218,30 +1869,30 @@ function renderTaskItems(items, tickets) {
     return html;
 }
 
-function renderTickets(tickets) {
-    if (!tickets || tickets.length === 0) return '<div class="empty-hint">无执行单数据</div>';
+function renderTickets(commands) {
+    if (!commands || commands.length === 0) return '<div class="empty-hint">无命令数据</div>';
     var now = new Date();
     var html = '<table class="data-table"><thead><tr>' +
-        '<th>PLC任务号</th><th>任务状态</th><th>起点</th><th>终点</th><th>设备类型</th><th>设备编码</th><th>开始时间</th><th>已耗时</th>' +
+        '<th>PLC任务号</th><th>命令状态</th><th>起点</th><th>终点</th><th>设备类型</th><th>设备编码</th><th>开始时间</th><th>已耗时</th>' +
         '</tr></thead><tbody>';
-    tickets.forEach(function(t) {
+    commands.forEach(function(t) {
         var elapsed = '';
-        if (t.startTime && t.taskState === 'RUNNING') {
+        if (t.startTime && t.commandState === 'RUNNING') {
             elapsed = calcElapsed(t.startTime, now);
         } else if (t.startTime && t.finishTime) {
             elapsed = calcElapsed(t.startTime, parseTime(t.finishTime));
         }
         var elapsedCls = '';
-        if (t.taskState === 'RUNNING' && t.startTime) {
+        if (t.commandState === 'RUNNING' && t.startTime) {
             var mins = getElapsedMinutes(t.startTime, now);
             if (mins > 5) elapsedCls = ' style="color:var(--color-error);font-weight:600"';
             else if (mins > 2) elapsedCls = ' style="color:var(--color-warning);font-weight:600"';
         }
         html += '<tr>' +
-            '<td>' + esc(t.plcTaskId) + '</td>' +
-            '<td>' + stateTag(t.taskState) + '</td>' +
-            '<td>' + esc(t.startPoint) + '</td>' +
-            '<td>' + esc(t.endPoint) + '</td>' +
+            '<td>' + esc(t.plcTaskNo) + '</td>' +
+            '<td>' + stateTag(t.commandState) + '</td>' +
+            '<td>' + esc(t.startNode) + '</td>' +
+            '<td>' + esc(t.endNode) + '</td>' +
             '<td>' + esc(t.deviceType) + '</td>' +
             '<td>' + esc(t.deviceCode) + '</td>' +
             '<td>' + fmtTime(t.startTime) + '</td>' +
@@ -1278,6 +1929,521 @@ function renderConflicts(conflicts) {
     });
     html += '</tbody></table>';
     html += '<div class="conflict-tip">💡 建议操作：检查占用任务是否卡住，如已无效可手动释放锁或取消占用任务，释放后当前任务可自动继续执行。</div>';
+    return html;
+}
+
+function renderDeviceInfo(devices) {
+    if (!devices || devices.length === 0) return;
+    var timeline = document.getElementById('timeline');
+    // 查找或创建设备信息卡片
+    var existing = document.getElementById('device-info-card');
+    if (existing) existing.remove();
+
+    var div = document.createElement('div');
+    div.className = 'step-card done';
+    div.id = 'device-info-card';
+    div.innerHTML =
+        '<div class="step-header">' +
+            '<div class="step-icon done">⚙</div>' +
+            '<div class="step-label">设备状态信息</div>' +
+        '</div>' +
+        '<div class="step-content" id="device-info-content"></div>';
+
+    // 插入到所有新增诊断数据源卡片之后，与报告事件之后
+    insertCardAfter(div, ['report-events-card', 'goods-states-card', 'task-group-card', 'collected-data-card', 'device-locks-card', 'dcs-states-card', 'step-2', 'step-1']);
+
+    var html = '';
+    devices.forEach(function(device) {
+        var onlineClass = device.online ? 'success' : 'error';
+        var onlineText = device.online ? '在线' : '离线';
+        html += '<div style="margin-bottom:12px;padding:12px;border:1px solid rgba(99,102,241,0.1);border-radius:10px;background:rgba(255,255,255,0.5)">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+        html += '<strong style="font-size:14px">' + esc(device.deviceCode) + '</strong>';
+        html += '<span class="state-tag ' + onlineClass + '">' + onlineText + '</span>';
+        html += '</div>';
+        html += '<div style="font-size:13px;color:var(--color-text-secondary)">';
+        html += '<span>类型: ' + esc(device.deviceTypeName || device.deviceTypeCode || '-') + '</span>';
+        if (device.collectTime) {
+            html += ' | <span>采集时间: ' + esc(device.collectTime) + '</span>';
+        }
+        html += '</div>';
+
+        if (device.stateInfo) {
+            var si = device.stateInfo;
+            html += '<div style="margin-top:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:12px;color:var(--color-text-secondary)">';
+            html += '<span>工作模式: ' + (si.workMode === 1 ? '自动' : '手动') + '</span>';
+            html += '<span>工作状态: ' + (si.workState === 1 ? '空闲' : si.workState === 2 ? '运行中' : si.workState) + '</span>';
+            html += '<span>负载: ' + (si.loadState === 1 ? '有货' : '无货') + '</span>';
+            html += '<span>错误码: ' + (si.taskError ? si.taskError : '无') + '</span>';
+            html += '</div>';
+            if (si.alarmInfoList && si.alarmInfoList.length > 0) {
+                html += '<div style="margin-top:6px;color:var(--color-error);font-size:12px">⚠️ 报警: ' + esc(JSON.stringify(si.alarmInfoList)) + '</div>';
+            }
+        }
+
+        if (device.lastUpdateMap) {
+            var keys = Object.keys(device.lastUpdateMap);
+            if (keys.length > 0) {
+                html += '<div style="margin-top:6px;font-size:12px;color:var(--color-text-muted)">';
+                keys.forEach(function(k) {
+                    html += '<span>' + esc(k) + ': ' + esc(device.lastUpdateMap[k]) + '</span> ';
+                });
+                html += '</div>';
+            }
+        }
+        html += '</div>';
+    });
+
+    document.getElementById('device-info-content').innerHTML = html;
+}
+
+function renderReportEvents(events) {
+    var timeline = document.getElementById('timeline');
+    var existing = document.getElementById('report-events-card');
+    if (existing) existing.remove();
+
+    if (!events || events.length === 0) return;
+
+    var div = document.createElement('div');
+    div.className = 'step-card done';
+    div.id = 'report-events-card';
+
+    var totalRetry = 0;
+    events.forEach(function(ev) { if (ev && ev.retryTimes && ev.retryTimes > 0) totalRetry++; });
+    var headerExtra = totalRetry > 0
+        ? '<span class="state-tag error" style="margin-left:auto">' + totalRetry + ' 个事件含重试</span>'
+        : '<span class="state-tag success" style="margin-left:auto">' + events.length + ' 个事件</span>';
+
+    div.innerHTML =
+        '<div class="step-header">' +
+            '<div class="step-icon done">⏱</div>' +
+            '<div class="step-label">上报事件历史 <span style="font-size:11px;color:var(--color-text-muted);font-weight:400">（sc_report_detail）</span></div>' +
+            headerExtra +
+        '</div>' +
+        '<div class="step-content" id="report-events-content"></div>';
+
+    // 插入到货物位置卡片之后，位于设备信息之前
+    insertCardAfter(div, ['goods-states-card', 'task-group-card', 'collected-data-card', 'device-locks-card', 'dcs-states-card', 'step-2', 'step-1']);
+
+    var html = '<div class="report-tl">';
+    events.forEach(function(ev) {
+        if (!ev) return;
+        var hasRetry = ev.retryTimes && ev.retryTimes > 0;
+        var stateCls = classifyReportState(ev.reportState);
+        var itemCls = 'report-tl-item';
+        if (hasRetry) itemCls += ' has-retry';
+        else if (stateCls === 'bad') itemCls += ' fail';
+        else if (stateCls === 'ok') itemCls += ' success';
+
+        html += '<div class="' + itemCls + '">';
+        html += '<div class="report-tl-head">';
+        html += '<span class="report-tl-time">' + esc(fmtTime(ev.produceTime)) + '</span>';
+        html += '<span class="report-tl-type">' + esc(ev.eventType || 'UNKNOWN') + '</span>';
+        html += '<span class="report-tl-state ' + stateCls + '">' + esc(ev.reportState || '-') + '</span>';
+        if (ev.taskItemNo) {
+            html += '<span class="report-tl-tag">子任务 ' + esc(ev.taskItemNo) + '</span>';
+        }
+        if (ev.commandNo) {
+            html += '<span class="report-tl-tag">指令 ' + esc(ev.commandNo) + '</span>';
+        }
+        if (hasRetry) {
+            html += '<span class="report-tl-retry">重试 ×' + esc(ev.retryTimes) + '</span>';
+        }
+        html += '</div>';
+        if (ev.eventDetail) {
+            html += '<div class="report-tl-detail">' + esc(ev.eventDetail) + '</div>';
+        }
+        html += '</div>';
+    });
+    html += '</div>';
+    document.getElementById('report-events-content').innerHTML = html;
+}
+
+function classifyReportState(state) {
+    if (!state) return '';
+    var s = String(state).toUpperCase();
+    if (s === 'SUCCESS' || s === 'REPORTED' || s === 'OK') return 'ok';
+    if (s === 'FAIL' || s === 'FAILED' || s === 'ERROR') return 'bad';
+    if (s === 'WAIT_REPORT' || s === 'PENDING' || s === 'RETRY') return 'warn';
+    return '';
+}
+
+/* ---- 新增诊断数据源渲染 ---- */
+
+function insertCardAfter(div, anchorIds) {
+    var timeline = document.getElementById('timeline');
+    var anchor = null;
+    for (var i = 0; i < anchorIds.length; i++) {
+        anchor = document.getElementById(anchorIds[i]);
+        if (anchor) break;
+    }
+    if (anchor && anchor.nextSibling) {
+        timeline.insertBefore(div, anchor.nextSibling);
+    } else if (anchor) {
+        timeline.appendChild(div);
+    } else {
+        timeline.appendChild(div);
+    }
+}
+
+function createOrReplaceCard(cardId, icon, label, anchorIds) {
+    var existing = document.getElementById(cardId);
+    if (existing) existing.remove();
+    var div = document.createElement('div');
+    div.className = 'step-card done';
+    div.id = cardId;
+    div.innerHTML =
+        '<div class="step-header">' +
+            '<div class="step-icon done">' + icon + '</div>' +
+            '<div class="step-label">' + label + '</div>' +
+        '</div>' +
+        '<div class="step-content" id="' + cardId + '-content"></div>';
+    insertCardAfter(div, anchorIds);
+    return document.getElementById(cardId + '-content');
+}
+
+/* DCS 设备运行状态 + 报警 */
+function renderDcsRunningStates(states) {
+    var existing = document.getElementById('dcs-states-card');
+    if (!states || states.length === 0) { if (existing) existing.remove(); return; }
+
+    var card = createOrReplaceCard('dcs-states-card', '⚡', '设备 DCS 运行状态 <span style="font-size:11px;color:var(--color-text-muted);font-weight:400">（' + states.length + ' 台）</span>', ['step-2', 'step-1']);
+    var container = document.createElement('div');
+    container.id = 'dcs-states-container';
+    container.className = 'dcs-grid';
+
+    var html = '';
+    states.forEach(function(s) {
+        var hasAlarm = s.alarmInfoList && s.alarmInfoList.length > 0;
+        var online = s.onlineState === true || s.onlineState === 'ONLINE' || s.onlineState === 'online' || s.onlineState === 1;
+        var stateCls = dcsStateClass(s.deviceState, online);
+        html += '<div class="dcs-card' + (hasAlarm ? ' has-alarm' : '') + '">';
+        html += '<div class="dcs-card-head">';
+        html += '<span class="dcs-state-dot" style="background:' + (online ? 'var(--color-success)' : '#9ca3af') + ';"></span>';
+        html += '<span class="dcs-card-code">' + esc(s.deviceCode || '-') + '</span>';
+        if (s.deviceType) html += '<span class="dcs-card-type">' + esc(s.deviceType) + '</span>';
+        html += '<span class="tag ' + stateCls + '" style="margin-left:auto;">' + esc(s.deviceState || (online ? '-' : 'OFFLINE')) + '</span>';
+        html += '</div>';
+
+        html += '<div class="dcs-card-meta">';
+        html += '<span class="dcs-meta-pill">' + (online ? '🟢 在线' : '🔴 离线') + '</span>';
+        if (s.workMode != null && s.workMode !== '') {
+            html += '<span class="dcs-meta-pill">模式: ' + esc(s.workMode) + '</span>';
+        }
+        if (s.dcsTaskState) html += '<span class="dcs-meta-pill">DCS: ' + esc(s.dcsTaskState) + '</span>';
+        html += '<span class="dcs-meta-pill">' + (s.hasTask ? '有任务' : '无任务') + '</span>';
+        html += '<span class="dcs-meta-pill">' + (s.hasGoods ? '有货' : '无货') + '</span>';
+        html += '</div>';
+
+        if (hasAlarm) {
+            html += '<div class="dcs-alarm-box">';
+            html += '<div class="dcs-alarm-title">⚠️ 报警 ×' + s.alarmInfoList.length + '</div>';
+            s.alarmInfoList.forEach(function(a) {
+                html += '<div class="dcs-alarm-item">';
+                if (a.alarmCode) html += '<b>[' + esc(a.alarmCode) + ']</b> ';
+                html += esc(a.alarmMessage || '-');
+                var extras = [];
+                if (a.alarmLevel) extras.push('级别: ' + a.alarmLevel);
+                if (a.alarmType) extras.push('类型: ' + a.alarmType);
+                if (a.firstAlarmTime) extras.push('首发: ' + fmtTime(a.firstAlarmTime));
+                else if (a.timestamp) extras.push('时间: ' + fmtTime(a.timestamp));
+                if (extras.length > 0) html += ' <span style="opacity:.75;">(' + esc(extras.join(' · ')) + ')</span>';
+                html += '</div>';
+            });
+            html += '</div>';
+        }
+        html += '</div>';
+    });
+
+    container.innerHTML = html;
+    card.innerHTML = '';
+    card.appendChild(container);
+}
+
+function dcsStateClass(state, online) {
+    if (online === false) return 'tag-state-offline';
+    if (!state) return 'tag-state-idle';
+    var s = String(state).toUpperCase();
+    if (s === 'IDLE') return 'tag-state-idle';
+    if (s === 'RUNNING') return 'tag-state-running';
+    if (s === 'FAULT' || s === 'ALARM' || s === 'ERROR') return 'tag-state-fault';
+    if (s === 'STOPPED' || s === 'STOP' || s === 'PAUSE') return 'tag-state-stopped';
+    if (s === 'OFFLINE') return 'tag-state-offline';
+    return 'tag-state-idle';
+}
+
+/* 设备锁定状态 */
+function renderDeviceLocks(locks, currentTaskNo) {
+    var existing = document.getElementById('device-locks-card');
+    if (!locks || locks.length === 0) { if (existing) existing.remove(); return; }
+
+    var card = createOrReplaceCard('device-locks-card', '🔒', '设备锁定状态 <span style="font-size:11px;color:var(--color-text-muted);font-weight:400">（' + locks.length + ' 项）</span>', ['dcs-states-card', 'step-2', 'step-1']);
+
+    var html = '<div id="device-locks-container">';
+    html += '<table class="data-table"><thead><tr>' +
+        '<th>设备号</th><th>任务号</th><th>子任务号</th><th>指令号</th><th>锁定状态</th><th>锁定时间</th>' +
+        '</tr></thead><tbody>';
+    locks.forEach(function(l) {
+        var lockState = l.lockState || '';
+        var isLocked = /LOCK|LOCKED/i.test(lockState);
+        var isConflict = isLocked && l.taskNo && currentTaskNo && String(l.taskNo) !== String(currentTaskNo);
+        var rowCls = isConflict ? 'lock-row-conflict' : (isLocked ? 'lock-row-locked' : '');
+        var stateTagCls = isLocked ? 'tag-error' : 'tag-init';
+        html += '<tr' + (rowCls ? ' class="' + rowCls + '"' : '') + '>' +
+            '<td title="' + esc(l.deviceCode) + '">' + esc(l.deviceCode || '-') + '</td>' +
+            '<td title="' + esc(l.taskNo) + '">' + esc(l.taskNo || '-') +
+                (isConflict ? '<span class="lock-conflict-tag">被其他任务占用</span>' : '') + '</td>' +
+            '<td title="' + esc(l.taskItemNo) + '">' + esc(l.taskItemNo || '-') + '</td>' +
+            '<td title="' + esc(l.commandNo) + '">' + esc(l.commandNo || '-') + '</td>' +
+            '<td><span class="tag ' + stateTagCls + '">' + esc(lockState || '-') + '</span></td>' +
+            '<td>' + fmtTime(l.lockTime) + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+    card.innerHTML = html;
+}
+
+/* 数据采集状态 */
+function renderCollectedData(collected) {
+    var existing = document.getElementById('collected-data-card');
+    if (!collected || collected.length === 0) { if (existing) existing.remove(); return; }
+
+    var card = createOrReplaceCard('collected-data-card', '📝', '数据采集状态 <span style="font-size:11px;color:var(--color-text-muted);font-weight:400">（' + collected.length + ' 项）</span>', ['device-locks-card', 'dcs-states-card', 'step-2', 'step-1']);
+
+    var container = '<div id="collected-data-container" class="collect-grid">';
+    collected.forEach(function(c) {
+        var st = String(c.state || '').toUpperCase();
+        var stCls = collectStateClass(st);
+        var cardCls = 'collect-card';
+        if (st === 'FAILED') cardCls += ' failed';
+        else if (st === 'COLLECTING') cardCls += ' collecting';
+        container += '<div class="' + cardCls + '">';
+        container += '<div class="collect-card-head">';
+        container += '<strong style="font-size:13px;">' + esc(c.deviceCode || '-') + '</strong>';
+        container += '<span class="tag ' + stCls + '">' + esc(c.state || '-') + '</span>';
+        container += '</div>';
+        var required = (c.requiredCount == null ? '-' : c.requiredCount);
+        var collectedIdx = (c.collectedIndex == null ? '-' : c.collectedIndex);
+        container += '<div class="collect-progress">进度: ' + esc(collectedIdx) + ' / ' + esc(required) + '</div>';
+        container += '<div class="collect-meta">';
+        if (c.nodeCode) container += '节点: ' + esc(c.nodeCode) + '<br>';
+        if (c.commandNo) container += '指令: ' + esc(c.commandNo) + '<br>';
+        if (c.taskNo) container += '任务: ' + esc(c.taskNo) + (c.taskItemNo ? ' / ' + esc(c.taskItemNo) : '') + '<br>';
+        if (c.ackState) container += '确认: ' + esc(c.ackState);
+        container += '</div>';
+        if (c.content) {
+            container += '<div class="collect-content">' + esc(c.content) + '</div>';
+        }
+        container += '</div>';
+    });
+    container += '</div>';
+    card.innerHTML = container;
+}
+
+function collectStateClass(state) {
+    var s = String(state || '').toUpperCase();
+    if (s === 'COLLECTING') return 'tag-collect-collecting';
+    if (s === 'SUCCESS') return 'tag-collect-success';
+    if (s === 'FAILED' || s === 'FAIL' || s === 'ERROR') return 'tag-collect-failed';
+    if (s === 'CANCELED' || s === 'CANCELLED' || s === 'CANCEL') return 'tag-collect-canceled';
+    return 'tag-init';
+}
+
+/* 任务组联动 */
+function renderTaskGroup(group, currentTaskNo) {
+    var existing = document.getElementById('task-group-card');
+    if (!group || group.length === 0) { if (existing) existing.remove(); return; }
+
+    var card = createOrReplaceCard('task-group-card', '🔗', '任务组联动 <span style="font-size:11px;color:var(--color-text-muted);font-weight:400">（' + group.length + ' 个任务）</span>', ['collected-data-card', 'device-locks-card', 'dcs-states-card', 'step-2', 'step-1']);
+
+    var html = '<div id="task-group-container" class="group-rail">';
+    group.forEach(function(t, idx) {
+        if (idx > 0) html += '<div class="group-node-arrow">→</div>';
+        var isCurrent = currentTaskNo && String(t.taskNo) === String(currentTaskNo);
+        html += '<div class="group-node' + (isCurrent ? ' is-current' : '') + '">';
+        html += '<div class="group-node-id">' + esc(t.taskNo || '-') + (isCurrent ? ' <span class="tag tag-running" style="font-size:10px;">当前</span>' : '') + '</div>';
+        if (t.bizType) html += '<div class="group-node-meta">业务: ' + esc(t.bizType) + '</div>';
+        if (t.groupRole) html += '<div class="group-node-meta">角色: ' + esc(t.groupRole) + '</div>';
+        if (t.startTime || t.finishTime) {
+            html += '<div class="group-node-meta" style="font-size:11px;">';
+            if (t.startTime) html += '起: ' + fmtTime(t.startTime);
+            if (t.finishTime) html += (t.startTime ? '<br>' : '') + '记: ' + fmtTime(t.finishTime);
+            html += '</div>';
+        }
+        html += '<div class="group-node-tags">' + groupStateTag(t.taskState) + '</div>';
+        html += '</div>';
+    });
+    html += '</div>';
+    card.innerHTML = html;
+}
+
+function groupStateTag(state) {
+    if (!state) return '<span class="tag tag-init">-</span>';
+    var s = String(state).toUpperCase();
+    var cls = 'tag-init';
+    if (s.indexOf('SUCCESS') >= 0) cls = 'tag-success';
+    else if (s.indexOf('RUNNING') >= 0 || s.indexOf('ISSUED') >= 0 || s.indexOf('EXEC') >= 0) cls = 'tag-running';
+    else if (s.indexOf('CANCEL') >= 0 || s.indexOf('CLOSE') >= 0) cls = 'tag-init';
+    else if (s.indexOf('WAIT') >= 0 || s.indexOf('PAUSE') >= 0 || s.indexOf('PENDING') >= 0) cls = 'tag-warn';
+    else if (s.indexOf('FAIL') >= 0 || s.indexOf('ERROR') >= 0) cls = 'tag-error';
+    return '<span class="tag ' + cls + '">' + esc(state) + '</span>';
+}
+
+/* 货物位置 */
+function renderGoodsStates(goods) {
+    var existing = document.getElementById('goods-states-card');
+    if (!goods || goods.length === 0) { if (existing) existing.remove(); return; }
+
+    var card = createOrReplaceCard('goods-states-card', '📦', '货物位置 <span style="font-size:11px;color:var(--color-text-muted);font-weight:400">（' + goods.length + ' 件）</span>', ['task-group-card', 'collected-data-card', 'device-locks-card', 'dcs-states-card', 'step-2', 'step-1']);
+
+    var html = '<div id="goods-states-container" class="goods-grid">';
+    goods.forEach(function(g) {
+        html += '<div class="goods-card">';
+        html += '<div class="goods-card-head">';
+        html += '<span class="goods-card-code">📦 ' + esc(g.goodsCode || '-') + '</span>';
+        html += stateTag(g.state);
+        html += '</div>';
+        if (g.containerCode) {
+            html += '<div class="goods-card-meta">容器: ' + esc(g.containerCode) + '</div>';
+        }
+        var loc = g.currentNode || g.locationCode;
+        if (loc) {
+            html += '<div class="goods-card-loc">📍 ' + esc(loc) + '</div>';
+        }
+        if (g.currentTaskNo || g.currentTaskItemNo) {
+            html += '<div class="goods-card-meta">任务: ' + esc(g.currentTaskNo || '-') + (g.currentTaskItemNo ? ' / ' + esc(g.currentTaskItemNo) : '') + '</div>';
+        }
+        html += '</div>';
+    });
+    html += '</div>';
+    card.innerHTML = html;
+}
+
+/* 平台运行日志（SSH 远程查询）。
+ * 兼容两种 payload：
+ *   - 数组：[line, line, ...]（旧版）
+ *   - 对象：{ status, message, lines, command }（新版，状态：OK / EMPTY / SKIPPED_* / ERROR）
+ */
+function renderPlatformLogs(payload) {
+    var existing = document.getElementById('platform-logs-card');
+    var lines = [];
+    var status = 'OK';
+    var message = '';
+
+    if (Array.isArray(payload)) {
+        lines = payload;
+        status = lines.length > 0 ? 'OK' : 'EMPTY';
+    } else if (payload && typeof payload === 'object') {
+        lines = payload.lines || [];
+        status = payload.status || (lines.length > 0 ? 'OK' : 'EMPTY');
+        message = payload.message || '';
+    }
+
+    // SKIPPED_* 状态（环境/凭据未配置）：不渲染卡片，避免干扰
+    if (status && status.indexOf('SKIPPED') === 0) {
+        if (existing) existing.remove();
+        return;
+    }
+
+    var titleHtml;
+    if (status === 'OK' && lines.length > 0) {
+        titleHtml = '平台运行日志 <span style="font-size:11px;color:var(--color-text-muted);font-weight:400">（' + lines.length + ' 行）</span>';
+    } else if (status === 'EMPTY') {
+        titleHtml = '平台运行日志 <span style="font-size:11px;color:var(--color-warning);font-weight:400">（无命中）</span>';
+    } else if (status === 'ERROR') {
+        titleHtml = '平台运行日志 <span style="font-size:11px;color:var(--color-error);font-weight:400">（查询失败）</span>';
+    } else {
+        titleHtml = '平台运行日志';
+    }
+
+    var card = createOrReplaceCard('platform-logs-card', '📋', titleHtml,
+        ['goods-states-card', 'task-group-card', 'collected-data-card', 'device-locks-card', 'dcs-states-card', 'step-5', 'step-4', 'step-2', 'step-1']);
+
+    var command = (payload && typeof payload === 'object') ? (payload.command || '') : '';
+    var commandBlock = '';
+    if (command) {
+        var cmdId = 'platform-logs-cmd-' + Date.now();
+        commandBlock =
+            '<details class="platform-cmd-details" style="margin-bottom:8px">' +
+              '<summary style="cursor:pointer;font-size:12px;color:var(--color-text-muted)">' +
+                '🔧 显示远程查询命令（可复制到服务器手动执行）' +
+              '</summary>' +
+              '<div style="margin-top:6px;display:flex;gap:6px;align-items:flex-start">' +
+                '<pre id="' + cmdId + '" style="flex:1;margin:0;padding:8px;border-radius:6px;background:rgba(15,23,42,.04);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-all">' + esc(command) + '</pre>' +
+                '<button class="glass-btn-outline" style="padding:4px 10px;font-size:12px;flex-shrink:0" onclick="copyPlatformCommand(\'' + cmdId + '\', this)">复制</button>' +
+              '</div>' +
+            '</details>';
+    }
+
+    if (lines.length === 0) {
+        var hint = message || (status === 'ERROR' ? '查询失败' : '无命中行');
+        card.innerHTML = commandBlock + '<div class="empty-hint">' + esc(hint) + '</div>';
+        return;
+    }
+
+    var html = commandBlock;
+    html += '<div id="platform-logs-container" class="platform-log-card">';
+    lines.forEach(function(line) {
+        var cls = 'log-line';
+        if (/\bERROR\b/i.test(line)) cls += ' log-error';
+        else if (/\bWARN\b/i.test(line)) cls += ' log-warn';
+        html += '<div class="' + cls + '">' + esc(line) + '</div>';
+    });
+    html += '</div>';
+    card.innerHTML = html;
+}
+
+function copyPlatformCommand(elementId, btn) {
+    var el = document.getElementById(elementId);
+    if (!el) return;
+    var text = el.textContent || '';
+    var done = function() {
+        if (!btn) return;
+        var origin = btn.textContent;
+        btn.textContent = '已复制';
+        setTimeout(function() { btn.textContent = origin; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function() { fallbackCopy(text, done); });
+    } else {
+        fallbackCopy(text, done);
+    }
+}
+
+function fallbackCopy(text, cb) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); cb && cb(); } catch (e) {}
+    document.body.removeChild(ta);
+}
+
+/* 指令错误信息渲染 */
+function renderCommandErrorRow(cmd) {
+    if (!cmd) return '';
+    var hasErr = cmd.errorCode || cmd.errorMsg;
+    var hasResult = cmd.execResult || cmd.ackResult || cmd.ackDetail;
+    if (!hasErr && !hasResult) return '';
+    var html = '<div class="cmd-error-box">';
+    if (cmd.errorCode) {
+        html += '<div><span class="cmd-error-label">错误码:</span>' + esc(cmd.errorCode) + '</div>';
+    }
+    if (cmd.errorMsg) {
+        html += '<div><span class="cmd-error-label">错误信息:</span>' + esc(cmd.errorMsg) + '</div>';
+    }
+    if (cmd.execResult) {
+        html += '<div><span class="cmd-error-label">执行结果:</span>' + esc(cmd.execResult) + '</div>';
+    }
+    if (cmd.ackResult) {
+        html += '<div><span class="cmd-error-label">Ack 结果:</span>' + esc(cmd.ackResult) + '</div>';
+    }
+    if (cmd.ackDetail) {
+        html += '<div><span class="cmd-error-label">Ack 详情:</span>' + esc(cmd.ackDetail) + '</div>';
+    }
+    html += '</div>';
     return html;
 }
 
@@ -1423,7 +2589,7 @@ function renderRelatedTasks(items) {
         html += '<div class="global-task-top">';
         html += '<div>';
         html += '<div class="global-task-id">' + esc(item.taskId || '-') + '</div>';
-        html += '<div style="font-size:12px;color:var(--color-text-muted);margin-top:4px;">WMS任务号：' + esc(item.wmsTaskNo || '-') + '</div>';
+        html += '<div style="font-size:12px;color:var(--color-text-muted);margin-top:4px;">任务号：' + esc(item.taskNo || item.wmsTaskNo || '-') + '</div>';
         html += '</div>';
         html += '<div class="global-task-tags">';
         html += '<span class="tag tag-running">' + esc(formatRelationType(item.relationType)) + '</span>';
@@ -1433,7 +2599,7 @@ function renderRelatedTasks(items) {
         html += '<div class="global-task-reason">';
         html += '<b>关联原因：</b>' + esc(item.relationReason || '无') + '<br>';
         html += '<b>阻塞判断：</b>' + esc(item.blockageReason || '无') + '<br>';
-        html += '<b>处理状态：</b>' + esc(item.handleState || '-') + '，<b>设备：</b>' + esc(item.deviceCode || '-') + '，<b>容器：</b>' + esc(item.containerCode || '-') + '，<b>业务终点：</b>' + esc(item.businessTo || '-') + '。';
+        html += '<b>设备：</b>' + esc(item.deviceCode || '-') + '，<b>容器：</b>' + esc(item.containerCode || item.containerList || '-') + '，<b>终点：</b>' + esc(item.endNode || item.businessTo || '-') + '。';
         if (item.errorMessage) {
             html += '<br><b style="color:var(--color-error)">异常信息：</b><span style="color:var(--color-error)">' + esc(item.errorMessage) + '</span>';
         }
@@ -1689,47 +2855,48 @@ function renderAiDeepResult(ai) {
 
 function renderSOP(data) {
     var container = document.getElementById('sopArea');
-    var task = data.task, items = data.items || [], tickets = data.tickets || [];
+    var task = data.task, items = data.items || [], commands = data.commands || [];
     if (items.length === 0) { container.innerHTML = ''; return; }
 
-    var ticketsByItem = {};
-    tickets.forEach(function(t) {
-        var k = t.taskItemId || '_';
-        if (!ticketsByItem[k]) ticketsByItem[k] = [];
-        ticketsByItem[k].push(t);
+    var commandsByItem = {};
+    commands.forEach(function(t) {
+        var k = t.taskItemNo || '_';
+        if (!commandsByItem[k]) commandsByItem[k] = [];
+        commandsByItem[k].push(t);
     });
-    Object.keys(ticketsByItem).forEach(function(k) {
-        ticketsByItem[k].sort(function(a, b) { return (a.taskSort || 0) - (b.taskSort || 0); });
+    Object.keys(commandsByItem).forEach(function(k) {
+        commandsByItem[k].sort(function(a, b) { return (a.taskSort || 0) - (b.taskSort || 0); });
     });
 
-    // 构建完整路径：把所有子任务的执行单串成一条线
+    // 构建完整路径：把所有子任务的命令串成一条线
     var allLegs = []; // { from, to, device, deviceCode, action, plc, cls }
     items.forEach(function(item) {
-        var tks = ticketsByItem[item.id] || [];
+        var tks = commandsByItem[item.taskItemNo] || commandsByItem[item.id] || [];
         var itemDevLabel = mapDeviceType(item.deviceType);
         var itemDevCode = item.deviceCode || '';
         if (tks.length > 0) {
             tks.forEach(function(tk) {
-                var tkDone = /SUCCESS/.test(tk.taskState || '');
-                var tkRun = tk.taskState === 'RUNNING';
-                var tkErr = /CANCEL/.test(tk.taskState || '');
+                var state = tk.commandState || '';
+                var tkDone = /SUCCESS/.test(state);
+                var tkRun = state === 'RUNNING';
+                var tkErr = /CANCEL|FAIL/.test(state);
                 var cls = tkDone ? 'done' : (tkRun ? 'active' : (tkErr ? 'error' : 'waiting'));
-                var action = mapFunction(tk.function || tk['function']);
-                // 优先用执行单的设备编码，没有再用子任务的
+                var action = mapFunction(tk.commandType || tk['function']);
+                // 优先用命令的设备编码，没有再用子任务的
                 var tkDevCode = tk.deviceCode || itemDevCode;
                 var tkDevName = tk.deviceName || tkDevCode;
                 allLegs.push({
-                    from: tk.startNodeNum || tk.startPoint || '',
-                    to: tk.endNodeNum || tk.endPoint || '',
+                    from: tk.startNodeNum || tk.startNode || '',
+                    to: tk.endNodeNum || tk.endNode || '',
                     device: tkDevName, deviceCode: tkDevCode,
-                    action: action, plc: tk.plcTaskId || '', cls: cls
+                    action: action, plc: tk.plcTaskNo || '', cls: cls
                 });
             });
         } else {
             allLegs.push({
-                from: item.startPoint || '', to: item.endPoint || '',
+                from: item.startNode || '', to: item.endNode || '',
                 device: itemDevCode || itemDevLabel, deviceCode: itemDevCode,
-                action: item.taskState || 'INIT', plc: '', cls: 'waiting'
+                action: item.taskItemState || 'INIT', plc: '', cls: 'waiting'
             });
         }
     });

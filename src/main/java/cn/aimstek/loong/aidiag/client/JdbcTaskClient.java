@@ -1,6 +1,10 @@
 package cn.aimstek.loong.aidiag.client;
 
+import cn.aimstek.loong.aidiag.dto.CollectedDataInfo;
+import cn.aimstek.loong.aidiag.dto.DeviceLockInfo;
+import cn.aimstek.loong.aidiag.dto.GoodsStateInfo;
 import cn.aimstek.loong.aidiag.dto.TaskDetail;
+import cn.aimstek.loong.aidiag.dto.TaskGroupMember;
 import cn.aimstek.loong.aidiag.exception.AiDiagnosisException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,10 +17,8 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Slf4j
 @Component
@@ -25,24 +27,28 @@ public class JdbcTaskClient implements TaskClient {
 
     private final JdbcTemplate jdbcTemplate;
 
+    private static final String TASK_COLUMNS =
+            "id, task_no, root_task_no, task_source, biz_type, task_type, task_state, " +
+            "paused, start_node, end_node, " +
+            "pre_start_task_no, pre_end_task_no, parent_task_no, group_code, " +
+            "goods_location, goods_device_code, container_list, plan_full_path, " +
+            "biz_priority, planned_time, start_time, finish_time, " +
+            "estimated_start_time, estimated_finish_time, create_time";
+
     @Override
-    public TaskDetail getTaskDetail(String taskId, String env) {
+    public TaskDetail getTaskDetail(String taskNo, String env) {
         List<TaskDetail> tasks = jdbcTemplate.query(
-            "SELECT id, wms_task_no, task_source, business_type, task_type, task_state, handle_state, " +
-            "container_code, business_from, definite_from, business_to, definite_to, error_message, " +
-            "priority, create_time, definite_time, split_time, start_time, finish_time " +
-            "FROM tas_task WHERE id = ? OR wms_task_no = ? ORDER BY create_time DESC LIMIT 1",
-            (rs, rowNum) -> mapTask(rs), taskId, taskId);
+            "SELECT " + TASK_COLUMNS + " FROM sc_task " +
+            "WHERE id = ? OR task_no = ? ORDER BY create_time DESC LIMIT 1",
+            (rs, rowNum) -> mapTask(rs), taskNo, taskNo);
 
         if (tasks.isEmpty()) {
-            throw new AiDiagnosisException("TASK_NOT_FOUND", "未找到当前活动任务: " + taskId);
+            throw new AiDiagnosisException("TASK_NOT_FOUND", "未找到当前活动任务: " + taskNo);
         }
 
         TaskDetail detail = tasks.get(0);
-        // 查子任务
-        detail.setTaskItems(queryTaskItems(detail.getTaskId(), detail.getWmsTaskNo()));
-        // 查执行单
-        detail.setTickets(queryTickets(detail.getWmsTaskNo()));
+        detail.setTaskItems(queryTaskItems(detail.getTaskNo()));
+        detail.setCommands(queryCommands(detail.getTaskNo()));
         return detail;
     }
 
@@ -57,278 +63,301 @@ public class JdbcTaskClient implements TaskClient {
                 : (focusTask.getCreateTime() != null ? focusTask.getCreateTime().minusMinutes(30) : LocalDateTime.now().minusMinutes(30));
         LocalDateTime effectiveEnd = windowEnd != null ? windowEnd : LocalDateTime.now().plusMinutes(5);
 
-        Set<String> deviceCodes = collectDeviceCodes(focusTask);
-        Set<String> pointCodes = collectPointCodes(focusTask);
+        String rootTaskNo = focusTask.getRootTaskNo();
+        String groupCode = focusTask.getGroupCode();
+        String parentTaskNo = focusTask.getParentTaskNo();
+        String taskNo = focusTask.getTaskNo();
+
+        // 基于显式依赖关系查询：rootTaskNo / groupCode / parentTaskNo / preStart/preEnd / 自身
+        String sql = "SELECT DISTINCT " + TASK_COLUMNS + " FROM sc_task t " +
+                "WHERE t.create_time BETWEEN ? AND ? " +
+                "  AND (t.root_task_no = ? OR t.group_code = ? OR t.parent_task_no = ? " +
+                "       OR t.task_no = ? OR t.pre_start_task_no = ? OR t.pre_end_task_no = ?) " +
+                "ORDER BY t.create_time DESC LIMIT 20";
+
+        List<TaskDetail> rows = jdbcTemplate.query(sql, (rs, rowNum) -> mapTask(rs),
+                Timestamp.valueOf(effectiveStart),
+                Timestamp.valueOf(effectiveEnd),
+                rootTaskNo, groupCode, parentTaskNo,
+                taskNo, taskNo, taskNo);
 
         Map<String, TaskDetail> related = new LinkedHashMap<>();
-        addTasks(related, queryRelatedCurrentTasks(focusTask, effectiveStart, effectiveEnd, deviceCodes, pointCodes));
-        addTasks(related, queryTasksByTaskItemDeviceCodes(deviceCodes, effectiveStart, effectiveEnd));
-        addTasks(related, queryTasksByTicketResources(deviceCodes, pointCodes, effectiveStart, effectiveEnd));
-        related.remove(focusTask.getTaskId());
+        for (TaskDetail t : rows) {
+            if (t.getTaskNo() != null) {
+                related.putIfAbsent(t.getTaskNo(), t);
+            }
+        }
+        if (taskNo != null) {
+            related.remove(taskNo);
+        }
 
         List<TaskDetail> result = new ArrayList<>(related.values());
         for (TaskDetail detail : result) {
-            detail.setTaskItems(queryTaskItems(detail.getTaskId(), detail.getWmsTaskNo()));
-            detail.setTickets(queryTickets(detail.getWmsTaskNo()));
+            detail.setTaskItems(queryTaskItems(detail.getTaskNo()));
+            detail.setCommands(queryCommands(detail.getTaskNo()));
         }
         return result;
     }
 
-    private List<TaskDetail.TaskItemDetail> queryTaskItems(String taskId, String wmsTaskNo) {
-        return jdbcTemplate.query(
-            "SELECT id, wms_task_no, start_point, end_point, device_code, device_type, " +
-            "task_state, check_status, start_time, finish_time, create_time " +
-            "FROM tas_task_item WHERE parent_id = ? OR wms_task_no = ? ORDER BY create_time",
-            (rs, rowNum) -> mapTaskItem(rs), taskId, wmsTaskNo);
+    @Override
+    public List<TaskDetail.CommandDetail> getCommands(String taskNo, String env) {
+        return queryCommands(taskNo);
     }
 
-    private List<TaskDetail.TicketDetail> queryTickets(String wmsTaskNo) {
-        return jdbcTemplate.query(
-            "SELECT t.id, t.task_item_id, t.`function`, t.start_point, t.end_point, t.start_node_num, t.end_node_num, " +
-            "t.device_code, t.device_type, t.task_state, t.plc_task_id, t.task_sort, t.start_time, t.finish_time, t.create_time, " +
-            "d.device_name " +
-            "FROM acs_ticket t LEFT JOIN map_device d ON t.device_code = d.device_code " +
-            "WHERE t.wms_task_no = ? ORDER BY t.task_sort, t.create_time",
-            (rs, rowNum) -> mapTicket(rs), wmsTaskNo);
-    }
-
-    private List<TaskDetail> queryRelatedCurrentTasks(TaskDetail focusTask, LocalDateTime windowStart, LocalDateTime windowEnd,
-                                                       Set<String> deviceCodes, Set<String> pointCodes) {
-        List<Object> params = new ArrayList<>();
-        String sql = buildRelatedTaskSql(focusTask, windowStart, windowEnd, deviceCodes, pointCodes, params);
-        return jdbcTemplate.query(sql, (rs, rowNum) -> mapTask(rs), params.toArray());
-    }
-
-    private List<TaskDetail> queryTasksByTaskItemDeviceCodes(Set<String> deviceCodes, LocalDateTime windowStart,
-                                                             LocalDateTime windowEnd) {
-        if (deviceCodes.isEmpty()) {
+    private List<TaskDetail.TaskItemDetail> queryTaskItems(String taskNo) {
+        if (taskNo == null) {
             return List.of();
         }
-        List<Object> params = new ArrayList<>();
-        StringBuilder sql = new StringBuilder();
-        sql.append("SELECT DISTINCT t.id, t.wms_task_no, t.task_source, t.business_type, t.task_type, t.task_state, t.handle_state, ")
-                .append("t.container_code, t.business_from, t.definite_from, t.business_to, t.definite_to, t.error_message, ")
-                .append("t.priority, t.create_time, t.definite_time, t.split_time, t.start_time, t.finish_time ")
-                .append("FROM tas_task t ")
-                .append("JOIN tas_task_item i ON i.parent_id = t.id OR i.wms_task_no = t.wms_task_no ")
-                .append("WHERE t.create_time BETWEEN ? AND ? AND i.device_code IN (")
-                .append(placeholders(deviceCodes.size())).append(") ")
-                .append("ORDER BY t.create_time DESC LIMIT 20");
-        params.add(Timestamp.valueOf(windowStart));
-        params.add(Timestamp.valueOf(windowEnd));
-        params.addAll(deviceCodes);
-        return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> mapTask(rs), params.toArray());
+        return jdbcTemplate.query(
+            "SELECT id, task_no, task_item_no, device_code, task_item_state, " +
+            "start_node, end_node, task_action, pre_task_item_no, " +
+            "plan_index, issued_index, executed_index, " +
+            "plan_full_path, start_time, finish_time, create_time " +
+            "FROM sc_task_item WHERE task_no = ? ORDER BY create_time",
+            (rs, rowNum) -> mapTaskItem(rs), taskNo);
     }
 
-    private List<TaskDetail> queryTasksByTicketResources(Set<String> deviceCodes, Set<String> pointCodes,
-                                                         LocalDateTime windowStart, LocalDateTime windowEnd) {
-        if (deviceCodes.isEmpty() && pointCodes.isEmpty()) {
+    private List<TaskDetail.CommandDetail> queryCommands(String taskNo) {
+        if (taskNo == null) {
             return List.of();
         }
-        List<Object> params = new ArrayList<>();
-        StringBuilder sql = new StringBuilder();
-        sql.append("SELECT DISTINCT t.id, t.wms_task_no, t.task_source, t.business_type, t.task_type, t.task_state, t.handle_state, ")
-                .append("t.container_code, t.business_from, t.definite_from, t.business_to, t.definite_to, t.error_message, ")
-                .append("t.priority, t.create_time, t.definite_time, t.split_time, t.start_time, t.finish_time ")
-                .append("FROM tas_task t ")
-                .append("JOIN acs_ticket tk ON tk.wms_task_no = t.wms_task_no ")
-                .append("WHERE t.create_time BETWEEN ? AND ?");
-        params.add(Timestamp.valueOf(windowStart));
-        params.add(Timestamp.valueOf(windowEnd));
-
-        List<String> clauses = new ArrayList<>();
-        if (!deviceCodes.isEmpty()) {
-            clauses.add("tk.device_code IN (" + placeholders(deviceCodes.size()) + ")");
-            params.addAll(deviceCodes);
-        }
-        if (!pointCodes.isEmpty()) {
-            String pointClause = "(tk.start_point IN (" + placeholders(pointCodes.size()) + ") OR tk.end_point IN (" + placeholders(pointCodes.size()) + "))";
-            clauses.add(pointClause);
-            params.addAll(pointCodes);
-            params.addAll(pointCodes);
-        }
-        sql.append(" AND (").append(String.join(" OR ", clauses)).append(") ")
-                .append("ORDER BY t.create_time DESC LIMIT 20");
-        return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> mapTask(rs), params.toArray());
-    }
-
-    private String buildRelatedTaskSql(TaskDetail focusTask, LocalDateTime windowStart,
-                                       LocalDateTime windowEnd, Set<String> deviceCodes, Set<String> pointCodes,
-                                       List<Object> params) {
-        StringBuilder sql = new StringBuilder();
-        sql.append("SELECT DISTINCT id, wms_task_no, task_source, business_type, task_type, task_state, handle_state, ")
-                .append("container_code, business_from, definite_from, business_to, definite_to, error_message, ")
-                .append("priority, create_time, definite_time, split_time, start_time, finish_time ")
-                .append("FROM tas_task WHERE create_time BETWEEN ? AND ?");
-        params.add(Timestamp.valueOf(windowStart));
-        params.add(Timestamp.valueOf(windowEnd));
-
-        List<String> clauses = new ArrayList<>();
-        if (focusTask.getTaskId() != null) {
-            clauses.add("id = ?");
-            params.add(focusTask.getTaskId());
-        }
-        if (focusTask.getWmsTaskNo() != null) {
-            clauses.add("wms_task_no = ?");
-            params.add(focusTask.getWmsTaskNo());
-        }
-        if (focusTask.getContainerCode() != null) {
-            clauses.add("container_code = ?");
-            params.add(focusTask.getContainerCode());
-        }
-        appendPointClauses(clauses, params, "business_from", pointCodes);
-        appendPointClauses(clauses, params, "definite_from", pointCodes);
-        appendPointClauses(clauses, params, "business_to", pointCodes);
-        appendPointClauses(clauses, params, "definite_to", pointCodes);
-        if (!deviceCodes.isEmpty()) {
-            clauses.add("id IN (SELECT DISTINCT parent_id FROM tas_task_item WHERE device_code IN (" + placeholders(deviceCodes.size()) + "))");
-            params.addAll(deviceCodes);
-        }
-
-        if (clauses.isEmpty()) {
-            sql.append(" ORDER BY create_time DESC LIMIT 20");
-            return sql.toString();
-        }
-
-        sql.append(" AND (").append(String.join(" OR ", clauses)).append(") ")
-                .append("ORDER BY create_time DESC LIMIT 20");
-        return sql.toString();
-    }
-
-    private void appendPointClauses(List<String> clauses, List<Object> params, String column, Set<String> pointCodes) {
-        if (pointCodes.isEmpty()) {
-            return;
-        }
-        clauses.add(column + " IN (" + placeholders(pointCodes.size()) + ")");
-        params.addAll(pointCodes);
-    }
-
-    private Set<String> collectDeviceCodes(TaskDetail task) {
-        Set<String> deviceCodes = new LinkedHashSet<>();
-        if (task == null) {
-            return deviceCodes;
-        }
-        if (task.getTaskItems() != null) {
-            for (TaskDetail.TaskItemDetail item : task.getTaskItems()) {
-                if (item.getDeviceCode() != null && !item.getDeviceCode().isBlank()) {
-                    deviceCodes.add(item.getDeviceCode());
-                }
-            }
-        }
-        if (task.getTickets() != null) {
-            for (TaskDetail.TicketDetail ticket : task.getTickets()) {
-                if (ticket.getDeviceCode() != null && !ticket.getDeviceCode().isBlank()) {
-                    deviceCodes.add(ticket.getDeviceCode());
-                }
-            }
-        }
-        return deviceCodes;
-    }
-
-    private Set<String> collectPointCodes(TaskDetail task) {
-        Set<String> pointCodes = new LinkedHashSet<>();
-        if (task == null) {
-            return pointCodes;
-        }
-        addIfHasText(pointCodes, task.getBusinessFrom());
-        addIfHasText(pointCodes, task.getDefiniteFrom());
-        addIfHasText(pointCodes, task.getBusinessTo());
-        addIfHasText(pointCodes, task.getDefiniteTo());
-        if (task.getTaskItems() != null) {
-            for (TaskDetail.TaskItemDetail item : task.getTaskItems()) {
-                addIfHasText(pointCodes, item.getStartPoint());
-                addIfHasText(pointCodes, item.getEndPoint());
-            }
-        }
-        if (task.getTickets() != null) {
-            for (TaskDetail.TicketDetail ticket : task.getTickets()) {
-                addIfHasText(pointCodes, ticket.getStartPoint());
-                addIfHasText(pointCodes, ticket.getEndPoint());
-            }
-        }
-        return pointCodes;
-    }
-
-    private void addIfHasText(Set<String> values, String value) {
-        if (value != null && !value.isBlank()) {
-            values.add(value);
-        }
-    }
-
-    private String placeholders(int size) {
-        return String.join(",", java.util.Collections.nCopies(size, "?"));
-    }
-
-    private void addTasks(Map<String, TaskDetail> target, List<TaskDetail> tasks) {
-        for (TaskDetail detail : tasks) {
-            if (detail != null && detail.getTaskId() != null) {
-                target.putIfAbsent(detail.getTaskId(), detail);
-            }
-        }
+        return jdbcTemplate.query(
+            "SELECT id, task_no, task_item_no, command_no, plc_task_no, " +
+            "device_code, device_type, command_state, command_type, " +
+            "start_node, end_node, command_detail, command_result, " +
+            "report_state, error_code, error_msg, exec_result, ack_result, ack_detail, " +
+            "start_time, finish_time, create_time " +
+            "FROM sc_command WHERE task_no = ? ORDER BY create_time",
+            (rs, rowNum) -> mapCommand(rs), taskNo);
     }
 
     private TaskDetail mapTask(ResultSet rs) throws SQLException {
         TaskDetail d = new TaskDetail();
         d.setTaskId(rs.getString("id"));
-        d.setWmsTaskNo(rs.getString("wms_task_no"));
+        d.setTaskNo(rs.getString("task_no"));
+        d.setRootTaskNo(rs.getString("root_task_no"));
         d.setTaskSource(rs.getString("task_source"));
-        d.setBusinessType(rs.getString("business_type"));
-        d.setTaskType(rs.getObject("task_type", Integer.class));
+        d.setBizType(rs.getString("biz_type"));
+        d.setTaskType(rs.getString("task_type"));
         d.setTaskState(rs.getString("task_state"));
-        d.setHandleState(rs.getString("handle_state"));
-        d.setContainerCode(rs.getString("container_code"));
-        d.setBusinessFrom(rs.getString("business_from"));
-        d.setDefiniteFrom(rs.getString("definite_from"));
-        d.setBusinessTo(rs.getString("business_to"));
-        d.setDefiniteTo(rs.getString("definite_to"));
-        d.setErrorMessage(rs.getString("error_message"));
-        d.setPriority(rs.getObject("priority", Integer.class));
-        d.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
-        d.setDefiniteTime(toLocalDateTime(rs.getTimestamp("definite_time")));
-        d.setSplitTime(toLocalDateTime(rs.getTimestamp("split_time")));
+        d.setPaused(rs.getString("paused"));
+        d.setStartNode(rs.getString("start_node"));
+        d.setEndNode(rs.getString("end_node"));
+        d.setPreStartTaskNo(rs.getString("pre_start_task_no"));
+        d.setPreEndTaskNo(rs.getString("pre_end_task_no"));
+        d.setParentTaskNo(rs.getString("parent_task_no"));
+        d.setGroupCode(rs.getString("group_code"));
+        d.setGoodsLocation(rs.getString("goods_location"));
+        d.setGoodsDeviceCode(rs.getString("goods_device_code"));
+        d.setContainerList(rs.getString("container_list"));
+        d.setPlanFullPath(rs.getString("plan_full_path"));
+        d.setPriority(rs.getObject("biz_priority", Integer.class));
+        d.setPlannedTime(toLocalDateTime(rs.getTimestamp("planned_time")));
         d.setStartTime(toLocalDateTime(rs.getTimestamp("start_time")));
         d.setFinishTime(toLocalDateTime(rs.getTimestamp("finish_time")));
+        d.setEstimatedStartTime(toLocalDateTime(rs.getTimestamp("estimated_start_time")));
+        d.setEstimatedFinishTime(toLocalDateTime(rs.getTimestamp("estimated_finish_time")));
+        d.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
         return d;
     }
 
     private TaskDetail.TaskItemDetail mapTaskItem(ResultSet rs) throws SQLException {
         TaskDetail.TaskItemDetail item = new TaskDetail.TaskItemDetail();
         item.setId(rs.getString("id"));
-        item.setWmsTaskNo(rs.getString("wms_task_no"));
-        item.setStartPoint(rs.getString("start_point"));
-        item.setEndPoint(rs.getString("end_point"));
+        item.setTaskNo(rs.getString("task_no"));
+        item.setTaskItemNo(rs.getString("task_item_no"));
         item.setDeviceCode(rs.getString("device_code"));
-        item.setDeviceType(rs.getString("device_type"));
-        item.setTaskState(rs.getString("task_state"));
-        item.setCheckStatus(rs.getString("check_status"));
+        item.setTaskItemState(rs.getString("task_item_state"));
+        item.setStartNode(rs.getString("start_node"));
+        item.setEndNode(rs.getString("end_node"));
+        item.setTaskAction(rs.getString("task_action"));
+        item.setPreTaskItemNo(rs.getString("pre_task_item_no"));
+        item.setPlanIndex(rs.getObject("plan_index", Integer.class));
+        item.setIssuedIndex(rs.getObject("issued_index", Integer.class));
+        item.setExecutedIndex(rs.getObject("executed_index", Integer.class));
+        item.setPlanFullPath(rs.getString("plan_full_path"));
         item.setStartTime(toLocalDateTime(rs.getTimestamp("start_time")));
         item.setFinishTime(toLocalDateTime(rs.getTimestamp("finish_time")));
         item.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
         return item;
     }
 
-    private TaskDetail.TicketDetail mapTicket(ResultSet rs) throws SQLException {
-        TaskDetail.TicketDetail t = new TaskDetail.TicketDetail();
-        t.setId(rs.getString("id"));
-        t.setTaskItemId(rs.getString("task_item_id"));
-        t.setFunction(rs.getString("function"));
-        t.setStartPoint(rs.getString("start_point"));
-        t.setEndPoint(rs.getString("end_point"));
-        t.setStartNodeNum(rs.getString("start_node_num"));
-        t.setEndNodeNum(rs.getString("end_node_num"));
-        t.setDeviceCode(rs.getString("device_code"));
-//        t.setDeviceName(rs.getString("device_name"));
-        t.setDeviceType(rs.getString("device_type"));
-        t.setTaskState(rs.getString("task_state"));
-        t.setPlcTaskId(rs.getString("plc_task_id"));
-        t.setTaskSort(rs.getObject("task_sort", Integer.class));
-        t.setStartTime(toLocalDateTime(rs.getTimestamp("start_time")));
-        t.setFinishTime(toLocalDateTime(rs.getTimestamp("finish_time")));
-        t.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
-        return t;
+    private TaskDetail.CommandDetail mapCommand(ResultSet rs) throws SQLException {
+        TaskDetail.CommandDetail c = new TaskDetail.CommandDetail();
+        c.setId(rs.getString("id"));
+        c.setTaskItemNo(rs.getString("task_item_no"));
+        c.setCommandNo(rs.getString("command_no"));
+        c.setPlcTaskNo(rs.getString("plc_task_no"));
+        c.setDeviceCode(rs.getString("device_code"));
+        c.setDeviceType(rs.getString("device_type"));
+        c.setCommandState(rs.getString("command_state"));
+        c.setCommandType(rs.getString("command_type"));
+        c.setStartNode(rs.getString("start_node"));
+        c.setEndNode(rs.getString("end_node"));
+        c.setCommandDetail(rs.getString("command_detail"));
+        c.setCommandResult(rs.getString("command_result"));
+        c.setReportState(rs.getString("report_state"));
+        c.setErrorCode(safeGetString(rs, "error_code"));
+        c.setErrorMsg(safeGetString(rs, "error_msg"));
+        c.setExecResult(safeGetString(rs, "exec_result"));
+        c.setAckResult(safeGetString(rs, "ack_result"));
+        c.setAckDetail(safeGetString(rs, "ack_detail"));
+        c.setStartTime(toLocalDateTime(rs.getTimestamp("start_time")));
+        c.setFinishTime(toLocalDateTime(rs.getTimestamp("finish_time")));
+        c.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
+        return c;
     }
 
     private LocalDateTime toLocalDateTime(Timestamp ts) {
         return ts != null ? ts.toLocalDateTime() : null;
+    }
+
+    /**
+     * 安全获取字段值，列不存在时返回 null。
+     * 用于兼容不同版本 loong-platform 的表结构差异。
+     */
+    private String safeGetString(ResultSet rs, String columnName) {
+        try {
+            return rs.getString(columnName);
+        } catch (SQLException e) {
+            return null;
+        }
+    }
+
+    // ========================= 新增诊断数据源查询 =========================
+
+    /**
+     * 查询设备锁定状态。
+     * 对应 sc_device_lock 表，记录设备被占用/锁定的任务上下文。
+     */
+    @Override
+    public List<DeviceLockInfo> queryDeviceLocks(String deviceCode) {
+        if (deviceCode == null || deviceCode.isBlank()) {
+            return List.of();
+        }
+        try {
+            return jdbcTemplate.query(
+                "SELECT id, device_code, task_no, task_item_no, command_no, lock_state, " +
+                "update_time, create_time " +
+                "FROM sc_device_lock WHERE device_code = ? " +
+                "ORDER BY update_time DESC LIMIT 20",
+                (rs, rowNum) -> {
+                    DeviceLockInfo info = new DeviceLockInfo();
+                    info.setId(rs.getObject("id", Long.class));
+                    info.setDeviceCode(rs.getString("device_code"));
+                    info.setTaskNo(rs.getString("task_no"));
+                    info.setTaskItemNo(rs.getString("task_item_no"));
+                    info.setCommandNo(rs.getString("command_no"));
+                    info.setLockState(rs.getString("lock_state"));
+                    Timestamp ts = rs.getTimestamp("update_time");
+                    if (ts == null) {
+                        ts = rs.getTimestamp("create_time");
+                    }
+                    info.setLockTime(toLocalDateTime(ts));
+                    return info;
+                }, deviceCode);
+        } catch (Exception e) {
+            log.warn("查询设备锁定状态失败, deviceCode={}, error={}", deviceCode, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 查询采集数据记录。
+     * 对应 sc_device_collected_data 表，最近 50 条。
+     */
+    @Override
+    public List<CollectedDataInfo> queryCollectedData(String taskNo) {
+        if (taskNo == null || taskNo.isBlank()) {
+            return List.of();
+        }
+        try {
+            return jdbcTemplate.query(
+                "SELECT id, device_code, task_no, task_item_no, command_no, node_code, " +
+                "device_type, data_process_type, state, ack_state, content, " +
+                "collected_index, required_count, create_time " +
+                "FROM sc_device_collected_data WHERE task_no = ? " +
+                "ORDER BY create_time DESC LIMIT 50",
+                (rs, rowNum) -> {
+                    CollectedDataInfo info = new CollectedDataInfo();
+                    info.setId(rs.getObject("id", Long.class));
+                    info.setDeviceCode(rs.getString("device_code"));
+                    info.setTaskNo(rs.getString("task_no"));
+                    info.setTaskItemNo(rs.getString("task_item_no"));
+                    info.setCommandNo(rs.getString("command_no"));
+                    info.setNodeCode(rs.getString("node_code"));
+                    info.setDeviceType(rs.getString("device_type"));
+                    info.setDataProcessType(rs.getString("data_process_type"));
+                    info.setState(rs.getString("state"));
+                    info.setAckState(rs.getString("ack_state"));
+                    info.setContent(rs.getString("content"));
+                    info.setCollectedIndex(rs.getObject("collected_index", Integer.class));
+                    info.setRequiredCount(rs.getObject("required_count", Integer.class));
+                    info.setCreateTime(toLocalDateTime(rs.getTimestamp("create_time")));
+                    return info;
+                }, taskNo);
+        } catch (Exception e) {
+            log.warn("查询采集数据失败, taskNo={}, error={}", taskNo, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 按 group_code 查询任务组内所有任务的状态。
+     */
+    @Override
+    public List<TaskGroupMember> queryTaskGroupMembers(String groupCode) {
+        if (groupCode == null || groupCode.isBlank()) {
+            return List.of();
+        }
+        try {
+            return jdbcTemplate.query(
+                "SELECT task_no, task_state, biz_type, group_role, start_time, finish_time " +
+                "FROM sc_task WHERE group_code = ? ORDER BY create_time",
+                (rs, rowNum) -> {
+                    TaskGroupMember m = new TaskGroupMember();
+                    m.setTaskNo(rs.getString("task_no"));
+                    m.setTaskState(rs.getString("task_state"));
+                    m.setBizType(rs.getString("biz_type"));
+                    m.setGroupRole(safeGetString(rs, "group_role"));
+                    m.setStartTime(toLocalDateTime(rs.getTimestamp("start_time")));
+                    m.setFinishTime(toLocalDateTime(rs.getTimestamp("finish_time")));
+                    return m;
+                }, groupCode);
+        } catch (Exception e) {
+            log.warn("查询任务组成员失败, groupCode={}, error={}", groupCode, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 查询货物实时状态。
+     * 对应 sc_goods_state 表。
+     */
+    @Override
+    public List<GoodsStateInfo> queryGoodsState(String taskNo) {
+        if (taskNo == null || taskNo.isBlank()) {
+            return List.of();
+        }
+        try {
+            return jdbcTemplate.query(
+                "SELECT goods_code, container_code, location_code, current_task_no, " +
+                "current_task_item_no, current_node, state " +
+                "FROM sc_goods_state WHERE current_task_no = ?",
+                (rs, rowNum) -> {
+                    GoodsStateInfo g = new GoodsStateInfo();
+                    g.setGoodsCode(rs.getString("goods_code"));
+                    g.setContainerCode(rs.getString("container_code"));
+                    g.setLocationCode(rs.getString("location_code"));
+                    g.setCurrentTaskNo(rs.getString("current_task_no"));
+                    g.setCurrentTaskItemNo(rs.getString("current_task_item_no"));
+                    g.setCurrentNode(rs.getString("current_node"));
+                    g.setState(rs.getString("state"));
+                    return g;
+                }, taskNo);
+        } catch (Exception e) {
+            log.warn("查询货物状态失败, taskNo={}, error={}", taskNo, e.getMessage());
+            return List.of();
+        }
     }
 }

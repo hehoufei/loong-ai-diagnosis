@@ -14,14 +14,15 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 场景C：子任务已下发到调度(ISSUED_DCS)，但对应执行单仍为INIT状态，PLC未接收任务。
+ * 场景：子任务已 RUNNING，但其归属的命令仍处于 CREATED / ISSUING（尚未真正下发到 PLC），
+ * 表明 DCS/PLC 通信链路异常。
  */
 @Slf4j
 @Component
 public class PlcCommunicationRule extends AbstractDiagnoseRule {
 
     public PlcCommunicationRule() {
-        this.description = "检测子任务已下发但PLC未接收，设备通信异常";
+        this.description = "检测子任务已 RUNNING 但命令仍 CREATED/ISSUING，PLC/调度通信异常";
     }
 
     @Override
@@ -31,58 +32,69 @@ public class PlcCommunicationRule extends AbstractDiagnoseRule {
 
     @Override
     public int getPriority() {
-        return 900;
+        return 905;
     }
 
     @Override
     public boolean match(DiagnosisContext ctx) {
         try {
-            Set<String> issuedItemIds = new HashSet<>();
-            for (TaskDetail.TaskItemDetail item : ctx.getTaskItems()) {
-                if ("ISSUED_DCS".equals(item.getTaskState())) {
-                    issuedItemIds.add(item.getId());
-                }
-            }
-            if (issuedItemIds.isEmpty()) return false;
+            Set<String> runningItemNos = collectRunningItemNos(ctx);
+            if (runningItemNos.isEmpty()) return false;
 
-            return ctx.getTickets().stream()
-                .anyMatch(t -> "INIT".equals(t.getTaskState()) && issuedItemIds.contains(t.getTaskItemId()));
+            return ctx.getCommands().stream()
+                    .anyMatch(c -> isPendingDispatch(c.getCommandState())
+                            && c.getTaskItemNo() != null
+                            && runningItemNos.contains(c.getTaskItemNo()));
         } catch (Exception e) {
-            log.warn("场景C(PLC通信检测)匹配异常: {}", e.getMessage());
+            log.warn("PLC 通信检测匹配异常: {}", e.getMessage());
             return false;
         }
     }
 
     @Override
     public DiagnoseResponse diagnose(DiagnosisContext ctx) {
-        // 检查是否有配置覆盖
         DiagnoseResponse configResponse = buildResponseFromConfig(ctx);
         if (configResponse != null) {
             return configResponse;
         }
-        // 以下保持原有逻辑不变
-        Set<String> issuedItemIds = new HashSet<>();
-        for (TaskDetail.TaskItemDetail item : ctx.getTaskItems()) {
-            if ("ISSUED_DCS".equals(item.getTaskState())) {
-                issuedItemIds.add(item.getId());
-            }
-        }
+        Set<String> runningItemNos = collectRunningItemNos(ctx);
 
-        List<TaskDetail.TicketDetail> noPclTickets = ctx.getTickets().stream()
-            .filter(t -> "INIT".equals(t.getTaskState()) && issuedItemIds.contains(t.getTaskItemId()))
-            .collect(Collectors.toList());
+        List<TaskDetail.CommandDetail> stuckCommands = ctx.getCommands().stream()
+                .filter(c -> isPendingDispatch(c.getCommandState())
+                        && c.getTaskItemNo() != null
+                        && runningItemNos.contains(c.getTaskItemNo()))
+                .collect(Collectors.toList());
 
         StringBuilder desc = new StringBuilder();
-        for (TaskDetail.TicketDetail t : noPclTickets) {
-            desc.append("执行单").append(n(t.getId()))
-                .append("(设备:").append(n(t.getDeviceCode())).append(") ");
+        for (TaskDetail.CommandDetail c : stuckCommands) {
+            String key = c.getCommandNo() != null ? c.getCommandNo() : n(c.getId());
+            desc.append("命令").append(key)
+                    .append("(状态:").append(n(c.getCommandState()))
+                    .append(", 设备:").append(n(c.getDeviceCode())).append(") ");
         }
 
         DiagnoseResponse resp = new DiagnoseResponse();
-        resp.setSummary("子任务已下发到调度(ISSUED_DCS)，但对应执行单仍为INIT状态，PLC未接收任务");
-        resp.setRootCauses(List.of(new RootCauseItem("设备通信异常",
-            "以下执行单已下发但PLC未接收：" + desc + "。可能是PLC通信异常或设备不在线")));
-        resp.setActions(List.of("检查PLC通信连接状态", "确认相关设备是否在线", "设备点位是否被占用", "点位状态是否正常"));
+        resp.setSummary("子任务已进入 RUNNING，但对应命令仍处于 CREATED/ISSUING（尚未下发至 PLC），通信可能异常");
+        resp.setRootCauses(List.of(new RootCauseItem("调度/PLC 通信异常",
+                "以下命令未能成功下发至 PLC：" + desc + "。可能是 DCS 通信中断、设备离线或调度服务异常")));
+        resp.setActions(List.of("检查 PLC 通信连接状态",
+                "确认相关设备是否在线",
+                "确认 DCS/调度服务是否正常",
+                "排查命令下发链路是否存在堵塞"));
         return resp;
+    }
+
+    private Set<String> collectRunningItemNos(DiagnosisContext ctx) {
+        Set<String> nos = new HashSet<>();
+        for (TaskDetail.TaskItemDetail item : ctx.getTaskItems()) {
+            if ("RUNNING".equals(item.getTaskItemState()) && item.getTaskItemNo() != null) {
+                nos.add(item.getTaskItemNo());
+            }
+        }
+        return nos;
+    }
+
+    private boolean isPendingDispatch(String commandState) {
+        return "CREATED".equals(commandState) || "ISSUING".equals(commandState);
     }
 }

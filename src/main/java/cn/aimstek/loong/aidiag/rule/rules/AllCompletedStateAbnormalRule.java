@@ -11,14 +11,15 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 场景5.2：所有子任务和执行单已完成，但checkStatus非INIT，大任务状态更新失败。
+ * 场景：所有子任务和命令都已完成，但主任务 task_state 不在 SUCCESS / MANUAL_SUCCESS，
+ * 表明大任务的状态回写发生异常。
  */
 @Slf4j
 @Component
 public class AllCompletedStateAbnormalRule extends AbstractDiagnoseRule {
 
     public AllCompletedStateAbnormalRule() {
-        this.description = "检测所有子任务已完成但大任务状态更新失败的异常情况";
+        this.description = "检测所有子任务/命令已完成但主任务未更新为 SUCCESS/MANUAL_SUCCESS 的异常情况";
     }
 
     @Override
@@ -28,45 +29,46 @@ public class AllCompletedStateAbnormalRule extends AbstractDiagnoseRule {
 
     @Override
     public int getPriority() {
-        return 950;
+        return 955;
     }
 
     @Override
     public boolean match(DiagnosisContext ctx) {
         List<TaskDetail.TaskItemDetail> items = ctx.getTaskItems();
-        List<TaskDetail.TicketDetail> tickets = ctx.getTickets();
+        List<TaskDetail.CommandDetail> commands = ctx.getCommands();
         if (items.isEmpty()) return false;
 
-        boolean allItemsSuccess = items.stream().allMatch(i -> isItemSuccess(i.getTaskState()));
-        boolean allTicketsSuccess = tickets.stream().allMatch(t -> isItemSuccess(t.getTaskState()));
-        if (!allItemsSuccess || !allTicketsSuccess) return false;
+        boolean allItemsSuccess = items.stream().allMatch(i -> isItemSuccess(i.getTaskItemState()));
+        boolean allCommandsSuccess = commands.stream().allMatch(c -> isItemSuccess(c.getCommandState()));
+        if (!allItemsSuccess || !allCommandsSuccess) return false;
 
-        TaskDetail.TaskItemDetail lastItem = items.get(items.size() - 1);
-        return !"INIT".equals(lastItem.getCheckStatus());
+        // 大任务不是成功类终态 → 回写异常
+        String taskState = ctx.getTaskState();
+        return taskState != null
+                && !"SUCCESS".equals(taskState)
+                && !"MANUAL_SUCCESS".equals(taskState)
+                && !"RUNNING".equals(taskState); // RUNNING 由 all-completed-waiting-wms 处理
     }
 
     @Override
     public DiagnoseResponse diagnose(DiagnosisContext ctx) {
-        // 检查是否有配置覆盖
         DiagnoseResponse configResponse = buildResponseFromConfig(ctx);
         if (configResponse != null) {
             return configResponse;
         }
-        // 以下保持原有逻辑不变
-        List<TaskDetail.TaskItemDetail> items = ctx.getTaskItems();
-        TaskDetail.TaskItemDetail lastItem = items.get(items.size() - 1);
-        String checkStatus = lastItem.getCheckStatus();
+        String taskState = ctx.getTaskState();
 
         DiagnoseResponse resp = new DiagnoseResponse();
-        resp.setSummary("所有子任务和执行单已完成，但大任务状态仍为RUNNING，大任务状态更新失败");
-        resp.setRootCauses(List.of(new RootCauseItem("大任务状态回写异常",
-            "所有子任务均为AUTO_SUCCESS，所有执行单均已完成，"
-            + "最后一个子任务check_status=" + n(checkStatus) + "(非INIT)，"
-            + "大任务应该已经完成但状态未更新为成功")));
+        resp.setSummary("所有子任务和命令均已完成，但主任务 task_state=" + n(taskState)
+                + "（非 SUCCESS/MANUAL_SUCCESS），状态回写异常");
+        resp.setRootCauses(List.of(new RootCauseItem("主任务状态回写异常",
+                "所有子任务均处于 SUCCESS/MANUAL_SUCCESS，所有命令均已完成，"
+                        + "但主任务 task_state=" + n(taskState) + "，预期应为 SUCCESS。"
+                        + "可能原因：完成回调失败、状态更新事务回滚、并发冲突")));
         resp.setActions(List.of(
-            "检查大任务完成回调的日志记录",
-            "确认数据库中大任务状态是否可手动更新",
-            "排查状态回写逻辑是否有异常"));
+                "检查主任务完成回调的日志记录",
+                "确认数据库中 sc_task 是否可手动更新状态",
+                "排查状态回写逻辑是否存在异常或事务问题"));
         return resp;
     }
 }

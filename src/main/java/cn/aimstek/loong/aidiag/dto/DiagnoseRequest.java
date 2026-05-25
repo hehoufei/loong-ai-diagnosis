@@ -5,8 +5,8 @@ import lombok.Data;
 
 @Data
 public class DiagnoseRequest {
-    @Schema(description = "任务ID或WMS任务号", requiredMode = Schema.RequiredMode.REQUIRED)
-    private String taskId;
+    @Schema(description = "任务ID或任务号（taskNo）", requiredMode = Schema.RequiredMode.REQUIRED)
+    private String taskNo;
 
     @Schema(description = "诊断范围：single=单任务，global=全局关联分析")
     private String scope;

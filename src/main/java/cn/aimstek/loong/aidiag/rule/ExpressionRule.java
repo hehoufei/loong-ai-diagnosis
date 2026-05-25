@@ -94,9 +94,8 @@ public class ExpressionRule implements DiagnoseRule {
                 .forReadOnlyDataBinding()
                 .withInstanceMethods()   // 允许对变量调用实例方法，如 List.contains(), String.isEmpty()
                 .build();
-        ctx.setVariable("handleState", context.getHandleState());
         ctx.setVariable("taskItems", context.getTaskItems());
-        ctx.setVariable("tickets", context.getTickets());
+        ctx.setVariable("commands", context.getCommands());
         ctx.setVariable("hasConflicts", context.hasConflicts());
         ctx.setVariable("conflicts", context.getConflicts());
         ctx.setVariable("errorMessage", context.getErrorMessage());
@@ -109,28 +108,28 @@ public class ExpressionRule implements DiagnoseRule {
 
         // 子任务状态列表
         ctx.setVariable("taskItemStates", context.getTaskItems().stream()
-                .map(TaskDetail.TaskItemDetail::getTaskState)
+                .map(TaskDetail.TaskItemDetail::getTaskItemState)
                 .collect(Collectors.toList()));
 
-        // 执行单状态列表
-        ctx.setVariable("ticketStates", context.getTickets().stream()
-                .map(TaskDetail.TicketDetail::getTaskState)
+        // 命令状态列表
+        ctx.setVariable("commandStates", context.getCommands().stream()
+                .map(TaskDetail.CommandDetail::getCommandState)
                 .collect(Collectors.toList()));
 
         // 计算型变量
         List<TaskDetail.TaskItemDetail> items = context.getTaskItems();
         ctx.setVariable("taskItemCount", items.size());
         ctx.setVariable("completedCount", items.stream()
-                .filter(i -> "AUTO_SUCCESS".equals(i.getTaskState()) || "MANUAL_SUCCESS".equals(i.getTaskState()))
+                .filter(i -> "SUCCESS".equals(i.getTaskItemState()) || "MANUAL_SUCCESS".equals(i.getTaskItemState()))
                 .count());
         ctx.setVariable("runningCount", items.stream()
-                .filter(i -> "RUNNING".equals(i.getTaskState()))
+                .filter(i -> "RUNNING".equals(i.getTaskItemState()))
                 .count());
         ctx.setVariable("initCount", items.stream()
-                .filter(i -> "INIT".equals(i.getTaskState()))
+                .filter(i -> "WAIT_PLAN".equals(i.getTaskItemState()) || "WAIT_SPLIT".equals(i.getTaskItemState()))
                 .count());
         ctx.setVariable("cancelledCount", items.stream()
-                .filter(i -> "CANCELLED".equals(i.getTaskState()))
+                .filter(i -> "CANCEL".equals(i.getTaskItemState()))
                 .count());
 
         // params作为变量暴露
@@ -145,23 +144,22 @@ public class ExpressionRule implements DiagnoseRule {
         if (template == null || template.isEmpty()) return template;
 
         String result = template;
-        result = result.replace("{handleState}", safe(context.getHandleState()));
         result = result.replace("{errorMessage}", safe(context.getErrorMessage()));
 
         List<TaskDetail.TaskItemDetail> items = context.getTaskItems();
         result = result.replace("{taskItemCount}", String.valueOf(items.size()));
 
         long completedCount = items.stream()
-                .filter(i -> "AUTO_SUCCESS".equals(i.getTaskState()) || "MANUAL_SUCCESS".equals(i.getTaskState()))
+                .filter(i -> "SUCCESS".equals(i.getTaskItemState()) || "MANUAL_SUCCESS".equals(i.getTaskItemState()))
                 .count();
         long runningCount = items.stream()
-                .filter(i -> "RUNNING".equals(i.getTaskState()))
+                .filter(i -> "RUNNING".equals(i.getTaskItemState()))
                 .count();
         long initCount = items.stream()
-                .filter(i -> "INIT".equals(i.getTaskState()))
+                .filter(i -> "WAIT_PLAN".equals(i.getTaskItemState()) || "WAIT_SPLIT".equals(i.getTaskItemState()))
                 .count();
         long cancelledCount = items.stream()
-                .filter(i -> "CANCELLED".equals(i.getTaskState()))
+                .filter(i -> "CANCEL".equals(i.getTaskItemState()))
                 .count();
 
         result = result.replace("{taskState}", context.getDetail() != null && context.getDetail().getTaskState() != null ? context.getDetail().getTaskState() : "");

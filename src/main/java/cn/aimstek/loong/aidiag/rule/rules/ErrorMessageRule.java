@@ -2,6 +2,7 @@ package cn.aimstek.loong.aidiag.rule.rules;
 
 import cn.aimstek.loong.aidiag.dto.DiagnoseResponse;
 import cn.aimstek.loong.aidiag.dto.RootCauseItem;
+import cn.aimstek.loong.aidiag.dto.TaskDetail;
 import cn.aimstek.loong.aidiag.rule.AbstractDiagnoseRule;
 import cn.aimstek.loong.aidiag.rule.DiagnosisContext;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 场景D：任务或日志中有明确的错误信息。
+ * 场景：任务、命令或日志中有明确的错误信息。
+ * 适配后会同时检查：
+ * 1) TaskDetail.errorMessage
+ * 2) commands中FAILED/CANCELED状态的commandResult
+ * 3) 日志关键字
  */
 @Slf4j
 @Component
@@ -34,31 +39,43 @@ public class ErrorMessageRule extends AbstractDiagnoseRule {
     @Override
     public boolean match(DiagnosisContext ctx) {
         try {
-            // 检查主任务errorMessage
+            // 1. 主任务或命令误信息（getErrorMessage 已聚合两者）
             String errorMsg = ctx.getErrorMessage();
             if (errorMsg != null && !errorMsg.isBlank()) {
                 return true;
             }
-            // 检查日志中的错误关键词
+            // 2. 另外检查任意 commandResult 存在错误关键词
             String[] keywords = getParam("keywords", "error,exception,异常,失败").split(",");
+            for (TaskDetail.CommandDetail cmd : ctx.getCommands()) {
+                String result = cmd.getCommandResult();
+                if (result != null && containsAnyKeyword(result, keywords)) {
+                    return true;
+                }
+            }
+            // 3. 日志关键词
             List<String> logs = ctx.getLogs();
             if (logs != null) {
                 for (String logLine : logs) {
-                    if (logLine != null) {
-                        String lower = logLine.toLowerCase();
-                        for (String keyword : keywords) {
-                            if (lower.contains(keyword.trim().toLowerCase())) {
-                                return true;
-                            }
-                        }
+                    if (logLine != null && containsAnyKeyword(logLine, keywords)) {
+                        return true;
                     }
                 }
             }
             return false;
         } catch (Exception e) {
-            log.warn("场景D(错误信息检测)匹配异常: {}", e.getMessage());
+            log.warn("错误信息检测匹配异常: {}", e.getMessage());
             return false;
         }
+    }
+
+    private boolean containsAnyKeyword(String text, String[] keywords) {
+        String lower = text.toLowerCase();
+        for (String keyword : keywords) {
+            if (lower.contains(keyword.trim().toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -70,23 +87,28 @@ public class ErrorMessageRule extends AbstractDiagnoseRule {
         }
         // 以下保持原有逻辑不变
         List<String> errors = new ArrayList<>();
-        String errorMsg = ctx.getErrorMessage();
-        if (errorMsg != null && !errorMsg.isBlank()) {
-            errors.add("主任务错误: " + errorMsg);
+        // 主任务 errorMessage
+        if (ctx.getDetail() != null && ctx.getDetail().getErrorMessage() != null
+                && !ctx.getDetail().getErrorMessage().isBlank()) {
+            errors.add("主任务错误: " + ctx.getDetail().getErrorMessage());
+        }
+        // commands 中 FAILED/CANCELED 的 commandResult
+        for (TaskDetail.CommandDetail cmd : ctx.getCommands()) {
+            String state = cmd.getCommandState();
+            String result = cmd.getCommandResult();
+            if (result != null && !result.isBlank()
+                    && ("FAILED".equals(state) || "CANCELED".equals(state))) {
+                String key = cmd.getCommandNo() != null ? cmd.getCommandNo() : cmd.getId();
+                errors.add("命令" + n(key) + "(" + n(state) + ")错误: " + result);
+            }
         }
         // 从日志中提取错误关键词
         String[] keywords = getParam("keywords", "error,exception,异常,失败").split(",");
         List<String> logs = ctx.getLogs();
         if (logs != null) {
             for (String logLine : logs) {
-                if (logLine != null) {
-                    String lower = logLine.toLowerCase();
-                    for (String keyword : keywords) {
-                        if (lower.contains(keyword.trim().toLowerCase())) {
-                            errors.add("日志错误: " + (logLine.length() > 200 ? logLine.substring(0, 200) + "..." : logLine));
-                            break;
-                        }
-                    }
+                if (logLine != null && containsAnyKeyword(logLine, keywords)) {
+                    errors.add("日志错误: " + (logLine.length() > 200 ? logLine.substring(0, 200) + "..." : logLine));
                 }
             }
         }

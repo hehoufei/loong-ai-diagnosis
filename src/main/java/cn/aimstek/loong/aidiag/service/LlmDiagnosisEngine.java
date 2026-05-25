@@ -35,7 +35,6 @@ public class LlmDiagnosisEngine {
         StringBuilder sb = new StringBuilder();
         sb.append("请根据以下上下文输出诊断结果。\n");
         sb.append("任务状态: ").append(context.getDetail() != null ? context.getDetail().getTaskState() : "").append("\n");
-        sb.append("处理状态: ").append(context.getHandleState() == null ? "" : context.getHandleState()).append("\n");
         sb.append("错误信息: ").append(context.getErrorMessage() == null ? "" : context.getErrorMessage()).append("\n");
         sb.append("日志:\n");
         for (String line : context.getLogs()) {

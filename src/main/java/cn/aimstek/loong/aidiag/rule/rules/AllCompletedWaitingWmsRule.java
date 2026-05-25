@@ -11,14 +11,15 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 场景5.1：所有子任务和执行单已完成，最后一个子任务checkStatus=INIT，等待WMS下发更新。
+ * 场景：所有子任务和命令均已成功完成（SUCCESS/MANUAL_SUCCESS），
+ * 但主任务 task_state 仍为 RUNNING —— 等待上游 WMS 下发后续指令的正常等待状态。
  */
 @Slf4j
 @Component
 public class AllCompletedWaitingWmsRule extends AbstractDiagnoseRule {
 
     public AllCompletedWaitingWmsRule() {
-        this.description = "检测所有子任务已完成且正在等待WMS下发更新任务的正常等待状态";
+        this.description = "检测所有子任务/命令已完成且主任务仍 RUNNING，等待上游 WMS 下发后续任务";
     }
 
     @Override
@@ -34,39 +35,36 @@ public class AllCompletedWaitingWmsRule extends AbstractDiagnoseRule {
     @Override
     public boolean match(DiagnosisContext ctx) {
         List<TaskDetail.TaskItemDetail> items = ctx.getTaskItems();
-        List<TaskDetail.TicketDetail> tickets = ctx.getTickets();
+        List<TaskDetail.CommandDetail> commands = ctx.getCommands();
         if (items.isEmpty()) return false;
 
-        boolean allItemsSuccess = items.stream().allMatch(i -> isItemSuccess(i.getTaskState()));
-        boolean allTicketsSuccess = tickets.stream().allMatch(t -> isItemSuccess(t.getTaskState()));
-        if (!allItemsSuccess || !allTicketsSuccess) return false;
+        boolean allItemsSuccess = items.stream().allMatch(i -> isItemSuccess(i.getTaskItemState()));
+        boolean allCommandsSuccess = commands.stream().allMatch(c -> isItemSuccess(c.getCommandState()));
+        if (!allItemsSuccess || !allCommandsSuccess) return false;
 
-        TaskDetail.TaskItemDetail lastItem = items.get(items.size() - 1);
-        return "INIT".equals(lastItem.getCheckStatus());
+        return "RUNNING".equals(ctx.getTaskState());
     }
 
     @Override
     public DiagnoseResponse diagnose(DiagnosisContext ctx) {
-        // 检查是否有配置覆盖
         DiagnoseResponse configResponse = buildResponseFromConfig(ctx);
         if (configResponse != null) {
             return configResponse;
         }
-        // 以下保持原有逻辑不变
         List<TaskDetail.TaskItemDetail> items = ctx.getTaskItems();
         TaskDetail.TaskItemDetail lastItem = items.get(items.size() - 1);
 
         DiagnoseResponse resp = new DiagnoseResponse();
-        resp.setSummary("所有子任务和执行单已完成，最后一个子任务(ID=" + lastItem.getId()
-            + ")的check_status=INIT，正在等待WMS下发更新任务");
-        resp.setRootCauses(List.of(new RootCauseItem("等待WMS更新任务",
-            "最后一个子任务" + lastItem.getId() + "是检查点任务(check_status=INIT)，"
-            + "当前所有子任务和执行单均已完成，任务正在等待WMS下发更新指令，"
-            + "更新后WCS会生成新的子任务继续执行。这是正常的业务等待状态。")));
+        resp.setSummary("所有子任务和命令均已完成（SUCCESS/MANUAL_SUCCESS），主任务 task_state=RUNNING，"
+                + "正在等待上游 WMS 下发后续任务（最后一个子任务: "
+                + n(lastItem.getTaskItemNo() != null ? lastItem.getTaskItemNo() : lastItem.getId()) + "）");
+        resp.setRootCauses(List.of(new RootCauseItem("等待上游下发后续任务",
+                "当前所有子任务和命令均已成功完成，主任务尚未结束，正在等待 WMS 下发后续指令以驱动新子任务。"
+                        + "这通常是检查点类任务的正常业务等待状态。")));
         resp.setActions(List.of(
-            "确认WMS侧是否已收到任务完成通知",
-            "检查WMS是否有待下发的更新任务",
-            "如WMS长时间未下发更新，检查WMS与WCS之间的通信是否正常"));
+                "确认 WMS 侧是否已收到任务完成通知",
+                "检查 WMS 是否有待下发的更新任务",
+                "如长时间未下发，检查 WMS 与本系统之间的通信链路"));
         return resp;
     }
 }

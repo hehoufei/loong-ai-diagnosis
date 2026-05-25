@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,7 @@ import java.util.*;
  */
 @Slf4j
 @Component
+@DependsOn("dataSourceManager")
 @RequiredArgsConstructor
 public class PointConflictTool {
 
@@ -27,15 +29,18 @@ public class PointConflictTool {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 数据源懒初始化提示日志（不再做同步预热查询）。
+     *
+     * <p>历史版本曾在 {@code @PostConstruct} 阶段执行 {@code SELECT 1} 触发连接池预热，
+     * 但当激活环境的 JDBC 地址不通时，Hikari 会同步阻塞至 connectionTimeout 后抛错（30 秒级），
+     * 严重拖慢应用启动并导致前端首屏 AJAX 拿不到数据。
+     *
+     * <p>现行做法：池在第一次实际查询时按需建立连接，运行期失败由各调用方自行处理。
+     */
     @PostConstruct
     public void warmUp() {
-        long start = System.currentTimeMillis();
-        try {
-            Integer count = jdbcTemplate.queryForObject("SELECT 1", Integer.class);
-            log.info("PointConflictTool 数据源预热完成, result={}, cost={}ms", count, System.currentTimeMillis() - start);
-        } catch (Exception e) {
-            log.warn("PointConflictTool 数据源预热失败, cost={}ms, error={}", System.currentTimeMillis() - start, e.getMessage(), e);
-        }
+        log.info("PointConflictTool 已就绪（连接池采用懒初始化，首次查询时建立连接）");
     }
 
     @Tool(description = "查询指定点位列表的锁定状态，返回被其他任务占用的点位信息，用于判断是否存在路径冲突。需排除当前任务自身的锁")

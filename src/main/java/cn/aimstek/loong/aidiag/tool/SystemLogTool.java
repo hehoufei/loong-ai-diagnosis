@@ -9,7 +9,6 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -29,8 +28,8 @@ public class SystemLogTool {
         long start = System.currentTimeMillis();
         try {
             log.info("SystemLogTool 开始查询, wmsTaskNo={}, env={}", wmsTaskNo, envConfig.getActiveEnv());
+            // 日志已由下游按时间正序返回；不要再对字符串排序，否则会把毫秒/级别字段位置打散
             List<String> logs = logClient.queryLogs(wmsTaskNo, envConfig.getActiveEnv());
-            Collections.sort(logs);
             String result = objectMapper.writeValueAsString(logs);
             log.info("SystemLogTool 查询完成, 耗时={}ms, 条数={}", System.currentTimeMillis() - start, logs.size());
             return result;

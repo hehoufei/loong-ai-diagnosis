@@ -11,6 +11,11 @@ spring:
   application:
     name: loong-ai-diagnosis
   datasource:
+    # 数据源配置：
+    #   默认数据库名为 loong，适配旧 WCS 系统。
+    #   loong-platform 重构版本下可能使用不同的数据库名（如 loong_platform / loong_scheduler 等），
+    #   请通过 DB_URL 环境变量覆盖，例如：
+    #     DB_URL=jdbc:mysql://host:3306/loong_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     url: ${DB_URL:jdbc:mysql://192.168.53.206:3306/loong?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=Asia/Shanghai&autoReconnect=true}
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:1}
@@ -47,6 +52,7 @@ spring.web.resources:
       no-store: true
 
 # 地图服务配置
+# base-url 默认与 EnvConfig.wcsUrl 保持一致，实际指向 loong-platform 调度服务（scheduler）的 HTTP 入口
 map:
   api:
     base-url: ${MAP_API_URL:http://192.168.53.206:8088}
@@ -69,63 +75,65 @@ rule-engine:
     vector-weight: 0.6
     keyword-weight: 0.4
   rules:
-    handle-state-init:
+    task-state-wait-split:
       enabled: true
       priority: -1
-      description: "检查任务是否卡在初始化(INIT)阶段，WCS尚未调用引擎进行关键点规划"
+      description: "检查任务是否卡在待拆分(WAIT_SPLIT)阶段，调度引擎尚未对任务进行拆分"
       output:
-        summary: "任务卡在初始阶段（INIT），WCS还未调用引擎进行关键点规划"
+        summary: "任务卡在待拆分阶段（WAIT_SPLIT），调度引擎尚未对任务进行拆分"
         root-causes:
-          - title: "引擎未被调用"
-            description: "WCS还没有调用引擎获取关键点，任务停留在初始阶段"
+          - title: "调度引擎未拆分任务"
+            description: "任务已下发但调度引擎还没有对其进行拆分，可能是调度服务未启动或拆分逻辑异常"
         actions:
-          - "检查引擎服务是否正常运行"
-          - "确认起终点配置是否正确"
-          - "查看系统日志是否有引擎调用失败记录"
-    handle-state-key-planning:
+          - "检查调度引擎服务是否正常运行"
+          - "确认任务的起终点(startNode/endNode)配置是否正确"
+          - "查看系统日志是否有拆分失败记录"
+    task-state-wait-plan:
       enabled: true
       priority: -1
-      description: "检查任务是否卡在关键点规划(KEY_PLANNING)阶段，引擎未返回结果或处理失败"
+      description: "检查任务是否卡在待规划(WAIT_PLAN)阶段，路径规划服务未返回结果或处理失败"
       output:
-        summary: "任务卡在关键点规划阶段（KEY_PLANNING），引擎未返回结果或处理失败"
+        summary: "任务卡在待规划阶段（WAIT_PLAN），路径规划未完成或处理失败"
         root-causes:
-          - title: "引擎规划超时或失败"
-            description: "WCS已调用引擎但未成功完成关键点规划，可能超时或路径不通"
+          - title: "路径规划超时或失败"
+            description: "任务已拆分但路径规划未成功完成，可能超时、路径不通或依赖任务未完成"
         actions:
-          - "检查引擎服务状态和响应"
-          - "查看日志中引擎调用的返回结果"
-          - "检查起终点间的路径是否可达"
-    handle-state-unknown:
+          - "检查规划引擎服务状态和响应"
+          - "查看日志中规划调用的返回结果"
+          - "检查起终点(startNode/endNode)间的路径是否可达"
+          - "确认是否存在 preStartTaskNo/preEndTaskNo 等依赖未完成"
+    task-paused:
       enabled: true
       priority: -1
-      description: "检测任务处于未知的handleState阶段，需要AI大模型深度分析"
+      description: "检测任务被人工暂停（paused=Y）"
       output:
-        summary: "任务处于非常规阶段（{handleState}），共{taskItemCount}个子任务，需要AI深度分析"
+        summary: "任务被人工暂停（paused=Y），需操作员介入恢复"
         root-causes:
-          - title: "未知处理阶段"
-            description: "当前handleState为{handleState}，不在已知的INIT/KEY_PLANNING/PATH_PLANNING范围内"
+          - title: "任务人工暂停"
+            description: "当前任务的 paused 字段为 Y，表示已被人工或系统主动暂停执行"
         actions:
-          - "使用AI大模型进行深度分析"
-          - "检查是否有新增的业务阶段未纳入规则"
+          - "确认是否需要恢复任务执行"
+          - "检查暂停的业务原因（如设备维护、安全检查等）"
+          - "通过调度系统手动恢复任务"
     no-task-items:
       enabled: true
       priority: -1
-      description: "检查路径规划完成但未生成子任务的异常情况"
+      description: "检查任务进入运行中(RUNNING)但未生成任何子任务的异常情况"
       output:
-        summary: "路径规划已完成（PATH_PLANNING）但未生成任何子任务，数据可能异常"
+        summary: "任务已进入运行中（RUNNING）但未生成任何子任务，数据可能异常"
         root-causes:
           - title: "子任务生成失败"
-            description: "路径规划阶段已通过，但系统未能成功拆分和生成子任务"
+            description: "任务状态已为 RUNNING，但系统未能成功拆分和生成子任务（taskItem）"
         actions:
-          - "查看日志中路径拆分相关记录"
-          - "检查引擎返回的路径数据是否正常"
-          - "确认数据库中子任务表数据"
+          - "查看日志中任务拆分相关记录"
+          - "检查调度引擎返回的拆分结果是否正常"
+          - "确认数据库 sc_task_item 表是否有对应数据"
     all-completed-waiting-wms:
       enabled: true
       priority: -1
-      description: "检测所有子任务已完成且正在等待WMS下发更新任务的正常等待状态"
+      description: "检测所有子任务和指令均已完成且大任务仍为RUNNING，正在等待WMS下发更新任务"
       output:
-        summary: "所有子任务和执行单均已完成，正在等待WMS下发更新任务（正常业务等待）"
+        summary: "所有子任务和指令均已完成，正在等待WMS下发更新任务（正常业务等待）"
         root-causes:
           - title: "等待WMS响应"
             description: "这是正常的业务等待状态，任务执行完成后等待WMS下发后续指令"
@@ -136,48 +144,61 @@ rule-engine:
     all-completed-state-abnormal:
       enabled: true
       priority: -1
-      description: "检测所有子任务已完成但大任务状态更新失败的异常情况"
+      description: "检测所有子任务已完成但大任务状态非SUCCESS/MANUAL_SUCCESS/RUNNING的异常情况"
       output:
-        summary: "所有子任务已完成但大任务状态仍为RUNNING，状态回写可能异常"
+        summary: "所有子任务已完成但大任务状态异常（{taskState}），状态回写可能出错"
         root-causes:
           - title: "大任务状态更新失败"
-            description: "所有子任务均已完成，但大任务的状态未能正确更新为完成"
+            description: "所有子任务均已完成（SUCCESS/MANUAL_SUCCESS），但大任务的状态未能正确更新"
         actions:
           - "检查大任务完成回调逻辑"
-          - "确认数据库中是否可手动更新状态"
+          - "确认数据库 sc_task 表的状态是否可手动修正"
           - "排查状态回写相关的异常日志"
+    dependency-blocked:
+      enabled: true
+      priority: -1
+      description: "检测任务因依赖（preStartTaskNo/preEndTaskNo/parentTaskNo）未完成而阻塞"
+      output:
+        summary: "任务因依赖关系未满足而阻塞，正在等待前置任务完成"
+        root-causes:
+          - title: "依赖任务未完成"
+            description: "当前任务存在 preStartTaskNo/preEndTaskNo/parentTaskNo 等依赖，前置任务尚未完成"
+        actions:
+          - "检查依赖任务（preStartTaskNo/preEndTaskNo）的当前状态"
+          - "若依赖任务卡住，先排查依赖任务"
+          - "确认依赖关系配置是否正确"
     all-items-init:
       enabled: true
       priority: -1
-      description: "检查子任务全部处于初始状态，定时调度尚未处理"
+      description: "检查子任务全部处于待拆分/待规划状态，调度尚未推进"
       output:
-        summary: "所有{taskItemCount}个子任务均处于INIT状态，定时调度任务尚未开始处理"
+        summary: "所有{taskItemCount}个子任务均处于待处理状态（WAIT_SPLIT/WAIT_PLAN），调度尚未推进"
         root-causes:
           - title: "调度任务未执行"
-            description: "子任务已生成但全部停留在初始状态，定时调度可能未运行或队列积压"
+            description: "子任务已生成但全部停留在 WAIT_SPLIT/WAIT_PLAN 状态，定时调度可能未运行或队列积压"
         actions:
           - "检查定时调度任务是否正常运行"
-          - "确认引擎服务是否可用"
+          - "确认调度引擎服务是否可用"
           - "查看任务队列是否有积压"
     point-conflict:
       enabled: true
       priority: -1
-      description: "检测路径点位被其他任务占用导致当前任务无法推进"
+      description: "检测路径节点（startNode/endNode）被其他任务占用导致当前任务无法推进"
       output:
-        summary: "检测到点位冲突，路径点位被其他任务占用，当前设备可能无法推进"
+        summary: "检测到节点冲突，路径节点被其他任务占用，当前设备可能无法推进"
         root-causes:
-          - title: "点位资源冲突"
-            description: "当前任务的路径点位被其他任务占用，导致设备无法继续行驶"
+          - title: "节点资源冲突"
+            description: "当前任务的路径节点（startNode/endNode）被其他任务占用，导致设备无法继续行驶"
         actions:
-          - "检查占用点位的任务是否也卡住"
-          - "如占用任务已完成但未释放锁，手动清理点位"
+          - "检查占用节点的任务是否也卡住"
+          - "如占用任务已完成但未释放锁，手动清理节点占用"
           - "考虑取消冲突任务释放资源"
     task-item-cancelled:
       enabled: true
       priority: -1
-      description: "检测存在被取消的子任务，需查看取消原因"
+      description: "检测存在被取消的子任务（taskItemState=CANCEL）"
       output:
-        summary: "任务中存在被取消的子任务，可能是人工取消、系统异常或设备故障"
+        summary: "任务中存在被取消的子任务（taskItemState=CANCEL），可能是人工取消、系统异常或设备故障"
         root-causes:
           - title: "子任务被取消"
             description: "部分子任务状态为CANCEL，需要排查取消原因"
@@ -185,17 +206,30 @@ rule-engine:
           - "查看被取消子任务的详细信息"
           - "确认是否为人工主动取消"
           - "检查是否有系统异常或设备故障导致自动取消"
-    ticket-timeout:
+    command-failed:
+      enabled: true
+      priority: -1
+      description: "检测存在执行失败的指令（commandState=FAILED）"
+      output:
+        summary: "检测到{failedCommandCount}个指令执行失败（commandState=FAILED），需要排查失败原因"
+        root-causes:
+          - title: "指令执行失败"
+            description: "存在 commandState=FAILED 的指令，设备未能成功执行该指令"
+        actions:
+          - "查看失败指令的 commandResult 错误详情"
+          - "检查相关设备的运行状态"
+          - "确认是否需要重新下发指令或人工干预"
+    command-timeout:
       enabled: true
       priority: -1
       params:
         timeout-minutes: "5"
-      description: "检测执行单运行超时，设备可能卡住或故障"
+      description: "检测指令运行超时（commandState=RUNNING 且 startTime 超过阈值）"
       output:
-        summary: "检测到执行单运行超时，设备可能卡住、故障或PLC通信异常"
+        summary: "检测到指令运行超时，设备可能卡住、故障或PLC通信异常"
         root-causes:
-          - title: "执行单超时"
-            description: "执行单长时间处于RUNNING状态，超过配置的超时阈值"
+          - title: "指令超时"
+            description: "指令长时间处于 RUNNING 状态，超过配置的超时阈值"
         actions:
           - "检查相关设备的运行状态"
           - "确认PLC通信是否正常"
@@ -203,31 +237,58 @@ rule-engine:
     plc-communication:
       enabled: true
       priority: -1
-      description: "检测子任务已下发但PLC未接收，设备通信异常"
+      description: "检测子任务运行中但对应指令仍处于CREATED/ISSUING状态，PLC通信可能异常"
       output:
-        summary: "子任务已下发到调度（ISSUED_DCS）但PLC未接收任务，设备通信可能异常"
+        summary: "子任务运行中（RUNNING）但对应指令仍为CREATED/ISSUING，PLC通信可能异常"
         root-causes:
           - title: "PLC通信异常"
-            description: "子任务状态已更新为ISSUED_DCS但对应执行单仍为INIT，说明PLC未收到指令"
+            description: "子任务已 RUNNING，但其下属指令的 commandState 仍为 CREATED 或 ISSUING，说明指令未真正下发到PLC"
         actions:
           - "检查PLC通信连接状态"
           - "确认设备是否在线"
           - "检查网络和通信中间件状态"
+    progress-stalled:
+      enabled: true
+      priority: -1
+      params:
+        stall-minutes: "5"
+      description: "检测子任务执行进度停滞（executedIndex < issuedIndex 且 startTime 超过阈值）"
+      output:
+        summary: "检测到子任务执行进度停滞，已下发指令但执行进度长时间未推进"
+        root-causes:
+          - title: "执行进度停滞"
+            description: "子任务的 executedIndex 落后于 issuedIndex 已超过停滞阈值，设备可能卡住或响应缓慢"
+        actions:
+          - "检查相关设备的运行状态和实时进度"
+          - "确认PLC上报通道是否正常"
+          - "如设备无响应需人工干预或重新下发"
     error-message:
       enabled: true
       priority: -1
       params:
         max-errors: "5"
-      description: "检测系统错误信息或日志中的异常关键词"
+      description: "检测系统错误信息或指令执行结果中的异常关键词"
       output:
-        summary: "系统报告了明确的错误信息，需要根据错误内容进一步排查"
+        summary: "系统报告了明确的错误信息（任务或指令层面），需要根据错误内容进一步排查"
         root-causes:
           - title: "系统错误"
-            description: "任务数据或系统日志中包含错误信息"
+            description: "任务 errorMessage 字段或指令 commandResult 中包含错误关键词"
         actions:
           - "根据错误信息定位具体问题"
           - "查看完整系统日志获取更多上下文"
           - "联系相关模块负责人排查"
+    task-state-unknown:
+      enabled: true
+      priority: -1
+      description: "检测任务处于未知的taskState阶段，需要AI大模型深度分析"
+      output:
+        summary: "任务处于非常规状态（{taskState}），共{taskItemCount}个子任务，需要AI深度分析"
+        root-causes:
+          - title: "未知任务状态"
+            description: "当前taskState为{taskState}，不在已知的WAIT_SPLIT/WAIT_PLAN/RUNNING/SUCCESS/CANCEL/MANUAL_SUCCESS范围内"
+        actions:
+          - "使用AI大模型进行深度分析"
+          - "检查是否有新增的业务状态未纳入规则"
     fallback:
       enabled: true
       priority: -1

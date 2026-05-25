@@ -84,10 +84,13 @@ public abstract class AbstractDiagnoseRule implements DiagnoseRule {
     }
 
     /**
-     * 检查子任务是否全部成功（AUTO_SUCCESS 或 MANUAL_SUCCESS）
+     * 检查子任务/命令是否处于成功完成状态。
+     * 适配新状态体系：SUCCESS / MANUAL_SUCCESS（兼容旧值 AUTO_SUCCESS）。
      */
-    protected boolean isItemSuccess(String taskState) {
-        return "AUTO_SUCCESS".equals(taskState) || "MANUAL_SUCCESS".equals(taskState);
+    protected boolean isItemSuccess(String state) {
+        return "SUCCESS".equals(state)
+                || "MANUAL_SUCCESS".equals(state)
+                || "AUTO_SUCCESS".equals(state);
     }
 
     /** null 安全字符串转换（null → 空串） */
@@ -135,30 +138,44 @@ public abstract class AbstractDiagnoseRule implements DiagnoseRule {
         if (template == null || template.isEmpty()) return template;
 
         String result = template;
-        result = result.replace("{handleState}", n(context.getHandleState()));
+        result = result.replace("{taskState}", n(context.getTaskState()));
+        result = result.replace("{paused}", context.isPaused() ? "Y" : "N");
         result = result.replace("{errorMessage}", n(context.getErrorMessage()));
 
         List<TaskDetail.TaskItemDetail> items = context.getTaskItems();
         result = result.replace("{taskItemCount}", String.valueOf(items.size()));
 
         long completedCount = items.stream()
-                .filter(i -> "AUTO_SUCCESS".equals(i.getTaskState()) || "MANUAL_SUCCESS".equals(i.getTaskState()))
+                .filter(i -> isItemSuccess(i.getTaskItemState()))
                 .count();
         long runningCount = items.stream()
-                .filter(i -> "RUNNING".equals(i.getTaskState()))
+                .filter(i -> "RUNNING".equals(i.getTaskItemState()))
                 .count();
-        long initCount = items.stream()
-                .filter(i -> "INIT".equals(i.getTaskState()))
+        long waitSplitCount = items.stream()
+                .filter(i -> "WAIT_SPLIT".equals(i.getTaskItemState()))
+                .count();
+        long waitPlanCount = items.stream()
+                .filter(i -> "WAIT_PLAN".equals(i.getTaskItemState()))
+                .count();
+        long pausedCount = items.stream()
+                .filter(i -> "PAUSED".equals(i.getTaskItemState()))
                 .count();
         long cancelledCount = items.stream()
-                .filter(i -> "CANCELLED".equals(i.getTaskState()))
+                .filter(i -> "CANCEL".equals(i.getTaskItemState()))
+                .count();
+        long commandCount = context.getCommands().size();
+        long failedCommandCount = context.getCommands().stream()
+                .filter(c -> "FAILED".equals(c.getCommandState()))
                 .count();
 
-        result = result.replace("{taskState}", context.getDetail() != null && context.getDetail().getTaskState() != null ? context.getDetail().getTaskState() : "");
         result = result.replace("{completedCount}", String.valueOf(completedCount));
         result = result.replace("{runningCount}", String.valueOf(runningCount));
-        result = result.replace("{initCount}", String.valueOf(initCount));
+        result = result.replace("{waitSplitCount}", String.valueOf(waitSplitCount));
+        result = result.replace("{waitPlanCount}", String.valueOf(waitPlanCount));
+        result = result.replace("{pausedCount}", String.valueOf(pausedCount));
         result = result.replace("{cancelledCount}", String.valueOf(cancelledCount));
+        result = result.replace("{commandCount}", String.valueOf(commandCount));
+        result = result.replace("{failedCommandCount}", String.valueOf(failedCommandCount));
 
         return result;
     }

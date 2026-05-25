@@ -62,8 +62,8 @@ public class DiagnosisFacade {
     }
 
     private void validate(DiagnoseRequest request) {
-        if (request == null || !StringUtils.hasText(request.getTaskId())) {
-            throw new AiDiagnosisException("VALIDATION_ERROR", "taskId不能为空", null);
+        if (request == null || !StringUtils.hasText(request.getTaskNo())) {
+            throw new AiDiagnosisException("VALIDATION_ERROR", "taskNo不能为空", null);
         }
     }
 }

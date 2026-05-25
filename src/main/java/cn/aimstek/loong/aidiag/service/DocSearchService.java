@@ -166,7 +166,7 @@ public class DocSearchService {
             if (!deviceTypes.isEmpty()) {
                 query.append(String.join(" ", deviceTypes)).append(" ");
             }
-            String state = detail.getHandleState() != null ? detail.getHandleState() : detail.getTaskState();
+            String state = detail.getTaskState();
             if (state != null) {
                 query.append("任务状态 ").append(state);
             }
