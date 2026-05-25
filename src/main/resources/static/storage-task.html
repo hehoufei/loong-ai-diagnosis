@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WCS 智能诊断 - 立库循环测试</title>
+<link rel="stylesheet" href="common.css">
+<style>
+    .container { max-width: 1240px; margin: 0 auto; padding: 20px; }
+
+    /* -- Topbar -- */
+    .topbar-logo {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 16px; font-weight: 700; color: var(--color-primary);
+        white-space: nowrap; flex-shrink: 0;
+    }
+    .topbar-logo .icon { font-size: 20px; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
+    .topbar-link {
+        text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+        padding: 5px 14px; border-radius: var(--radius-tag); font-size: 13px; font-weight: 500;
+        color: var(--color-primary); border: 1.5px solid rgba(99,102,241,0.25);
+        transition: var(--transition); white-space: nowrap;
+    }
+    .topbar-link:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); }
+    .topbar-link.active { background: rgba(99,102,241,0.1); border-color: var(--color-primary); font-weight: 700; }
+
+    /* -- Status badge -- */
+    .status-badge {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+        border: 1px solid transparent; letter-spacing: .04em; text-transform: uppercase;
+    }
+    .status-IDLE     { background: rgba(156,163,175,0.12); color: var(--color-text-muted); border-color: rgba(156,163,175,0.25); }
+    .status-RUNNING  { background: rgba(16,185,129,0.12);  color: var(--color-success);    border-color: rgba(16,185,129,0.25); }
+    .status-PAUSED   { background: rgba(245,158,11,0.12);  color: var(--color-warning);    border-color: rgba(245,158,11,0.25); }
+    .status-ERROR    { background: rgba(239,68,68,0.12);   color: var(--color-error);      border-color: rgba(239,68,68,0.25); }
+    .status-FINISHED { background: rgba(99,102,241,0.10);  color: var(--color-primary);    border-color: rgba(99,102,241,0.20); }
+    .status-RUNNING .status-dot { background: var(--color-success); animation: pulseGlow 1.8s infinite; }
+    .status-PAUSED  .status-dot { background: var(--color-warning); }
+    .status-ERROR   .status-dot { background: var(--color-error); }
+    .status-IDLE    .status-dot { background: var(--color-text-muted); }
+    .status-FINISHED .status-dot { background: var(--color-primary); }
+
+    /* -- Section card -- */
+    .section-card { padding: 22px 24px; margin-bottom: 20px; }
+    .section-card:hover { transform: none; }
+    .section-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 16px; gap: 12px; flex-wrap: wrap;
+    }
+    .section-title {
+        font-size: 16px; font-weight: 700; color: var(--color-text);
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    /* -- Stats overview -- */
+    .stats-overview {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;
+    }
+    .stat-card { padding: 14px 16px; text-align: center; }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-value {
+        font-size: 22px; font-weight: 800;
+        background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        word-break: break-all;
+    }
+    .stat-label { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+
+    /* -- Action buttons row -- */
+    .actions-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .actions-row .glass-btn,
+    .actions-row .glass-btn-outline { padding: 8px 14px; font-size: 13px; }
+
+    /* -- Error banner -- */
+    .error-banner {
+        margin-top: 12px; padding: 10px 14px;
+        background: rgba(239,68,68,0.08);
+        border: 1px solid rgba(239,68,68,0.2);
+        border-left: 4px solid var(--color-error);
+        border-radius: var(--radius-card);
+        color: var(--color-error); font-size: 13px; font-weight: 500;
+        display: none;
+    }
+    .error-banner.show { display: block; }
+
+    /* -- Current task card -- */
+    .current-task {
+        padding: 14px 18px; border-radius: 14px;
+        background: rgba(99,102,241,0.06);
+        border: 1px solid rgba(99,102,241,0.14);
+        font-size: 13.5px; line-height: 1.7;
+    }
+    .current-task.stuck {
+        background: rgba(245,158,11,0.10);
+        border-color: rgba(245,158,11,0.32);
+        box-shadow: 0 0 0 3px rgba(245,158,11,0.08);
+    }
+    .current-task .ct-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+    .current-task .ct-task-no { font-size: 14px; font-weight: 700; color: var(--color-primary-dark); word-break: break-all; }
+    .current-task .ct-row { display: flex; gap: 16px; flex-wrap: wrap; color: var(--color-text-secondary); }
+    .current-task .ct-row .k { color: var(--color-text-muted); margin-right: 4px; }
+    .current-task .ct-nodes { font-family: var(--font-mono); font-size: 12.5px; }
+
+    /* -- Config form -- */
+    .cfg-grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 14px 18px;
+    }
+    .cfg-item { display: flex; flex-direction: column; gap: 4px; }
+    .cfg-label {
+        font-size: 12.5px; font-weight: 600; color: var(--color-text-secondary);
+        display: flex; gap: 6px; align-items: center;
+    }
+    .cfg-hint { font-size: 11px; color: var(--color-text-muted); font-weight: 400; }
+    .cfg-input {
+        height: 36px; padding: 0 12px;
+        border: 1.5px solid rgba(99,102,241,0.15);
+        border-radius: var(--radius-input); font-size: 13px;
+        background: rgba(255,255,255,0.6); color: var(--color-text);
+        outline: none; transition: var(--transition); width: 100%;
+    }
+    .cfg-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+    .cfg-input.cfg-input-wide { font-family: var(--font-mono); font-size: 12px; }
+    .cfg-input.cfg-input-sql {
+        font-family: var(--font-mono); font-size: 12px;
+        min-height: 78px; padding: 10px 12px; line-height: 1.55;
+        resize: vertical; white-space: pre;
+    }
+    .cfg-disabled .cfg-input { opacity: 0.6; cursor: not-allowed; }
+
+    /* -- History table -- */
+    .glass-table th:first-child { border-radius: 8px 0 0 0; }
+    .glass-table th:last-child { border-radius: 0 8px 0 0; }
+    .glass-table td.code { font-family: var(--font-mono); font-size: 11.5px; word-break: break-all; }
+    .glass-table tr.stuck-row td { background: rgba(245,158,11,0.06); }
+    .table-wrapper { overflow-x: auto; }
+
+    /* -- Tag colors -- */
+    .tag {
+        display: inline-block; padding: 2px 10px; border-radius: var(--radius-tag);
+        font-size: 11.5px; font-weight: 700; letter-spacing: .02em;
+    }
+    .tag-success         { background: rgba(16,185,129,0.12);  color: var(--color-success); }
+    .tag-manual          { background: rgba(99,102,241,0.12);  color: var(--color-primary); }
+    .tag-cancel          { background: rgba(156,163,175,0.15); color: var(--color-text-secondary); }
+    .tag-fail            { background: rgba(239,68,68,0.12);   color: var(--color-error); }
+    .tag-skip            { background: rgba(245,158,11,0.12);  color: var(--color-warning); }
+    .tag-issued          { background: rgba(99,102,241,0.10);  color: var(--color-primary); }
+
+    /* -- Toast -- */
+    .toast-stack {
+        position: fixed; top: 64px; right: 20px; z-index: 2000;
+        display: flex; flex-direction: column; gap: 8px;
+    }
+    .toast {
+        padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500;
+        backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+        animation: fadeIn .2s ease-out;
+    }
+    .toast.success { background: rgba(16,185,129,0.15); color: var(--color-success); border: 1px solid rgba(16,185,129,0.3); }
+    .toast.error   { background: rgba(239,68,68,0.15);  color: var(--color-error);   border: 1px solid rgba(239,68,68,0.3); }
+    .toast.info    { background: rgba(99,102,241,0.12); color: var(--color-primary); border: 1px solid rgba(99,102,241,0.25); }
+
+    /* -- Empty state -- */
+    .empty-row { text-align: center; padding: 24px; color: var(--color-text-muted); font-size: 13px; }
+
+    /* -- 库位描述 -- */
+    .code-desc {
+        display: inline-flex; align-items: center; gap: 6px;
+        font-size: 12px; color: var(--color-text-secondary);
+        padding: 2px 10px; border-radius: 999px;
+        background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.12);
+    }
+    .ct-desc { margin-top: 4px; }
+
+    /* -- 可点击的统计卡片 -- */
+    .stat-card.clickable { cursor: pointer; }
+    .stat-card.clickable:hover { transform: translateY(-3px); border-color: rgba(99,102,241,0.32); }
+
+    /* -- Modal -- */
+    .modal-overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(15,23,42,0.4); backdrop-filter: blur(6px);
+        z-index: 1000; align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; animation: fadeIn .2s ease; }
+    .modal {
+        background: rgba(255,255,255,0.96);
+        backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(99,102,241,0.12);
+        border-radius: var(--radius-card);
+        padding: 22px 24px;
+        width: 880px; max-width: calc(100vw - 24px);
+        max-height: calc(100vh - 60px);
+        display: flex; flex-direction: column; gap: 12px;
+        box-shadow: 0 24px 64px rgba(15,23,42,0.18);
+    }
+    .modal-head {
+        display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+        padding-bottom: 8px; border-bottom: 1px solid rgba(99,102,241,0.08);
+    }
+    .modal-title {
+        font-size: 16px; font-weight: 700; color: var(--color-text);
+        display: flex; align-items: center; gap: 8px;
+    }
+    .modal-close {
+        margin-left: auto; background: transparent; border: none;
+        font-size: 18px; color: var(--color-text-muted); cursor: pointer;
+        padding: 4px 8px; border-radius: 8px; transition: var(--transition);
+    }
+    .modal-close:hover { color: var(--color-error); background: rgba(239,68,68,0.08); }
+    .modal-search {
+        flex: 1; min-width: 200px; height: 34px; padding: 0 12px;
+        border: 1.5px solid rgba(99,102,241,0.15);
+        border-radius: var(--radius-input); font-size: 13px;
+        background: rgba(255,255,255,0.7); outline: none;
+        transition: var(--transition);
+    }
+    .modal-search:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+    .modal-meta { font-size: 12px; color: var(--color-text-muted); }
+    .modal-body {
+        flex: 1; min-height: 0; overflow: auto;
+        border: 1px solid rgba(99,102,241,0.08); border-radius: 12px;
+        background: rgba(99,102,241,0.02);
+    }
+    .modal-table {
+        width: 100%; border-collapse: separate; border-spacing: 0;
+        font-size: 12.5px;
+    }
+    .modal-table th {
+        position: sticky; top: 0; z-index: 1;
+        background: rgba(99,102,241,0.10);
+        text-align: left; padding: 8px 12px;
+        color: var(--color-text-secondary); font-weight: 600;
+        font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+        border-bottom: 1px solid rgba(99,102,241,0.12);
+    }
+    .modal-table td {
+        padding: 6px 12px;
+        border-bottom: 1px solid rgba(99,102,241,0.05);
+    }
+    .modal-table td.code { font-family: var(--font-mono); font-size: 11.5px; word-break: break-all; }
+    .modal-table tr:hover td { background: rgba(99,102,241,0.05); }
+    .modal-table .row-num { color: var(--color-text-muted); font-variant-numeric: tabular-nums; width: 56px; }
+</style>
+</head>
+<body>
+
+<!-- ========== Top Bar ========== -->
+<nav class="glass-topbar">
+    <div class="topbar-logo">
+        <span class="icon">🏗️</span>
+        <span>立库循环测试</span>
+    </div>
+    <div class="topbar-right">
+        <a href="index.html"        class="topbar-link">📊 诊断模式</a>
+        <a href="chat.html"         class="topbar-link">💬 Agent 对话</a>
+        <a href="rules.html"        class="topbar-link">📋 规则管理</a>
+        <a href="docs.html"         class="topbar-link">📚 知识库</a>
+        <a href="storage-task.html" class="topbar-link active">🏗️ 立库测试</a>
+    </div>
+</nav>
+
+<div class="toast-stack" id="toastStack"></div>
+
+
+<div class="container">
+
+    <!-- ========== 状态 + 控制 ========== -->
+    <div class="glass-card section-card">
+        <div class="section-header">
+            <div class="section-title">
+                <span>状态</span>
+                <span id="statusBadge" class="status-badge status-IDLE">
+                    <span class="status-dot"></span>
+                    <span id="statusText">IDLE</span>
+                </span>
+                <span id="roundBadge" class="glass-tag" style="display:none;">第 <b id="roundText">0</b> 轮 · 步骤 <b id="stepText">0/0</b></span>
+            </div>
+            <div class="actions-row">
+                <button class="glass-btn"          id="btnStart">▶ 启动 / 继续</button>
+                <button class="glass-btn-outline"  id="btnPause">⏸ 暂停</button>
+                <button class="glass-btn-outline"  id="btnSkip">⏭ 跳过当前</button>
+                <button class="glass-btn-outline"  id="btnReset">↻ 重置</button>
+                <button class="glass-btn-outline"  id="btnRegen">🔃 重生成库位</button>
+                <button class="glass-btn-outline"  id="btnTestDb">🩺 测 DB</button>
+            </div>
+        </div>
+        <div id="errorBanner" class="error-banner"></div>
+        <div class="stats-overview">
+            <div class="glass-card stat-card clickable" id="statValidCard" title="点击查看全部有效库位">
+                <div class="stat-value" id="statValid">-</div>
+                <div class="stat-label">有效库位 (点击查看)</div>
+            </div>
+            <div class="glass-card stat-card"><div class="stat-value" id="statIssued">-</div><div class="stat-label">已下发</div></div>
+            <div class="glass-card stat-card"><div class="stat-value" id="statSuccess">-</div><div class="stat-label">SUCCESS</div></div>
+            <div class="glass-card stat-card"><div class="stat-value" id="statManual">-</div><div class="stat-label">MANUAL_SUCCESS</div></div>
+            <div class="glass-card stat-card"><div class="stat-value" id="statCancel">-</div><div class="stat-label">CANCEL</div></div>
+            <div class="glass-card stat-card"><div class="stat-value" id="statFailed">-</div><div class="stat-label">FAIL</div></div>
+        </div>
+    </div>
+
+    <!-- ========== 当前任务 ========== -->
+    <div class="glass-card section-card">
+        <div class="section-header">
+            <div class="section-title">▶ 当前任务</div>
+        </div>
+        <div id="currentTaskBox">
+            <div class="empty-hint">空闲</div>
+        </div>
+    </div>
+
+    <!-- ========== 配置面板 ========== -->
+    <div class="glass-card section-card" id="cfgCard">
+        <div class="section-header">
+            <div class="section-title">⚙ 配置 <span class="cfg-hint" id="cfgLockHint" style="display:none;">运行中不可修改</span></div>
+            <div class="actions-row">
+                <button class="glass-btn-outline" id="btnReloadCfg">↻ 重新加载</button>
+                <button class="glass-btn-outline" id="btnValidateSql">🧪 校验 SQL</button>
+                <button class="glass-btn"          id="btnSaveCfg">💾 保存配置</button>
+            </div>
+        </div>
+        <div id="cfgGrid" class="cfg-grid"></div>
+    </div>
+
+    <!-- ========== 任务历史 ========== -->
+    <div class="glass-card section-card">
+        <div class="section-header">
+            <div class="section-title">🗂 任务历史 <span class="cfg-hint" id="historyCount">最近 0 条</span></div>
+        </div>
+        <div class="table-wrapper">
+            <table class="glass-table">
+                <thead>
+                    <tr>
+                        <th style="width:50px;">#</th>
+                        <th style="width:50px;">轮</th>
+                        <th style="width:90px;">步骤</th>
+                        <th style="min-width:180px;">taskNo</th>
+                        <th style="width:60px;">类型</th>
+                        <th style="min-width:240px;">起 → 终</th>
+                        <th style="width:120px;">状态</th>
+                        <th style="width:140px;">提交</th>
+                        <th style="width:140px;">完成</th>
+                        <th style="min-width:140px;">备注</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTbody">
+                    <tr><td colspan="10" class="empty-row">暂无历史任务</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- ========== 有效库位查看弹窗 ========== -->
+<div class="modal-overlay" id="codesModal" onclick="if(event.target===this)closeCodesModal()">
+    <div class="modal">
+        <div class="modal-head">
+            <div class="modal-title">📦 有效库位列表</div>
+            <input class="modal-search" id="codesSearch" type="text" placeholder="搜索: 输入巷道/L/R/列号/层号 任意片段..." />
+            <span class="modal-meta" id="codesMeta">0 / 0</span>
+            <button class="modal-close" onclick="closeCodesModal()" title="关闭">✕</button>
+        </div>
+        <div class="modal-body">
+            <table class="modal-table">
+                <thead>
+                    <tr>
+                        <th class="row-num">#</th>
+                        <th>库位编码</th>
+                        <th style="width:280px;">解析</th>
+                    </tr>
+                </thead>
+                <tbody id="codesTbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+<script>
+'use strict';
+
+const API_BASE = '/api/v1/storage-task';
+const $ = id => document.getElementById(id);
+
+// --------- HTTP ---------
+async function api(path, opts = {}) {
+    const init = {
+        method: opts.method || 'GET',
+        headers: { 'Content-Type': 'application/json' }
+    };
+    if (opts.body !== undefined) init.body = JSON.stringify(opts.body);
+    const res = await fetch(API_BASE + path, init);
+    let json = null;
+    try { json = await res.json(); } catch (e) {}
+    if (!res.ok || !json || json.success === false) {
+        const msg = (json && json.message) ? json.message : ('HTTP ' + res.status);
+        const err = new Error(msg);
+        err.code = json ? json.code : 'HTTP_ERROR';
+        throw err;
+    }
+    return json.data;
+}
+
+// --------- Toast ---------
+function toast(msg, kind = 'info', ttl = 2400) {
+    const el = document.createElement('div');
+    el.className = 'toast ' + kind;
+    el.textContent = msg;
+    $('toastStack').appendChild(el);
+    setTimeout(() => {
+        el.style.transition = 'opacity .25s';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 260);
+    }, ttl);
+}
+
+// --------- HTML escape ---------
+function esc(v) {
+    if (v === null || v === undefined) return '';
+    return String(v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// --------- 库位编码解析 ---------
+// 例: SL_-WH_001-SA_HSMD_1-AL_L08-R-02-04-0001-01
+//                                  ↑aisle ↑side ↑depth ↑row ↑col ↑layer
+const CODE_RE = /-AL_L(\d{1,3})-([LR])-(\d{1,2})-(\d{1,2})-(\d{1,4})-(\d{1,2})$/;
+function parseCode(code) {
+    if (!code) return null;
+    const m = CODE_RE.exec(code);
+    if (!m) return null;
+    const aisle = parseInt(m[1], 10);
+    const side  = m[2];                   // L / R
+    const depth = parseInt(m[3], 10);     // 01=近伸, 02=远伸
+    const row   = parseInt(m[4], 10);
+    const col   = parseInt(m[5], 10);
+    const layer = parseInt(m[6], 10);
+    return {
+        aisle, side, depth, row, col, layer,
+        sideText : side === 'L' ? '左侧' : (side === 'R' ? '右侧' : '?'),
+        depthText: depth === 1 ? '近伸' : (depth === 2 ? '远伸' : '?'),
+    };
+}
+function describeCode(code) {
+    const p = parseCode(code);
+    if (!p) return '';
+    return `${p.aisle} 巷道 · ${p.sideText} · ${p.depthText} · ${p.row}排 · ${p.col}列 · ${p.layer}层`;
+}
+
+// --------- Config form ---------
+const CFG_FIELDS = [
+    { key: 'dbUrl',                     label: '数据库 URL',          type: 'text',     wide: true },
+    { key: 'dbUsername',                label: 'DB 账号',             type: 'text' },
+    { key: 'dbPassword',                label: 'DB 密码',             type: 'password' },
+    { key: 'acsAddTaskUrl',             label: 'addTask 地址',        type: 'text',     wide: true },
+    { key: 'httpTimeoutSeconds',        label: 'HTTP 超时(秒)',       type: 'number' },
+    { key: 'storagePrefix',             label: '库位编码前缀',         type: 'text',     wide: true,  hint: '一般不改' },
+    { key: 'aisles',                    label: '巷道',                type: 'intArray', hint: '逗号分隔, 例: 8 或 8,9' },
+    { key: 'totalLayers',               label: '总层数',               type: 'number' },
+    { key: 'maxCol',                    label: '最大列数',             type: 'number' },
+    { key: 'fullTestLayers',            label: '全测层',               type: 'intArray', hint: '逗号分隔, 例: 1,10' },
+    { key: 'sampleRatio',               label: '抽样比例',             type: 'number',   hint: '0~1, 例 0.5' },
+    { key: 'randomSeed',                label: '随机种子',             type: 'number',   hint: '空=每次随机' },
+    { key: 'inboundStartNode',          label: '入库口节点',           type: 'text' },
+    { key: 'taskSource',                label: 'taskSource',          type: 'text' },
+    { key: 'taskBizType',               label: 'bizType',             type: 'text' },
+    { key: 'containerCode',             label: '容器号',              type: 'text' },
+    { key: 'goodsCode',                 label: '货物号',              type: 'text' },
+    { key: 'shuffleTimesPerRound',      label: '每轮移库次数',         type: 'number' },
+    { key: 'pollIntervalSeconds',       label: '轮询间隔(秒)',         type: 'number' },
+    { key: 'taskStuckThresholdSeconds', label: '卡住阈值(秒)',         type: 'number' },
+    { key: 'taskNoPrefix',              label: '任务号前缀',           type: 'text' },
+    { key: 'validateLocationSql',       label: '库位校验 SQL',         type: 'sql',
+      hint: '必须 SELECT, 必须含占位符 {CODES}, 第一列返回库位编码' },
+    { key: 'queryTaskStateSql',         label: '任务状态查询 SQL',      type: 'sql',
+      hint: '必须 SELECT, 第一列返回 task_state, ? 绑定 task_no' }
+];
+
+let CURRENT_CFG = null;
+let LATEST_STATE = null;
+
+function renderCfgForm(cfg, locked) {
+    const container = $('cfgGrid');
+    container.classList.toggle('cfg-disabled', !!locked);
+    $('cfgLockHint').style.display = locked ? '' : 'none';
+    container.innerHTML = CFG_FIELDS.map(f => {
+        let v = cfg ? cfg[f.key] : '';
+        if (Array.isArray(v)) v = v.join(',');
+        if (v === null || v === undefined) v = '';
+
+        if (f.type === 'sql') {
+            return `
+            <div class="cfg-item" style="grid-column: 1 / -1;">
+                <label class="cfg-label">
+                    ${esc(f.label)}
+                    ${f.hint ? `<span class="cfg-hint">(${esc(f.hint)})</span>` : ''}
+                </label>
+                <textarea class="cfg-input cfg-input-sql"
+                    data-key="${f.key}" data-type="${f.type}"
+                    ${locked ? 'disabled' : ''}>${esc(v)}</textarea>
+            </div>`;
+        }
+
+        const inputType = (f.type === 'password') ? 'password'
+                        : (f.type === 'number') ? 'number'
+                        : 'text';
+        const stepAttr = (f.type === 'number' && f.key === 'sampleRatio') ? ' step="0.01"' : '';
+        const widthCls = f.wide ? ' cfg-input-wide' : '';
+        const colSpan = f.wide ? ' style="grid-column: 1 / -1;"' : '';
+        return `
+        <div class="cfg-item"${colSpan}>
+            <label class="cfg-label">
+                ${esc(f.label)}
+                ${f.hint ? `<span class="cfg-hint">(${esc(f.hint)})</span>` : ''}
+            </label>
+            <input class="cfg-input${widthCls}"
+                data-key="${f.key}" data-type="${f.type}"
+                type="${inputType}"${stepAttr}
+                value="${esc(v)}"
+                ${locked ? 'disabled' : ''}>
+        </div>`;
+    }).join('');
+}
+
+function readCfgForm() {
+    const out = Object.assign({}, CURRENT_CFG || {});
+    document.querySelectorAll('#cfgGrid input[data-key], #cfgGrid textarea[data-key]').forEach(input => {
+        const key = input.dataset.key;
+        const type = input.dataset.type;
+        const raw = input.value;
+        if (type === 'intArray') {
+            out[key] = raw.split(/[,，;\s]+/)
+                .map(s => s.trim()).filter(Boolean)
+                .map(s => parseInt(s, 10)).filter(n => !isNaN(n));
+        } else if (type === 'number') {
+            if (raw === '' || raw === null) {
+                out[key] = (key === 'randomSeed') ? null : 0;
+            } else {
+                out[key] = Number(raw);
+            }
+        } else {
+            out[key] = raw;
+        }
+    });
+    return out;
+}
+
+async function loadConfig() {
+    try {
+        CURRENT_CFG = await api('/config');
+        const locked = LATEST_STATE && LATEST_STATE.status === 'RUNNING';
+        renderCfgForm(CURRENT_CFG, locked);
+    } catch (e) {
+        toast('加载配置失败: ' + e.message, 'error');
+    }
+}
+
+async function saveConfig() {
+    if (LATEST_STATE && LATEST_STATE.status === 'RUNNING') {
+        toast('运行中无法修改配置, 请先暂停', 'error');
+        return;
+    }
+    try {
+        const cfg = readCfgForm();
+        await api('/config', { method: 'PUT', body: cfg });
+        CURRENT_CFG = cfg;
+        toast('配置已保存', 'success');
+    } catch (e) {
+        toast('保存配置失败: ' + e.message, 'error');
+    }
+}
+</script>
+
+
+<script>
+// --------- State rendering ---------
+function renderState(s) {
+    LATEST_STATE = s;
+    const status = s.status || 'IDLE';
+
+    // status badge
+    const badge = $('statusBadge');
+    badge.className = 'status-badge status-' + status;
+    $('statusText').textContent = status;
+
+    // round / step
+    const totalSteps = 1 + ((CURRENT_CFG && CURRENT_CFG.shuffleTimesPerRound) || 0) + 1;
+    if (s.currentRound > 0) {
+        $('roundBadge').style.display = '';
+        $('roundText').textContent = s.currentRound;
+        $('stepText').textContent = (s.currentStepInRound || 0) + ' / ' + totalSteps;
+    } else {
+        $('roundBadge').style.display = 'none';
+    }
+
+    // error banner
+    const banner = $('errorBanner');
+    if (s.errorMessage) {
+        banner.classList.add('show');
+        banner.textContent = '⚠ ' + s.errorMessage;
+    } else {
+        banner.classList.remove('show');
+        banner.textContent = '';
+    }
+
+    // stat cards
+    $('statValid').textContent   = (s.validCodes || []).length;
+    $('statIssued').textContent  = s.totalIssued || 0;
+    $('statSuccess').textContent = s.totalSuccess || 0;
+    $('statManual').textContent  = s.totalManualSuccess || 0;
+    $('statCancel').textContent  = s.totalCanceled || 0;
+    $('statFailed').textContent  = s.totalFailed || 0;
+
+    // current task
+    renderCurrentTask(s.currentTask, s.status);
+
+    // history
+    renderHistory(s.recentTasks || []);
+
+    // 控制按钮可用性
+    setButtonsByStatus(status, !!s.currentTask);
+
+    // 配置只读切换
+    const locked = (status === 'RUNNING');
+    const formLocked = $('cfgGrid').classList.contains('cfg-disabled');
+    if (locked !== formLocked) {
+        renderCfgForm(CURRENT_CFG, locked);
+    }
+}
+
+function setButtonsByStatus(status, hasCurrent) {
+    const isRunning = status === 'RUNNING';
+    const isPaused  = status === 'PAUSED';
+    const isError   = status === 'ERROR';
+    const isIdle    = status === 'IDLE' || status === 'FINISHED';
+
+    $('btnStart').disabled  = isRunning;
+    $('btnPause').disabled  = !isRunning;
+    // skip: 运行中或者(PAUSED/ERROR 且有 currentTask)可点
+    $('btnSkip').disabled   = !(isRunning || ((isPaused || isError) && hasCurrent));
+    $('btnReset').disabled  = isRunning;
+    $('btnRegen').disabled  = isRunning;
+    $('btnTestDb').disabled = false;
+    $('btnSaveCfg').disabled = isRunning;
+    $('btnReloadCfg').disabled = false;
+    void isIdle; // (eslint placeholder)
+}
+
+// --------- Current task ---------
+function renderCurrentTask(t, status) {
+    const box = $('currentTaskBox');
+    if (!t) {
+        box.innerHTML = '<div class="empty-hint">' +
+            (status === 'RUNNING' ? '正在准备下一步...' : '空闲') +
+            '</div>';
+        return;
+    }
+    const stuckCls = t.stuck ? ' stuck' : '';
+    const stateTag = stateTagHtml(t.state || 'ISSUED');
+    const stuckBadge = t.stuck
+        ? '<span class="tag tag-fail">⚠ 卡住, 请到 ACS 处理或点 跳过当前</span>'
+        : '';
+
+    let elapsed = '';
+    if (t.submittedAt) {
+        const ms = Date.now() - parseTs(t.submittedAt);
+        if (!isNaN(ms) && ms >= 0) elapsed = formatDuration(ms);
+    }
+
+    const startDesc = describeCode(t.startNode);
+    const endDesc = describeCode(t.endNode);
+
+    box.innerHTML = `
+        <div class="current-task${stuckCls}">
+            <div class="ct-head">
+                <span class="glass-tag">第 ${t.round} 轮 · ${esc(t.step)}</span>
+                <span class="glass-tag">${esc(t.taskType)}</span>
+                ${stateTag}
+                ${stuckBadge}
+            </div>
+            <div class="ct-task-no">${esc(t.taskNo)}</div>
+            <div class="ct-row ct-nodes">
+                <span><span class="k">起点</span>${esc(t.startNode)}</span>
+                <span><span class="k">终点</span>${esc(t.endNode)}</span>
+            </div>
+            ${(startDesc || endDesc) ? `
+            <div class="ct-row ct-desc">
+                ${startDesc ? `<span class="code-desc">起 → ${esc(startDesc)}</span>` : ''}
+                ${endDesc   ? `<span class="code-desc">终 → ${esc(endDesc)}</span>`   : ''}
+            </div>` : ''}
+            <div class="ct-row">
+                <span><span class="k">db_state</span>${esc(t.dbTaskState || '-')}</span>
+                <span><span class="k">提交时间</span>${esc(t.submittedAt || '-')}</span>
+                ${elapsed ? `<span><span class="k">已耗时</span>${elapsed}</span>` : ''}
+            </div>
+            ${t.remark ? `<div class="ct-row"><span><span class="k">备注</span>${esc(t.remark)}</span></div>` : ''}
+        </div>`;
+}
+
+function stateTagHtml(state) {
+    const upper = (state || '').toUpperCase();
+    let cls = 'tag-issued';
+    if (upper === 'SUCCESS') cls = 'tag-success';
+    else if (upper === 'MANUAL_SUCCESS') cls = 'tag-manual';
+    else if (upper.startsWith('CANCEL')) cls = 'tag-cancel';
+    else if (upper === 'FAIL' || upper === 'FAILED' || upper === 'ADD_FAILED') cls = 'tag-fail';
+    else if (upper === 'SKIPPED' || upper === 'PAUSED') cls = 'tag-skip';
+    else if (upper === 'ISSUED') cls = 'tag-issued';
+    return `<span class="tag ${cls}">${esc(state || '-')}</span>`;
+}
+
+// --------- History table ---------
+function renderHistory(list) {
+    $('historyCount').textContent = '最近 ' + list.length + ' 条';
+    const tbody = $('historyTbody');
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="empty-row">暂无历史任务</td></tr>';
+        return;
+    }
+    tbody.innerHTML = list.map(t => {
+        const tag = stateTagHtml(t.state);
+        const stuckCls = t.stuck ? ' stuck-row' : '';
+        const sd = describeCode(t.startNode);
+        const ed = describeCode(t.endNode);
+        return `<tr class="${stuckCls}">
+            <td>${t.seq}</td>
+            <td>${t.round}</td>
+            <td>${esc(t.step || '')}</td>
+            <td class="code">${esc(t.taskNo || '')}</td>
+            <td>${esc(t.taskType || '')}</td>
+            <td class="code">
+                ${esc(t.startNode || '')}${sd ? `<div class="cfg-hint">${esc(sd)}</div>` : ''}
+                <div style="margin-top:2px;">→ ${esc(t.endNode || '')}${ed ? `<div class="cfg-hint">${esc(ed)}</div>` : ''}</div>
+            </td>
+            <td>${tag}</td>
+            <td>${esc(t.submittedAt || '')}</td>
+            <td>${esc(t.finishedAt || '')}</td>
+            <td>${esc(t.remark || '')}</td>
+        </tr>`;
+    }).join('');
+}
+
+// --------- Helpers ---------
+function parseTs(s) {
+    // "yyyy-MM-dd HH:mm:ss" -> epoch
+    if (!s) return NaN;
+    return Date.parse(s.replace(' ', 'T'));
+}
+function formatDuration(ms) {
+    if (ms < 1000) return ms + 'ms';
+    const sec = Math.floor(ms / 1000);
+    if (sec < 60) return sec + 's';
+    const min = Math.floor(sec / 60);
+    const restSec = sec % 60;
+    if (min < 60) return min + 'm ' + restSec + 's';
+    const hour = Math.floor(min / 60);
+    const restMin = min % 60;
+    return hour + 'h ' + restMin + 'm';
+}
+</script>
+
+
+<script>
+// --------- Action buttons ---------
+async function doAction(path, opts) {
+    opts = opts || {};
+    if (opts.confirmMsg && !confirm(opts.confirmMsg)) return;
+    const btn = opts.btn;
+    const orig = btn ? btn.textContent : null;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ ...'; }
+    try {
+        const data = await api(path, { method: 'POST' });
+        toast(opts.okMsg || '操作成功', 'success');
+        if (typeof opts.onSuccess === 'function') opts.onSuccess(data);
+        await fetchState(true);
+    } catch (e) {
+        toast((opts.errPrefix || '操作失败') + ': ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.textContent = orig; }
+    }
+}
+
+function bindActions() {
+    $('btnStart').addEventListener('click', e => doAction('/start', {
+        btn: e.currentTarget, okMsg: '已启动', errPrefix: '启动失败'
+    }));
+    $('btnPause').addEventListener('click', e => doAction('/pause', {
+        btn: e.currentTarget, okMsg: '已发送暂停信号', errPrefix: '暂停失败'
+    }));
+    $('btnSkip').addEventListener('click', e => doAction('/skip', {
+        btn: e.currentTarget,
+        confirmMsg: '确认跳过当前任务? 当前任务会被记为 SKIPPED, 立即进入下一步',
+        okMsg: '已跳过当前任务', errPrefix: '跳过失败'
+    }));
+    $('btnReset').addEventListener('click', e => doAction('/reset', {
+        btn: e.currentTarget,
+        confirmMsg: '会清空所有进度和历史 (保留配置), 确定?',
+        okMsg: '已重置', errPrefix: '重置失败'
+    }));
+    $('btnRegen').addEventListener('click', e => doAction('/regenerate-codes', {
+        btn: e.currentTarget,
+        errPrefix: '重生成失败',
+        onSuccess: n => toast('重生成完成: ' + n + ' 个有效库位', 'success')
+    }));
+    $('btnTestDb').addEventListener('click', e => doAction('/test-db', {
+        btn: e.currentTarget, okMsg: '数据库连接 OK', errPrefix: '数据库连接失败'
+    }));
+
+    $('btnSaveCfg').addEventListener('click', saveConfig);
+    $('btnReloadCfg').addEventListener('click', () => loadConfig().then(() => toast('已重新加载配置', 'info')));
+    $('btnValidateSql').addEventListener('click', async () => {
+        try {
+            const draft = readCfgForm();
+            await api('/validate-sql', { method: 'POST', body: draft });
+            toast('SQL 合法 ✓', 'success');
+        } catch (e) {
+            toast('SQL 校验失败: ' + e.message, 'error', 4500);
+        }
+    });
+
+    // 有效库位查看弹窗
+    $('statValidCard').addEventListener('click', openCodesModal);
+    $('codesSearch').addEventListener('input', () => renderCodesList(''));
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && $('codesModal').classList.contains('show')) closeCodesModal();
+    });
+}
+
+// --------- 有效库位查看弹窗 ---------
+function openCodesModal() {
+    const codes = (LATEST_STATE && LATEST_STATE.validCodes) || [];
+    if (!codes.length) {
+        toast('当前没有有效库位, 请先 重生成库位', 'info');
+        return;
+    }
+    $('codesSearch').value = '';
+    renderCodesList();
+    $('codesModal').classList.add('show');
+    setTimeout(() => $('codesSearch').focus(), 50);
+}
+function closeCodesModal() { $('codesModal').classList.remove('show'); }
+window.closeCodesModal = closeCodesModal;
+
+function renderCodesList() {
+    const codes = (LATEST_STATE && LATEST_STATE.validCodes) || [];
+    const kw = ($('codesSearch').value || '').trim().toLowerCase();
+    const tbody = $('codesTbody');
+
+    let shown = 0;
+    const rows = [];
+    for (let i = 0; i < codes.length; i++) {
+        const code = codes[i];
+        const desc = describeCode(code) || '';
+        if (kw) {
+            // 同时支持搜索原始编码 / 中文描述
+            const hay = (code + ' ' + desc).toLowerCase();
+            if (!hay.includes(kw)) continue;
+        }
+        shown++;
+        // 只渲染前 2000 条, 避免 dom 过大卡顿
+        if (rows.length >= 2000) continue;
+        rows.push(`<tr>
+            <td class="row-num">${i + 1}</td>
+            <td class="code">${esc(code)}</td>
+            <td>${esc(desc)}</td>
+        </tr>`);
+    }
+
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="empty-row">没有匹配的库位</td></tr>';
+    } else {
+        tbody.innerHTML = rows.join('');
+    }
+    const truncated = shown > 2000 ? ` (仅显示前 2000 条, 请缩小搜索范围)` : '';
+    $('codesMeta').textContent = `${shown} / ${codes.length}${truncated}`;
+}
+
+// --------- Polling ---------
+let pollTimer = null;
+let inFlight = false;
+
+async function fetchState(force) {
+    if (inFlight && !force) return;
+    inFlight = true;
+    try {
+        const s = await api('/state');
+        renderState(s);
+    } catch (e) {
+        // 静默失败, 避免轮询过程中持续报错
+        console.warn('fetch state failed', e);
+    } finally {
+        inFlight = false;
+    }
+}
+
+function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(fetchState, 1500);
+}
+
+// --------- Boot ---------
+(async function init() {
+    bindActions();
+    await loadConfig();
+    await fetchState(true);
+    startPolling();
+})();
+</script>
+
+</body>
+</html>

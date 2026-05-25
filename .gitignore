@@ -25,3 +25,4 @@ Thumbs.db
 **/target/
 **/target/**
 /.qoder/pdf-to-text.js
+/.jqwik-database
