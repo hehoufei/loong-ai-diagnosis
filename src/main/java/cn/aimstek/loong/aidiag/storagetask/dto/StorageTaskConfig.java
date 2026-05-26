@@ -35,9 +35,19 @@ public class StorageTaskConfig {
     /** 随机种子, 保证可复现; null 则每次随机 */
     private Long randomSeed = 20260525L;
 
+    /**
+     * S 形条带宽度 (列数). 决定 generate() 出来的库位顺序.
+     *   stripeWidth = maxCol -> 整个仓库一段 S, 列方向最少跨越
+     *   stripeWidth = 4      -> 每 4 列一段 (默认)
+     *   stripeWidth = 1      -> 每列一段, 层升降密集
+     */
+    private int stripeWidth = 4;
+
     // ========== 任务参数 ==========
-    /** 入库口 / 出库口 节点 */
-    private String inboundStartNode = "ND_11025";
+    /** 入库口节点 (一轮起点 N2S 的 startNode + 输送终点 N2N 的 endNode) */
+    private String inboundStartNode = "ND_11001";
+    /** 出库口节点 (一轮 S2N 的 endNode + 输送起点 N2N 的 startNode) */
+    private String outboundEndNode = "ND_11002";
     private String taskSource = "WMS";
     private String taskBizType = "默认";
     /** 容器 (固定) */
@@ -45,9 +55,33 @@ public class StorageTaskConfig {
     /** 货物 (固定) */
     private String goodsCode = "GS_1223";
 
+    /**
+     * 是否在每轮出库后追加一个 N2N 输送任务 (ND_11002 -> ND_11001).
+     * 输送任务携带 SHAPE_DETECTOR 形状检测功能, 容器高度 30cm.
+     */
+    private boolean enableConveyorStep = true;
+
     // ========== 循环规则 ==========
     /** 一轮内移库次数 */
     private int shuffleTimesPerRound = 10;
+
+    /**
+     * 移库目标选取策略.
+     *   SEQUENTIAL: 顺序滚动 (取 validCodes[(cursor+1) % n], 路径最短, 覆盖最快)
+     *   LOCAL:      局部随机 (在 cursor ± moveLocalWindow 内随机抽)
+     *   RANDOM:     完全随机 (在整个 validCodes 内随机, 三轴乱跳)
+     */
+    private String moveStrategy = "SEQUENTIAL";
+
+    /** LOCAL 模式下随机窗口大小 (前后各 N 个候选) */
+    private int moveLocalWindow = 10;
+
+    /**
+     * 是否避免同列同侧的移库 (默认 true).
+     * 同列同侧 = 同巷道, 同层, 同列, 同侧 (左/右), 比如 row1 左远 -> row2 左近.
+     * 双深位货架物理上需要先取出近位才能取远位, 测试场景一般不希望出现.
+     */
+    private boolean avoidSameColSameSide = true;
 
     // ========== 轮询 ==========
     private int pollIntervalSeconds = 3;

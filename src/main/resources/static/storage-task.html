@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WCS 智能诊断 - 立库循环测试</title>
 <link rel="stylesheet" href="common.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 <style>
     .container { max-width: 1240px; margin: 0 auto; padding: 20px; }
 
@@ -167,6 +175,83 @@
     /* -- Empty state -- */
     .empty-row { text-align: center; padding: 24px; color: var(--color-text-muted); font-size: 13px; }
 
+    /* -- 任务轨迹 SVG -- */
+    .track-toolbar {
+        display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        font-size: 12.5px; color: var(--color-text-secondary);
+    }
+    .track-toolbar select {
+        height: 30px; padding: 0 10px; border: 1.5px solid rgba(99,102,241,0.15);
+        border-radius: 8px; background: rgba(255,255,255,0.7); color: var(--color-text);
+        outline: none; font-size: 12px; cursor: pointer;
+    }
+    .track-toolbar label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+    .track-svg-wrap {
+        margin-top: 12px;
+        padding: 8px 6px;
+        background: rgba(255,255,255,0.4);
+        border: 1px solid rgba(99,102,241,0.08);
+        border-radius: 12px;
+        overflow-x: auto;
+    }
+    .track-svg { display: block; min-width: 760px; }
+    .tk-cell-valid     { fill: rgba(99,102,241,0.10); stroke: rgba(99,102,241,0.22); }
+    .tk-cell-empty     { fill: rgba(0,0,0,0.02);      stroke: rgba(0,0,0,0.06); }
+    .tk-aisle-bar      { fill: rgba(99,102,241,0.05); stroke: rgba(99,102,241,0.10); }
+    .tk-cell-cur-start { fill: rgba(245,158,11,0.55); stroke: #d97706; stroke-width: 2; }
+    .tk-cell-cur-end   { fill: rgba(16,185,129,0.55); stroke: #059669; stroke-width: 2; }
+    .tk-cell-hist      { fill: rgba(99,102,241,0.45); stroke: rgba(99,102,241,0.7); }
+    .tk-line-cur       { stroke: #059669; stroke-width: 2; fill: none; }
+    .tk-line-hist      { stroke: rgba(99,102,241,0.45); stroke-width: 1; fill: none; stroke-dasharray: 3 2; }
+    .tk-row-label      { font: 11px var(--font-family); fill: var(--color-text-muted); }
+    .tk-col-label      { font: 9px  var(--font-mono); fill: var(--color-text-muted); }
+    .tk-cross-layer    { font: 11px var(--font-family); fill: var(--color-warning); font-weight: 600; }
+    .track-legend {
+        display: flex; flex-wrap: wrap; gap: 14px;
+        margin-top: 8px; font-size: 11.5px; color: var(--color-text-muted);
+    }
+    .track-legend span.box {
+        display: inline-block; width: 12px; height: 12px;
+        vertical-align: middle; margin-right: 4px; border-radius: 2px;
+    }
+    .track-legend span.line {
+        display: inline-block; width: 22px; height: 2px;
+        vertical-align: middle; margin-right: 4px;
+    }
+
+    /* -- 3D 场景 -- */
+    .scene3d-wrap {
+        margin-top: 12px;
+        position: relative;
+        background: linear-gradient(135deg, #f5f7ff 0%, #eef0fc 100%);
+        border: 1px solid rgba(99,102,241,0.12);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .scene3d-canvas { display: block; width: 100%; height: 560px; }
+    .scene3d-hud {
+        position: absolute; top: 10px; left: 10px;
+        background: rgba(255,255,255,0.78);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(99,102,241,0.12);
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 11.5px; color: var(--color-text-secondary);
+        line-height: 1.7;
+        pointer-events: none;
+    }
+    .scene3d-hud b { color: var(--color-text); font-weight: 700; }
+    .scene3d-tip {
+        position: absolute; bottom: 10px; right: 12px;
+        font-size: 11px; color: var(--color-text-muted);
+        background: rgba(255,255,255,0.7);
+        padding: 4px 10px; border-radius: 8px;
+    }
+    .scene3d-controls {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        font-size: 12.5px; color: var(--color-text-secondary);
+    }
+
     /* -- 库位描述 -- */
     .code-desc {
         display: inline-flex; align-items: center; gap: 6px;
@@ -256,10 +341,7 @@
         <span>立库循环测试</span>
     </div>
     <div class="topbar-right">
-        <a href="index.html"        class="topbar-link">📊 诊断模式</a>
-        <a href="chat.html"         class="topbar-link">💬 Agent 对话</a>
-        <a href="rules.html"        class="topbar-link">📋 规则管理</a>
-        <a href="docs.html"         class="topbar-link">📚 知识库</a>
+        <a href="home.html"         class="topbar-link">🏠 首页</a>
         <a href="storage-task.html" class="topbar-link active">🏗️ 立库测试</a>
     </div>
 </nav>
@@ -287,13 +369,37 @@
                 <button class="glass-btn-outline"  id="btnReset">↻ 重置</button>
                 <button class="glass-btn-outline"  id="btnRegen">🔃 重生成库位</button>
                 <button class="glass-btn-outline"  id="btnTestDb">🩺 测 DB</button>
+                <button class="glass-btn-outline"  id="btnPreview">📋 预览任务</button>
+                <button class="glass-btn-outline"  id="btnOpenCfg">⚙ 配置</button>
             </div>
         </div>
         <div id="errorBanner" class="error-banner"></div>
         <div class="stats-overview">
             <div class="glass-card stat-card clickable" id="statValidCard" title="点击查看全部有效库位">
                 <div class="stat-value" id="statValid">-</div>
-                <div class="stat-label">有效库位 (点击查看)</div>
+                <div class="stat-label">
+                    有效 / <span id="statCandidate">-</span> 候选
+                    <div class="cfg-hint" id="statGeneratedAt" style="margin-top:2px;"></div>
+                </div>
+            </div>
+            <div class="glass-card stat-card clickable" id="statVisitedCard" title="点击查看已访问库位列表">
+                <div class="stat-value">
+                    <span id="statVisited">-</span>
+                    <span class="cfg-hint" id="statVisitedPct" style="font-size:14px;font-weight:600;">-</span>
+                </div>
+                <div class="stat-label">
+                    已访问库位
+                    <div class="cfg-hint" id="statVisitedHint" style="margin-top:2px;"></div>
+                </div>
+            </div>
+            <div class="glass-card stat-card" id="statEtaCard" title="基于最近任务平均耗时估算">
+                <div class="stat-value">
+                    <span id="statEta">-</span>
+                </div>
+                <div class="stat-label">
+                    预计跑完
+                    <div class="cfg-hint" id="statEtaHint" style="margin-top:2px;"></div>
+                </div>
             </div>
             <div class="glass-card stat-card"><div class="stat-value" id="statIssued">-</div><div class="stat-label">已下发</div></div>
             <div class="glass-card stat-card"><div class="stat-value" id="statSuccess">-</div><div class="stat-label">SUCCESS</div></div>
@@ -313,23 +419,110 @@
         </div>
     </div>
 
-    <!-- ========== 配置面板 ========== -->
-    <div class="glass-card section-card" id="cfgCard">
+    <!-- ========== 任务轨迹 (俯视图) ========== -->
+    <div class="glass-card section-card">
         <div class="section-header">
-            <div class="section-title">⚙ 配置 <span class="cfg-hint" id="cfgLockHint" style="display:none;">运行中不可修改</span></div>
-            <div class="actions-row">
-                <button class="glass-btn-outline" id="btnReloadCfg">↻ 重新加载</button>
-                <button class="glass-btn-outline" id="btnValidateSql">🧪 校验 SQL</button>
-                <button class="glass-btn"          id="btnSaveCfg">💾 保存配置</button>
+            <div class="section-title">🧭 任务轨迹 (俯视图)</div>
+            <div class="track-toolbar">
+                <label>层
+                    <select id="trackLayerSel"></select>
+                </label>
+                <label>巷道
+                    <select id="trackAisleSel"></select>
+                </label>
+                <label>历史
+                    <input type="number" id="trackHistN" value="20" min="0" max="200" style="width:60px;height:30px;border:1.5px solid rgba(99,102,241,0.15);border-radius:8px;padding:0 8px;font-size:12px;background:rgba(255,255,255,0.7);outline:none;">
+                </label>
+                <label><input type="checkbox" id="trackOnlyCurAisle" checked> 仅当前巷道历史</label>
+                <button class="glass-btn-outline" id="btnRedrawTrack" style="padding:5px 12px;font-size:12px;">↻ 刷新</button>
             </div>
         </div>
-        <div id="cfgGrid" class="cfg-grid"></div>
+        <div class="track-svg-wrap">
+            <svg id="trackSvg" class="track-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div class="track-legend">
+            <span><span class="box" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.22);"></span>有效库位</span>
+            <span><span class="box" style="background:rgba(245,158,11,0.55);border:1px solid #d97706;"></span>当前任务起点</span>
+            <span><span class="box" style="background:rgba(16,185,129,0.55);border:1px solid #059669;"></span>当前任务终点</span>
+            <span><span class="line" style="background:#059669;"></span>当前任务轨迹</span>
+            <span><span class="line" style="background:rgba(99,102,241,0.45);"></span>最近历史</span>
+            <span style="color:var(--color-warning);">⚑ 跨层标记 (端点不在当前层时显示在两端)</span>
+        </div>
+    </div>
+
+    <!-- ========== 3D 立体视图 ========== -->
+    <div class="glass-card section-card">
+        <div class="section-header">
+            <div class="section-title">🧊 立体视图 (3D)</div>
+            <div class="scene3d-controls">
+                <label>历史
+                    <input type="number" id="scene3dHistN" value="20" min="0" max="200" style="width:60px;height:30px;border:1.5px solid rgba(99,102,241,0.15);border-radius:8px;padding:0 8px;font-size:12px;background:rgba(255,255,255,0.7);outline:none;">
+                </label>
+                <label><input type="checkbox" id="scene3dShowEmpty"> 显示无效库位</label>
+                <label><input type="checkbox" id="scene3dAutoRotate"> 自动旋转</label>
+                <button class="glass-btn-outline" id="btnSceneFit"  style="padding:5px 12px;font-size:12px;">📷 视角复位</button>
+                <button class="glass-btn-outline" id="btnClearVisited" style="padding:5px 12px;font-size:12px;">🧹 清除访问标记</button>
+                <button class="glass-btn-outline" id="btnPreviewAnim" style="padding:5px 12px;font-size:12px;">▶ 预览动画</button>
+                <button class="glass-btn-outline" id="btnPreviewStop" style="padding:5px 12px;font-size:12px;display:none;">⏹ 停止</button>
+                <label style="display:none;" id="previewSpeedLabel">速度
+                    <input type="range" id="previewSpeed" min="50" max="1000" value="300" style="width:80px;vertical-align:middle;">
+                </label>
+                <span id="previewProgress" style="font-size:11px;color:var(--color-text-muted);display:none;"></span>
+            </div>
+        </div>
+        <div class="scene3d-wrap">
+            <canvas id="scene3dCanvas" class="scene3d-canvas"></canvas>
+            <div class="scene3d-hud" id="scene3dHud">
+                <div><b>左键</b> 旋转 · <b>右键</b> 平移 · <b>滚轮</b> 缩放</div>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px;font-size:11px;">
+                    <span><span style="display:inline-block;width:10px;height:10px;background:#9ca3af;border-radius:2px;vertical-align:middle;margin-right:3px;"></span>未访问</span>
+                    <span><span style="display:inline-block;width:10px;height:10px;background:#10b981;border-radius:2px;vertical-align:middle;margin-right:3px;"></span>已访问</span>
+                    <span><span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;vertical-align:middle;margin-right:3px;"></span>当前起点</span>
+                    <span><span style="display:inline-block;width:10px;height:10px;background:#fbbf24;border-radius:2px;vertical-align:middle;margin-right:3px;"></span>堆垛机</span>
+                </div>
+                <div id="scene3dStat">尚未生成库位</div>
+            </div>
+            <div class="scene3d-tip">轴: <b style="color:#dc2626;">X 列</b> · <b style="color:#059669;">Y 层</b> · <b style="color:#2563eb;">Z 排</b></div>
+        </div>
     </div>
 
     <!-- ========== 任务历史 ========== -->
     <div class="glass-card section-card">
         <div class="section-header">
             <div class="section-title">🗂 任务历史 <span class="cfg-hint" id="historyCount">最近 0 条</span></div>
+            <div class="actions-row">
+                <a class="glass-btn-outline" href="/api/v1/storage-task/history.csv"
+                   download style="text-decoration:none;padding:5px 12px;font-size:12px;">⬇ 下载 CSV</a>
+                <button class="glass-btn-outline" id="btnClearHistoryCsv" style="padding:5px 12px;font-size:12px;">🧹 清空 CSV</button>
+            </div>
+        </div>
+
+        <!-- 筛选条 -->
+        <div class="actions-row" style="margin-bottom:12px;font-size:12.5px;color:var(--color-text-secondary);">
+            <input type="text" id="hsearch" placeholder="搜索任务号 / 起终点 / 备注..." class="glass-input" style="width:260px;height:34px;font-size:13px;">
+            <select id="hfilterState" class="glass-input" style="width:140px;height:34px;font-size:12px;cursor:pointer;">
+                <option value="">全部状态</option>
+                <option value="SUCCESS">SUCCESS</option>
+                <option value="MANUAL_SUCCESS">MANUAL_SUCCESS</option>
+                <option value="CANCEL">CANCEL</option>
+                <option value="FAIL">FAIL</option>
+                <option value="SKIPPED">SKIPPED</option>
+                <option value="ADD_FAILED">ADD_FAILED</option>
+                <option value="ISSUED">ISSUED</option>
+            </select>
+            <select id="hfilterType" class="glass-input" style="width:120px;height:34px;font-size:12px;cursor:pointer;">
+                <option value="">全部类型</option>
+                <option value="N2S">N2S 入库</option>
+                <option value="S2S">S2S 移库</option>
+                <option value="S2N">S2N 出库</option>
+                <option value="N2N">N2N 输送</option>
+            </select>
+            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" id="hfilterStuck"> 仅卡住
+            </label>
+            <button class="glass-btn-outline" id="btnHfilterReset" style="padding:5px 12px;font-size:12px;">↻ 重置</button>
+            <span style="flex:1;"></span>
+            <span id="hpageInfo" style="font-size:12px;color:var(--color-text-muted);">0 / 0</span>
         </div>
         <div class="table-wrapper">
             <table class="glass-table">
@@ -352,8 +545,20 @@
                 </tbody>
             </table>
         </div>
-    </div>
 
+        <!-- 分页 -->
+        <div class="actions-row" style="margin-top:12px;justify-content:flex-end;">
+            <button class="glass-btn-outline" id="hpagePrev" style="padding:5px 14px;font-size:12px;">‹ 上一页</button>
+            <span id="hpageNum" style="font-size:12.5px;color:var(--color-text-secondary);min-width:80px;text-align:center;">第 1 页</span>
+            <button class="glass-btn-outline" id="hpageNext" style="padding:5px 14px;font-size:12px;">下一页 ›</button>
+            <select id="hpageSize" class="glass-input" style="width:90px;height:30px;font-size:12px;cursor:pointer;">
+                <option value="10">10/页</option>
+                <option value="20" selected>20/页</option>
+                <option value="50">50/页</option>
+                <option value="100">100/页</option>
+            </select>
+        </div>
+    </div>
 </div>
 
 <!-- ========== 有效库位查看弹窗 ========== -->
@@ -375,6 +580,55 @@
                     </tr>
                 </thead>
                 <tbody id="codesTbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 配置弹窗 ========== -->
+<div class="modal-overlay" id="cfgModal" onclick="if(event.target===this)closeCfgModal()">
+    <div class="modal" style="width:900px;">
+        <div class="modal-head">
+            <div class="modal-title">⚙ 配置 <span class="cfg-hint" id="cfgLockHint" style="display:none;margin-left:8px;">运行中不可修改</span></div>
+            <span style="flex:1;"></span>
+            <button class="glass-btn-outline" id="btnReloadCfg" style="padding:5px 12px;font-size:12px;">↻ 重新加载</button>
+            <button class="glass-btn-outline" id="btnValidateSql" style="padding:5px 12px;font-size:12px;">🧪 校验 SQL</button>
+            <button class="glass-btn"          id="btnSaveCfg" style="padding:5px 14px;font-size:12px;">💾 保存</button>
+            <button class="modal-close" onclick="closeCfgModal()" title="关闭">✕</button>
+        </div>
+        <div class="modal-body" style="padding:16px 18px;">
+            <div id="cfgGrid" class="cfg-grid"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 预览任务弹窗 ========== -->
+<div class="modal-overlay" id="previewModal" onclick="if(event.target===this)closePreviewModal()">
+    <div class="modal" style="width:1080px;">
+        <div class="modal-head">
+            <div class="modal-title">📋 预览任务清单 (干跑, 不下发)</div>
+            <label style="font-size:12.5px;color:var(--color-text-secondary);">
+                数量
+                <input type="number" id="previewN" value="30" min="1" max="200" style="width:70px;height:30px;border:1.5px solid rgba(99,102,241,0.15);border-radius:8px;padding:0 8px;font-size:12px;background:rgba(255,255,255,0.7);outline:none;margin-left:4px;">
+            </label>
+            <button class="glass-btn-outline" id="btnRunPreview" style="padding:5px 12px;font-size:12px;">↻ 重新生成</button>
+            <span class="modal-meta" id="previewMeta"></span>
+            <button class="modal-close" onclick="closePreviewModal()" title="关闭">✕</button>
+        </div>
+        <div class="modal-body">
+            <table class="modal-table">
+                <thead>
+                    <tr>
+                        <th class="row-num">#</th>
+                        <th style="width:50px;">轮</th>
+                        <th style="width:90px;">步骤</th>
+                        <th style="width:60px;">类型</th>
+                        <th>起 → 终</th>
+                        <th style="width:170px;">解析对照</th>
+                        <th style="width:80px;">距离</th>
+                    </tr>
+                </thead>
+                <tbody id="previewTbody"></tbody>
             </table>
         </div>
     </div>
@@ -430,6 +684,11 @@ function esc(v) {
 // --------- 库位编码解析 ---------
 // 例: SL_-WH_001-SA_HSMD_1-AL_L08-R-02-04-0001-01
 //                                  ↑aisle ↑side ↑depth ↑row ↑col ↑layer
+// row -> 位置:
+//   row 1 -> 远伸 (L 侧)
+//   row 2 -> 近伸 (L 侧)
+//   row 3 -> 近伸 (R 侧)
+//   row 4 -> 远伸 (R 侧)
 const CODE_RE = /-AL_L(\d{1,3})-([LR])-(\d{1,2})-(\d{1,2})-(\d{1,4})-(\d{1,2})$/;
 function parseCode(code) {
     if (!code) return null;
@@ -453,6 +712,9 @@ function describeCode(code) {
     return `${p.aisle} 巷道 · ${p.sideText} · ${p.depthText} · ${p.row}排 · ${p.col}列 · ${p.layer}层`;
 }
 
+// 暴露给 3D 模块脚本
+window.parseCode = parseCode;
+
 // --------- Config form ---------
 const CFG_FIELDS = [
     { key: 'dbUrl',                     label: '数据库 URL',          type: 'text',     wide: true },
@@ -467,12 +729,30 @@ const CFG_FIELDS = [
     { key: 'fullTestLayers',            label: '全测层',               type: 'intArray', hint: '逗号分隔, 例: 1,10' },
     { key: 'sampleRatio',               label: '抽样比例',             type: 'number',   hint: '0~1, 例 0.5' },
     { key: 'randomSeed',                label: '随机种子',             type: 'number',   hint: '空=每次随机' },
-    { key: 'inboundStartNode',          label: '入库口节点',           type: 'text' },
+    { key: 'stripeWidth',               label: 'S 形条带宽度',         type: 'number',
+      hint: '每段 S 的列数. 8=平衡, 64=整段, 1=每列一段' },
+    { key: 'inboundStartNode',          label: '入库口节点',           type: 'text',
+      hint: 'N2S 起点 + N2N 终点 (默认 ND_11001)' },
+    { key: 'outboundEndNode',           label: '出库口节点',           type: 'text',
+      hint: 'S2N 终点 + N2N 起点 (默认 ND_11002)' },
+    { key: 'enableConveyorStep',        label: '启用输送 N2N',         type: 'bool',
+      hint: '出库后追加 ND_11002 → ND_11001 输送任务' },
     { key: 'taskSource',                label: 'taskSource',          type: 'text' },
     { key: 'taskBizType',               label: 'bizType',             type: 'text' },
     { key: 'containerCode',             label: '容器号',              type: 'text' },
     { key: 'goodsCode',                 label: '货物号',              type: 'text' },
     { key: 'shuffleTimesPerRound',      label: '每轮移库次数',         type: 'number' },
+    { key: 'moveStrategy',              label: '移库目标策略',         type: 'select',
+      options: [
+        { v: 'LOCAL',      t: 'LOCAL 局部随机 (推荐)' },
+        { v: 'SEQUENTIAL', t: 'SEQUENTIAL 顺序相邻 (路径最短)' },
+        { v: 'RANDOM',     t: 'RANDOM 完全随机 (三轴乱跳)' }
+      ],
+      hint: 'LOCAL=路程短+随机; SEQ=最短; RANDOM=最远' },
+    { key: 'moveLocalWindow',           label: 'LOCAL 窗口',          type: 'number',
+      hint: 'LOCAL 模式下随机抽 cursor ± N' },
+    { key: 'avoidSameColSameSide',      label: '避免同列同侧移库',     type: 'bool',
+      hint: '同巷道+同层+同列+同侧 (如左远→左近) 直接跳过' },
     { key: 'pollIntervalSeconds',       label: '轮询间隔(秒)',         type: 'number' },
     { key: 'taskStuckThresholdSeconds', label: '卡住阈值(秒)',         type: 'number' },
     { key: 'taskNoPrefix',              label: '任务号前缀',           type: 'text' },
@@ -484,7 +764,6 @@ const CFG_FIELDS = [
 
 let CURRENT_CFG = null;
 let LATEST_STATE = null;
-
 function renderCfgForm(cfg, locked) {
     const container = $('cfgGrid');
     container.classList.toggle('cfg-disabled', !!locked);
@@ -504,6 +783,37 @@ function renderCfgForm(cfg, locked) {
                 <textarea class="cfg-input cfg-input-sql"
                     data-key="${f.key}" data-type="${f.type}"
                     ${locked ? 'disabled' : ''}>${esc(v)}</textarea>
+            </div>`;
+        }
+
+        if (f.type === 'select') {
+            const opts = (f.options || []).map(o =>
+                `<option value="${esc(o.v)}"${o.v === v ? ' selected' : ''}>${esc(o.t)}</option>`
+            ).join('');
+            return `
+            <div class="cfg-item">
+                <label class="cfg-label">
+                    ${esc(f.label)}
+                    ${f.hint ? `<span class="cfg-hint">(${esc(f.hint)})</span>` : ''}
+                </label>
+                <select class="cfg-input" data-key="${f.key}" data-type="${f.type}" ${locked ? 'disabled' : ''}>
+                    ${opts}
+                </select>
+            </div>`;
+        }
+
+        if (f.type === 'bool') {
+            const checked = (v === true || v === 'true') ? 'checked' : '';
+            return `
+            <div class="cfg-item">
+                <label class="cfg-label">
+                    ${esc(f.label)}
+                    ${f.hint ? `<span class="cfg-hint">(${esc(f.hint)})</span>` : ''}
+                </label>
+                <label class="cfg-input" style="display:flex;align-items:center;gap:8px;cursor:pointer;${locked?'opacity:0.6;cursor:not-allowed;':''}">
+                    <input type="checkbox" data-key="${f.key}" data-type="${f.type}" ${checked} ${locked ? 'disabled' : ''}>
+                    <span style="font-size:12.5px;color:var(--color-text-secondary);">${checked ? '已开启' : '关闭'}</span>
+                </label>
             </div>`;
         }
 
@@ -530,9 +840,13 @@ function renderCfgForm(cfg, locked) {
 
 function readCfgForm() {
     const out = Object.assign({}, CURRENT_CFG || {});
-    document.querySelectorAll('#cfgGrid input[data-key], #cfgGrid textarea[data-key]').forEach(input => {
+    document.querySelectorAll('#cfgGrid input[data-key], #cfgGrid textarea[data-key], #cfgGrid select[data-key]').forEach(input => {
         const key = input.dataset.key;
         const type = input.dataset.type;
+        if (type === 'bool') {
+            out[key] = !!input.checked;
+            return;
+        }
         const raw = input.value;
         if (type === 'intArray') {
             out[key] = raw.split(/[,，;\s]+/)
@@ -554,6 +868,7 @@ function readCfgForm() {
 async function loadConfig() {
     try {
         CURRENT_CFG = await api('/config');
+        window.CURRENT_CFG = CURRENT_CFG;
         const locked = LATEST_STATE && LATEST_STATE.status === 'RUNNING';
         renderCfgForm(CURRENT_CFG, locked);
     } catch (e) {
@@ -571,6 +886,7 @@ async function saveConfig() {
         await api('/config', { method: 'PUT', body: cfg });
         CURRENT_CFG = cfg;
         toast('配置已保存', 'success');
+        closeCfgModal();
     } catch (e) {
         toast('保存配置失败: ' + e.message, 'error');
     }
@@ -582,6 +898,8 @@ async function saveConfig() {
 // --------- State rendering ---------
 function renderState(s) {
     LATEST_STATE = s;
+    window.LATEST_STATE = s;
+    window.CURRENT_CFG = CURRENT_CFG;
     const status = s.status || 'IDLE';
 
     // status badge
@@ -610,7 +928,26 @@ function renderState(s) {
     }
 
     // stat cards
-    $('statValid').textContent   = (s.validCodes || []).length;
+    $('statValid').textContent     = (s.validCodes || []).length;
+    $('statCandidate').textContent = s.candidateCount || 0;
+    $('statGeneratedAt').textContent = s.validCodesGeneratedAt
+        ? ('生成于 ' + s.validCodesGeneratedAt) : '尚未生成';
+
+    const visited = (s.visitedCodes || []).length;
+    const validN  = (s.validCodes  || []).length;
+    $('statVisited').textContent = visited;
+    if (validN > 0) {
+        const pct = (visited * 100 / validN).toFixed(1);
+        $('statVisitedPct').textContent = ' / ' + validN + '  (' + pct + '%)';
+        $('statVisitedHint').textContent = '点击查看 · 还差 ' + (validN - visited) + ' 个';
+    } else {
+        $('statVisitedPct').textContent = '';
+        $('statVisitedHint').textContent = '点击查看';
+    }
+
+    // 预计完成时间: 用最近 N 条已完成任务的平均耗时, 推算还要多久
+    updateEta(s);
+
     $('statIssued').textContent  = s.totalIssued || 0;
     $('statSuccess').textContent = s.totalSuccess || 0;
     $('statManual').textContent  = s.totalManualSuccess || 0;
@@ -624,7 +961,7 @@ function renderState(s) {
     renderHistory(s.recentTasks || []);
 
     // 控制按钮可用性
-    setButtonsByStatus(status, !!s.currentTask);
+    setButtonsByStatus(status, !!s.currentTask, (s.validCodes || []).length);
 
     // 配置只读切换
     const locked = (status === 'RUNNING');
@@ -632,24 +969,68 @@ function renderState(s) {
     if (locked !== formLocked) {
         renderCfgForm(CURRENT_CFG, locked);
     }
+
+    // 当前任务的层若与轨迹图层不同, 自动跟随
+    if (s.currentTask) {
+        const pe = parseCode(s.currentTask.endNode);
+        if (pe && (TRACK_STATE.followCurrent !== false)) {
+            const layerSel = $('trackLayerSel');
+            if (layerSel && parseInt(layerSel.value, 10) !== pe.layer) {
+                ensureTrackSelectors();
+                layerSel.value = pe.layer;
+            }
+            const aisleSel = $('trackAisleSel');
+            if (aisleSel && parseInt(aisleSel.value, 10) !== pe.aisle) {
+                ensureTrackSelectors();
+                aisleSel.value = pe.aisle;
+            }
+        }
+    }
+
+    // 重绘轨迹
+    ensureTrackSelectors();
+    drawTrack();
+
+    // 3D 立体场景
+    if (typeof window.update3DScene === 'function') {
+        try { window.update3DScene(); } catch (e) { console.warn('3D update failed', e); }
+    }
 }
 
-function setButtonsByStatus(status, hasCurrent) {
+function setButtonsByStatus(status, hasCurrent, validCount) {
     const isRunning = status === 'RUNNING';
     const isPaused  = status === 'PAUSED';
     const isError   = status === 'ERROR';
-    const isIdle    = status === 'IDLE' || status === 'FINISHED';
+    const isFresh   = status === 'IDLE' || status === 'FINISHED';
 
-    $('btnStart').disabled  = isRunning;
+    // 启动: 暂停/出错时随时可继续; IDLE 状态必须先生成有效库位
+    $('btnStart').disabled  = isRunning || (isFresh && !validCount);
     $('btnPause').disabled  = !isRunning;
-    // skip: 运行中或者(PAUSED/ERROR 且有 currentTask)可点
     $('btnSkip').disabled   = !(isRunning || ((isPaused || isError) && hasCurrent));
     $('btnReset').disabled  = isRunning;
     $('btnRegen').disabled  = isRunning;
     $('btnTestDb').disabled = false;
-    $('btnSaveCfg').disabled = isRunning;
+    $('btnSaveCfg').disabled   = isRunning;
     $('btnReloadCfg').disabled = false;
-    void isIdle; // (eslint placeholder)
+
+    // 没生成库位时, 重生成按钮高亮成主操作
+    const regenBtn = $('btnRegen');
+    if (isFresh && !validCount) {
+        regenBtn.classList.remove('glass-btn-outline');
+        regenBtn.classList.add('glass-btn');
+        regenBtn.title = '先生成有效库位, 然后才能启动';
+    } else {
+        regenBtn.classList.remove('glass-btn');
+        regenBtn.classList.add('glass-btn-outline');
+        regenBtn.title = '';
+    }
+
+    // 启动按钮也加个 title 提示
+    if (isFresh && !validCount) {
+        $('btnStart').title = '请先点 重生成库位';
+    } else {
+        $('btnStart').title = '';
+    }
 }
 
 // --------- Current task ---------
@@ -676,6 +1057,15 @@ function renderCurrentTask(t, status) {
     const startDesc = describeCode(t.startNode);
     const endDesc = describeCode(t.endNode);
 
+    // 暂停 / 错误状态下, 在卡片底部显示 重试 / 跳过 按钮
+    const showActions = (status === 'PAUSED' || status === 'ERROR');
+    const actionsHtml = showActions ? `
+            <div class="ct-row" style="margin-top:10px;gap:8px;">
+                <button class="glass-btn" id="ctBtnRetry" style="padding:6px 14px;font-size:12px;">🔁 重试当前</button>
+                <button class="glass-btn-outline" id="ctBtnSkip" style="padding:6px 14px;font-size:12px;">⏭ 跳过当前</button>
+                <span class="cfg-hint" style="align-self:center;margin-left:6px;">处理掉 ACS 冲突后, 点 重试当前 重新下发</span>
+            </div>` : '';
+
     box.innerHTML = `
         <div class="current-task${stuckCls}">
             <div class="ct-head">
@@ -700,7 +1090,24 @@ function renderCurrentTask(t, status) {
                 ${elapsed ? `<span><span class="k">已耗时</span>${elapsed}</span>` : ''}
             </div>
             ${t.remark ? `<div class="ct-row"><span><span class="k">备注</span>${esc(t.remark)}</span></div>` : ''}
+            ${actionsHtml}
         </div>`;
+
+    // 绑定卡片内的按钮 (每次重渲染都要重新绑)
+    if (showActions) {
+        const retryBtn = $('ctBtnRetry');
+        const skipBtn  = $('ctBtnSkip');
+        if (retryBtn) retryBtn.addEventListener('click', () => doAction('/retry', {
+            btn: retryBtn,
+            confirmMsg: '确认重试当前任务? 任务号不变, 会再次调用 addTask 下发',
+            okMsg: '已重新下发', errPrefix: '重试失败'
+        }));
+        if (skipBtn) skipBtn.addEventListener('click', () => doAction('/skip', {
+            btn: skipBtn,
+            confirmMsg: '确认跳过当前任务?',
+            okMsg: '已跳过当前任务', errPrefix: '跳过失败'
+        }));
+    }
 }
 
 function stateTagHtml(state) {
@@ -716,14 +1123,41 @@ function stateTagHtml(state) {
 }
 
 // --------- History table ---------
+const HISTORY_FILTER = {
+    keyword: '',
+    state: '',
+    type: '',
+    stuck: false,
+    page: 1,
+    pageSize: 20
+};
+
 function renderHistory(list) {
     $('historyCount').textContent = '最近 ' + list.length + ' 条';
+    const filtered = applyHistoryFilter(list);
+
+    // 分页
+    const ps = HISTORY_FILTER.pageSize;
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / ps));
+    if (HISTORY_FILTER.page > totalPages) HISTORY_FILTER.page = totalPages;
+    if (HISTORY_FILTER.page < 1) HISTORY_FILTER.page = 1;
+    const startIdx = (HISTORY_FILTER.page - 1) * ps;
+    const pageRows = filtered.slice(startIdx, startIdx + ps);
+
+    $('hpageInfo').textContent = total + ' 条 / 共 ' + list.length;
+    $('hpageNum').textContent = '第 ' + HISTORY_FILTER.page + ' / ' + totalPages + ' 页';
+    $('hpagePrev').disabled = HISTORY_FILTER.page <= 1;
+    $('hpageNext').disabled = HISTORY_FILTER.page >= totalPages;
+
     const tbody = $('historyTbody');
-    if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="10" class="empty-row">暂无历史任务</td></tr>';
+    if (!pageRows.length) {
+        tbody.innerHTML = '<tr><td colspan="10" class="empty-row">'
+            + (list.length ? '没有匹配的任务' : '暂无历史任务')
+            + '</td></tr>';
         return;
     }
-    tbody.innerHTML = list.map(t => {
+    tbody.innerHTML = pageRows.map(t => {
         const tag = stateTagHtml(t.state);
         const stuckCls = t.stuck ? ' stuck-row' : '';
         const sd = describeCode(t.startNode);
@@ -746,6 +1180,63 @@ function renderHistory(list) {
     }).join('');
 }
 
+function applyHistoryFilter(list) {
+    const f = HISTORY_FILTER;
+    const kw = (f.keyword || '').trim().toLowerCase();
+    return list.filter(t => {
+        if (f.state && (t.state || '').toUpperCase() !== f.state) return false;
+        if (f.type  && (t.taskType || '') !== f.type) return false;
+        if (f.stuck && !t.stuck) return false;
+        if (kw) {
+            const hay = ((t.taskNo || '') + ' ' + (t.startNode || '') + ' ' + (t.endNode || '')
+                       + ' ' + (t.remark || '') + ' ' + (t.step || '')).toLowerCase();
+            if (!hay.includes(kw)) return false;
+        }
+        return true;
+    });
+}
+
+function bindHistoryFilters() {
+    const rerender = () => {
+        if (LATEST_STATE) renderHistory(LATEST_STATE.recentTasks || []);
+    };
+    $('hsearch').addEventListener('input', () => {
+        HISTORY_FILTER.keyword = $('hsearch').value;
+        HISTORY_FILTER.page = 1;
+        rerender();
+    });
+    $('hfilterState').addEventListener('change', () => {
+        HISTORY_FILTER.state = $('hfilterState').value;
+        HISTORY_FILTER.page = 1;
+        rerender();
+    });
+    $('hfilterType').addEventListener('change', () => {
+        HISTORY_FILTER.type = $('hfilterType').value;
+        HISTORY_FILTER.page = 1;
+        rerender();
+    });
+    $('hfilterStuck').addEventListener('change', () => {
+        HISTORY_FILTER.stuck = $('hfilterStuck').checked;
+        HISTORY_FILTER.page = 1;
+        rerender();
+    });
+    $('btnHfilterReset').addEventListener('click', () => {
+        HISTORY_FILTER.keyword = ''; $('hsearch').value = '';
+        HISTORY_FILTER.state = '';   $('hfilterState').value = '';
+        HISTORY_FILTER.type = '';    $('hfilterType').value = '';
+        HISTORY_FILTER.stuck = false; $('hfilterStuck').checked = false;
+        HISTORY_FILTER.page = 1;
+        rerender();
+    });
+    $('hpagePrev').addEventListener('click', () => { HISTORY_FILTER.page--; rerender(); });
+    $('hpageNext').addEventListener('click', () => { HISTORY_FILTER.page++; rerender(); });
+    $('hpageSize').addEventListener('change', () => {
+        HISTORY_FILTER.pageSize = parseInt($('hpageSize').value, 10) || 20;
+        HISTORY_FILTER.page = 1;
+        rerender();
+    });
+}
+
 // --------- Helpers ---------
 function parseTs(s) {
     // "yyyy-MM-dd HH:mm:ss" -> epoch
@@ -762,6 +1253,303 @@ function formatDuration(ms) {
     const hour = Math.floor(min / 60);
     const restMin = min % 60;
     return hour + 'h ' + restMin + 'm';
+}
+
+// ========== ETA 估算 ==========
+function updateEta(s) {
+    const etaEl = $('statEta');
+    const etaHint = $('statEtaHint');
+    const validN = (s.validCodes || []).length;
+    const visited = (s.visitedCodes || []).length;
+    const remaining = Math.max(0, validN - visited);
+
+    if (validN === 0) {
+        etaEl.textContent = '-';
+        etaHint.textContent = '尚未生成库位';
+        return;
+    }
+    if (remaining === 0) {
+        etaEl.textContent = '✓ 已完成';
+        etaHint.textContent = '';
+        return;
+    }
+
+    // 取最近 30 条完成的任务计算平均耗时
+    const recent = (s.recentTasks || []).filter(t => t.submittedAt && t.finishedAt);
+    if (recent.length < 3) {
+        etaEl.textContent = '估算中…';
+        etaHint.textContent = '需要至少 3 个完成任务';
+        return;
+    }
+    const sample = recent.slice(0, 30);
+    let totalMs = 0, count = 0;
+    for (const t of sample) {
+        const start = parseTs(t.submittedAt);
+        const end = parseTs(t.finishedAt);
+        if (!isNaN(start) && !isNaN(end) && end > start) {
+            totalMs += (end - start);
+            count++;
+        }
+    }
+    if (count === 0) {
+        etaEl.textContent = '-';
+        etaHint.textContent = '无法解析任务时间';
+        return;
+    }
+    const avgMs = totalMs / count;
+
+    // 一轮覆盖的新库位数 (SEQUENTIAL 下入库 1 + 移库 N = N+1)
+    const cfg = window.CURRENT_CFG || {};
+    const shuffleN = cfg.shuffleTimesPerRound || 10;
+    const conveyor = !!cfg.enableConveyorStep;
+    const tasksPerRound = 1 + shuffleN + 1 + (conveyor ? 1 : 0);  // N2S + N*S2S + S2N + (N2N)
+    const newCellsPerRound = 1 + shuffleN; // SEQUENTIAL 下每个任务都是新库位
+    const remainingRounds = Math.ceil(remaining / newCellsPerRound);
+    const remainingTasks = remainingRounds * tasksPerRound;
+    const remainingMs = remainingTasks * avgMs;
+
+    etaEl.textContent = formatEtaDuration(remainingMs);
+    const finishAt = new Date(Date.now() + remainingMs);
+    etaHint.textContent = '约 ' + remainingTasks + ' 个任务 · 单任务 ' + formatDuration(Math.round(avgMs))
+                       + ' · 完成于 ' + fmtClock(finishAt);
+}
+
+function formatEtaDuration(ms) {
+    const sec = Math.round(ms / 1000);
+    if (sec < 60) return sec + ' 秒';
+    const min = Math.round(sec / 60);
+    if (min < 60) return min + ' 分';
+    const hour = Math.floor(min / 60);
+    const restMin = min % 60;
+    if (hour < 24) return hour + ' 时 ' + restMin + ' 分';
+    const day = Math.floor(hour / 24);
+    const restHour = hour % 24;
+    return day + ' 天 ' + restHour + ' 时';
+}
+
+function fmtClock(d) {
+    const pad2 = n => String(n).padStart(2, '0');
+    return d.getMonth() + 1 + '月' + d.getDate() + '日 '
+         + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+}
+
+
+// ========== 任务轨迹俯视图 ==========
+//
+// 视图说明:
+//   - 横轴: 列号 1..maxCol
+//   - 纵轴: 4 排 (上到下) row 1=左远, row 2=左近, [巷道], row 3=右近, row 4=右远
+//   - 中间一条灰色细带表示巷道
+//   - 选定层 layer 显示该层的库位分布
+//   - 当前任务起点/终点高亮, 起→终用绿色线连接
+//   - 历史最近 N 条用浅紫虚线
+//
+const TRACK = {
+    cellW: 14,        // 单格宽
+    cellH: 16,        // 单格高
+    gap: 1,           // 格间距
+    leftPad: 32,      // 左侧留给 row 标签
+    topPad: 22,       // 顶部留给 col 刻度
+    aisleBand: 10,    // 巷道带宽度
+    rightPad: 18,
+    bottomPad: 14,
+    rowOrder: [1, 2, 3, 4],   // 上到下: 左远, 左近, 右近, 右远
+};
+
+// 当前选中的层和巷道
+let TRACK_STATE = { layer: 1, aisle: null };
+
+function ensureTrackSelectors() {
+    const layerSel = $('trackLayerSel');
+    const aisleSel = $('trackAisleSel');
+    const cfg = CURRENT_CFG || {};
+    const totalLayers = cfg.totalLayers || 10;
+    const aisles = cfg.aisles || [];
+
+    // 层选择
+    if (layerSel.options.length !== totalLayers) {
+        layerSel.innerHTML = '';
+        for (let i = 1; i <= totalLayers; i++) {
+            const o = document.createElement('option');
+            o.value = i; o.textContent = i + ' 层';
+            layerSel.appendChild(o);
+        }
+        layerSel.value = TRACK_STATE.layer;
+    }
+    // 巷道选择
+    const aisleSig = aisles.join(',');
+    if (aisleSel.dataset.sig !== aisleSig) {
+        aisleSel.innerHTML = '';
+        aisles.forEach(a => {
+            const o = document.createElement('option');
+            o.value = a; o.textContent = a + ' 巷道';
+            aisleSel.appendChild(o);
+        });
+        aisleSel.dataset.sig = aisleSig;
+        if (TRACK_STATE.aisle == null && aisles.length) {
+            TRACK_STATE.aisle = aisles[0];
+        }
+        aisleSel.value = TRACK_STATE.aisle != null ? TRACK_STATE.aisle : '';
+    }
+}
+
+function drawTrack() {
+    const svg = $('trackSvg');
+    if (!svg) return;
+    const cfg = CURRENT_CFG || {};
+    const s = LATEST_STATE || {};
+    const maxCol = cfg.maxCol || 64;
+    const aisle = parseInt($('trackAisleSel').value, 10);
+    const layer = parseInt($('trackLayerSel').value, 10);
+    if (isNaN(aisle) || isNaN(layer)) {
+        svg.innerHTML = '<text x="20" y="40" class="tk-row-label">请先生成有效库位</text>';
+        return;
+    }
+    TRACK_STATE.aisle = aisle;
+    TRACK_STATE.layer = layer;
+
+    const W = TRACK.leftPad + maxCol * (TRACK.cellW + TRACK.gap) + TRACK.rightPad;
+    const totalRows = TRACK.rowOrder.length;
+    const H = TRACK.topPad + totalRows * (TRACK.cellH + TRACK.gap) + TRACK.aisleBand + TRACK.bottomPad;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+
+    // 把当前层 valid codes 建索引: rowIdx (0..3) + col -> 1
+    const valid = (s.validCodes || []);
+    const layerSet = new Set();
+    for (const code of valid) {
+        const p = parseCode(code);
+        if (!p) continue;
+        if (p.aisle !== aisle || p.layer !== layer) continue;
+        layerSet.add(p.row + ':' + p.col);
+    }
+
+    const parts = [];
+
+    // col 刻度 (每 4 列标一次)
+    for (let c = 1; c <= maxCol; c++) {
+        if (c === 1 || c === maxCol || c % 8 === 0) {
+            const x = cellX(c) + TRACK.cellW / 2;
+            parts.push(`<text x="${x}" y="${TRACK.topPad - 6}" text-anchor="middle" class="tk-col-label">${c}</text>`);
+        }
+    }
+
+    // 4 排格子 + row 标签
+    for (let i = 0; i < totalRows; i++) {
+        const row = TRACK.rowOrder[i];
+        const rowYIndex = i;            // 0..3
+        const y = rowY(rowYIndex);
+        // row 标签
+        const rowLabel = rowToLabel(row);
+        parts.push(`<text x="${TRACK.leftPad - 6}" y="${y + TRACK.cellH * 0.7}" text-anchor="end" class="tk-row-label">${rowLabel}</text>`);
+
+        for (let c = 1; c <= maxCol; c++) {
+            const x = cellX(c);
+            const has = layerSet.has(row + ':' + c);
+            parts.push(`<rect x="${x}" y="${y}" width="${TRACK.cellW}" height="${TRACK.cellH}" rx="2" class="${has ? 'tk-cell-valid' : 'tk-cell-empty'}"></rect>`);
+        }
+    }
+
+    // 巷道带 (在 row 2 和 row 3 之间)
+    const aisleY = rowY(1) + TRACK.cellH + TRACK.gap;
+    parts.push(`<rect x="${TRACK.leftPad}" y="${aisleY}" width="${maxCol * (TRACK.cellW + TRACK.gap)}" height="${TRACK.aisleBand}" class="tk-aisle-bar"></rect>`);
+    parts.push(`<text x="${TRACK.leftPad + 4}" y="${aisleY + TRACK.aisleBand - 2}" class="tk-row-label">${aisle} 巷道</text>`);
+
+    // 历史轨迹
+    const histN = Math.max(0, parseInt($('trackHistN').value, 10) || 0);
+    const onlyCurAisle = $('trackOnlyCurAisle').checked;
+    const hist = (s.recentTasks || []).slice(0, histN);
+    for (let i = hist.length - 1; i >= 0; i--) {  // 由旧到新画
+        const t = hist[i];
+        drawTaskTrack(parts, t, aisle, layer, maxCol, false, onlyCurAisle);
+    }
+
+    // 当前任务
+    if (s.currentTask) {
+        drawTaskTrack(parts, s.currentTask, aisle, layer, maxCol, true, onlyCurAisle);
+    }
+
+    svg.innerHTML = parts.join('');
+}
+
+function cellX(col)  { return TRACK.leftPad + (col - 1) * (TRACK.cellW + TRACK.gap); }
+function rowY(idx)   {
+    // idx 0..1 在巷道之上, 2..3 在巷道之下
+    if (idx <= 1) return TRACK.topPad + idx * (TRACK.cellH + TRACK.gap);
+    return TRACK.topPad + idx * (TRACK.cellH + TRACK.gap) + TRACK.aisleBand;
+}
+function rowToLabel(row) {
+    return ({1:'左远', 2:'左近', 3:'右近', 4:'右远'})[row] || ('row '+row);
+}
+function rowIndex(row) { return TRACK.rowOrder.indexOf(row); }
+
+function drawTaskTrack(parts, t, aisle, layer, maxCol, isCurrent, onlyCurAisle) {
+    if (!t) return;
+    const ps = parseCode(t.startNode);
+    const pe = parseCode(t.endNode);
+    if (onlyCurAisle) {
+        if (ps && ps.aisle !== aisle && pe && pe.aisle !== aisle) return;
+        if (ps && ps.aisle !== aisle && !pe) return;
+    }
+
+    const lineCls = isCurrent ? 'tk-line-cur' : 'tk-line-hist';
+    const sCellCls = isCurrent ? 'tk-cell-cur-start' : 'tk-cell-hist';
+    const eCellCls = isCurrent ? 'tk-cell-cur-end'   : 'tk-cell-hist';
+
+    // 起点
+    const sPt = locatePoint(ps, aisle, layer, maxCol, 'left');
+    const ePt = locatePoint(pe, aisle, layer, maxCol, 'right');
+
+    if (sPt && ePt) {
+        parts.push(`<line x1="${sPt.x}" y1="${sPt.y}" x2="${ePt.x}" y2="${ePt.y}" class="${lineCls}"></line>`);
+    }
+    if (sPt && sPt.cellable && ps) {
+        const x = cellX(ps.col), y = rowY(rowIndex(ps.row));
+        parts.push(`<rect x="${x}" y="${y}" width="${TRACK.cellW}" height="${TRACK.cellH}" rx="2" class="${sCellCls}"></rect>`);
+    } else if (sPt && sPt.crossLayer) {
+        parts.push(`<text x="${sPt.x - 4}" y="${sPt.y + 4}" text-anchor="end" class="tk-cross-layer">⚑${ps.layer}层</text>`);
+    } else if (sPt && sPt.outAisle) {
+        parts.push(`<text x="${sPt.x - 4}" y="${sPt.y + 4}" text-anchor="end" class="tk-cross-layer">⚑${ps.aisle}巷</text>`);
+    } else if (sPt && sPt.isInbound) {
+        parts.push(`<text x="${sPt.x - 4}" y="${sPt.y + 4}" text-anchor="end" class="tk-row-label">入库口</text>`);
+    }
+
+    if (ePt && ePt.cellable && pe) {
+        const x = cellX(pe.col), y = rowY(rowIndex(pe.row));
+        parts.push(`<rect x="${x}" y="${y}" width="${TRACK.cellW}" height="${TRACK.cellH}" rx="2" class="${eCellCls}"></rect>`);
+    } else if (ePt && ePt.crossLayer) {
+        parts.push(`<text x="${ePt.x + 4}" y="${ePt.y + 4}" class="tk-cross-layer">⚑${pe.layer}层</text>`);
+    } else if (ePt && ePt.outAisle) {
+        parts.push(`<text x="${ePt.x + 4}" y="${ePt.y + 4}" class="tk-cross-layer">⚑${pe.aisle}巷</text>`);
+    } else if (ePt && ePt.isInbound) {
+        parts.push(`<text x="${ePt.x + 4}" y="${ePt.y + 4}" class="tk-row-label">入库口</text>`);
+    }
+}
+
+// 把一个端点定位到 svg 上, 区分 4 种情况:
+//   1. 落在当前层当前巷道 -> 在格子中心
+//   2. 落在当前巷道但不同层 -> 在格子位置上方/下方做"跨层"标记
+//   3. 落在不同巷道 -> svg 边缘标记
+//   4. 不是库位编码 (入库口 ND_xxx 等) -> svg 最左 / 最右边
+function locatePoint(p, aisle, layer, maxCol, edge) {
+    const W = TRACK.leftPad + maxCol * (TRACK.cellW + TRACK.gap) + TRACK.rightPad;
+    const midX = edge === 'left' ? TRACK.leftPad - 14 : (W - TRACK.rightPad + 14);
+    const midY = (rowY(1) + TRACK.cellH + TRACK.aisleBand / 2);
+    if (!p) {
+        return { x: midX, y: midY, isInbound: true };
+    }
+    if (p.aisle !== aisle) {
+        return { x: midX, y: midY, outAisle: true };
+    }
+    const ri = rowIndex(p.row);
+    if (ri < 0) return null;
+    const x = cellX(p.col) + TRACK.cellW / 2;
+    const y = rowY(ri) + TRACK.cellH / 2;
+    if (p.layer !== layer) {
+        return { x, y, crossLayer: true };
+    }
+    return { x, y, cellable: true };
 }
 </script>
 
@@ -806,7 +1594,10 @@ function bindActions() {
     $('btnRegen').addEventListener('click', e => doAction('/regenerate-codes', {
         btn: e.currentTarget,
         errPrefix: '重生成失败',
-        onSuccess: n => toast('重生成完成: ' + n + ' 个有效库位', 'success')
+        onSuccess: n => {
+            const cand = (LATEST_STATE && LATEST_STATE.candidateCount) || '?';
+            toast('重生成完成: 候选 ' + cand + ' / 有效 ' + n, 'success', 3500);
+        }
     }));
     $('btnTestDb').addEventListener('click', e => doAction('/test-db', {
         btn: e.currentTarget, okMsg: '数据库连接 OK', errPrefix: '数据库连接失败'
@@ -826,29 +1617,169 @@ function bindActions() {
 
     // 有效库位查看弹窗
     $('statValidCard').addEventListener('click', openCodesModal);
+    $('statVisitedCard').addEventListener('click', openVisitedModal);
     $('codesSearch').addEventListener('input', () => renderCodesList(''));
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && $('codesModal').classList.contains('show')) closeCodesModal();
+        if (e.key === 'Escape') {
+            if ($('codesModal').classList.contains('show')) closeCodesModal();
+            else if ($('cfgModal').classList.contains('show')) closeCfgModal();
+            else if ($('previewModal').classList.contains('show')) closePreviewModal();
+        }
     });
+
+    // 配置弹窗
+    $('btnOpenCfg').addEventListener('click', openCfgModal);
+
+    // 预览任务弹窗
+    $('btnPreview').addEventListener('click', openPreviewModal);
+    $('btnRunPreview').addEventListener('click', runPreview);
+    $('previewN').addEventListener('keydown', e => { if (e.key === 'Enter') runPreview(); });
+
+    // 任务轨迹控件
+    $('trackLayerSel').addEventListener('change', () => { TRACK_STATE.followCurrent = false; drawTrack(); });
+    $('trackAisleSel').addEventListener('change', () => { TRACK_STATE.followCurrent = false; drawTrack(); });
+    $('trackHistN').addEventListener('change', drawTrack);
+    $('trackOnlyCurAisle').addEventListener('change', drawTrack);
+    $('btnRedrawTrack').addEventListener('click', () => { TRACK_STATE.followCurrent = true; drawTrack(); });
+
+    // 历史 CSV 清空
+    const btnClearCsv = $('btnClearHistoryCsv');
+    if (btnClearCsv) {
+        btnClearCsv.addEventListener('click', async () => {
+            if (!confirm('确认清空 CSV 历史? 已下发任务的明细将被删除 (state.json 不受影响)')) return;
+            try {
+                await api('/history/clear', { method: 'POST' });
+                toast('CSV 已清空', 'success');
+            } catch (e) {
+                toast('清空失败: ' + e.message, 'error');
+            }
+        });
+    }
 }
 
 // --------- 有效库位查看弹窗 ---------
+let CODES_MODAL_MODE = 'valid';   // 'valid' | 'visited'
+
 function openCodesModal() {
+    CODES_MODAL_MODE = 'valid';
     const codes = (LATEST_STATE && LATEST_STATE.validCodes) || [];
     if (!codes.length) {
         toast('当前没有有效库位, 请先 重生成库位', 'info');
         return;
     }
+    setCodesModalTitle('📦 有效库位列表');
     $('codesSearch').value = '';
     renderCodesList();
     $('codesModal').classList.add('show');
     setTimeout(() => $('codesSearch').focus(), 50);
 }
+
+function openVisitedModal() {
+    CODES_MODAL_MODE = 'visited';
+    const codes = (LATEST_STATE && LATEST_STATE.visitedCodes) || [];
+    if (!codes.length) {
+        toast('还没有跑过任何库位', 'info');
+        return;
+    }
+    setCodesModalTitle('✅ 已访问库位 (' + codes.length + ')');
+    $('codesSearch').value = '';
+    renderCodesList();
+    $('codesModal').classList.add('show');
+    setTimeout(() => $('codesSearch').focus(), 50);
+}
+
+function setCodesModalTitle(t) {
+    const head = document.querySelector('#codesModal .modal-title');
+    if (head) head.textContent = t;
+}
+
 function closeCodesModal() { $('codesModal').classList.remove('show'); }
 window.closeCodesModal = closeCodesModal;
 
+// --------- 配置弹窗 ---------
+function openCfgModal() {
+    // 每次打开都重新拉一次, 避免别处改了不同步
+    loadConfig().then(() => {
+        $('cfgModal').classList.add('show');
+    });
+}
+function closeCfgModal() { $('cfgModal').classList.remove('show'); }
+window.closeCfgModal = closeCfgModal;
+
+// --------- 预览任务弹窗 ---------
+async function openPreviewModal() {
+    $('previewModal').classList.add('show');
+    await runPreview();
+}
+function closePreviewModal() { $('previewModal').classList.remove('show'); }
+window.closePreviewModal = closePreviewModal;
+
+async function runPreview() {
+    const n = Math.max(1, Math.min(200, parseInt($('previewN').value, 10) || 30));
+    $('previewMeta').textContent = '生成中...';
+    try {
+        const list = await api('/preview?n=' + n);
+        renderPreview(list);
+    } catch (e) {
+        $('previewMeta').textContent = '失败';
+        toast('预览失败: ' + e.message, 'error');
+    }
+}
+
+function renderPreview(list) {
+    const tbody = $('previewTbody');
+    if (!list || !list.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-row">没有任务</td></tr>';
+        $('previewMeta').textContent = '0 条';
+        return;
+    }
+    let totalDist = 0;
+    let pairCount = 0;
+    const rows = list.map(t => {
+        const ps = parseCode(t.startNode);
+        const pe = parseCode(t.endNode);
+        const sd = describeCode(t.startNode);
+        const ed = describeCode(t.endNode);
+        const dist = (ps && pe) ? cellDistance(ps, pe) : null;
+        if (dist != null) { totalDist += dist; pairCount++; }
+        const stepCls = t.taskType === 'N2S' ? 'tag-issued'
+                      : t.taskType === 'S2N' ? 'tag-cancel'
+                      : 'tag-success';
+        const distText = (dist == null) ? '-' : dist.toFixed(1);
+        const sameColSameSide = (ps && pe && ps.aisle === pe.aisle && ps.col === pe.col && ps.layer === pe.layer && ps.side === pe.side);
+        const warn = sameColSameSide ? ' <span class="tag tag-skip" title="同列同侧, 物理上需先取/放近位">⚠ 同侧</span>' : '';
+        return `<tr>
+            <td class="row-num">${t.seq}</td>
+            <td>${t.round}</td>
+            <td>${esc(t.step)}</td>
+            <td><span class="tag ${stepCls}">${esc(t.taskType)}</span>${warn}</td>
+            <td class="code">
+                ${esc(t.startNode)}<br>→ ${esc(t.endNode)}
+            </td>
+            <td><div class="cfg-hint">${esc(sd)}</div><div class="cfg-hint" style="margin-top:2px;">→ ${esc(ed)}</div></td>
+            <td>${distText}</td>
+        </tr>`;
+    }).join('');
+    tbody.innerHTML = rows;
+    const avg = pairCount > 0 ? (totalDist / pairCount).toFixed(2) : '-';
+    $('previewMeta').textContent = `${list.length} 条 · 平均距离 ${avg} (cell)`;
+}
+
+// 简单距离: 列差 + 排差 + 层差 (各维度 1 单位); 没有真实物理距离
+function cellDistance(a, b) {
+    if (!a || !b) return null;
+    const ROW_Z_LOCAL = { 1: -2, 2: -1, 3: 1, 4: 2 };
+    const dx = Math.abs(a.col - b.col);
+    const dz = Math.abs((ROW_Z_LOCAL[a.row] || 0) - (ROW_Z_LOCAL[b.row] || 0));
+    const dy = Math.abs(a.layer - b.layer) * 1.5; // 层间稍重
+    return Math.sqrt(dx*dx + dy*dy + dz*dz);
+}
+
 function renderCodesList() {
-    const codes = (LATEST_STATE && LATEST_STATE.validCodes) || [];
+    const state = LATEST_STATE || {};
+    const codes = CODES_MODAL_MODE === 'visited'
+        ? (state.visitedCodes || [])
+        : (state.validCodes || []);
     const kw = ($('codesSearch').value || '').trim().toLowerCase();
     const tbody = $('codesTbody');
 
@@ -907,10 +1838,684 @@ function startPolling() {
 // --------- Boot ---------
 (async function init() {
     bindActions();
+    bindHistoryFilters();
     await loadConfig();
     await fetchState(true);
     startPolling();
 })();
+</script>
+
+<!-- ========== 3D 场景模块 ========== -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const SCENE = {
+    renderer: null, scene: null, camera: null, controls: null,
+    cellsGroup: null,           // 所有库位 cube
+    tracksGroup: null,          // 轨迹线
+    markersGroup: null,         // 起点/终点高亮
+    inboundMarker: null,
+    cellByCode: null,           // Map<code, Mesh>
+    raf: null,
+    needsRender: true,
+    lastSig: '',
+    autoRotate: false,
+};
+
+// 物理坐标轴: X=列号 1..maxCol, Y=层 1..N (向上), Z=排 1..4 (前后)
+// 单位以 1 为基准
+const ROW_Z = { 1: -4.6, 2: -2.6, 3: 2.6, 4: 4.6 };
+// 默认全部用克制的灰色; 仅当前任务位置着色, 一眼就能看到任务在哪里
+const ROW_COLOR_VALID = {
+    1: 0x9ca3af,   // 左远  深灰
+    2: 0xb6bcc7,   // 左近  中灰
+    3: 0xb6bcc7,   // 右近  中灰
+    4: 0x9ca3af    // 右远  深灰
+};
+const ROW_COLOR_EMPTY = 0xeceef2;
+const COLOR_CURRENT_START = 0xf59e0b;
+const COLOR_CURRENT_END   = 0x10b981;
+const LAYER_GAP = 2.6;
+const CELL_SIZE = 1.4;
+const COL_GAP   = 1.7;
+
+function init3D() {
+    if (SCENE.renderer) return;
+    const canvas = document.getElementById('scene3dCanvas');
+    if (!canvas) return;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setClearColor(0x000000, 0);
+
+    const scene = new THREE.Scene();
+    scene.background = null;
+    scene.fog = new THREE.Fog(0xeef0fc, 80, 260);
+
+    const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 2000);
+    camera.position.set(60, 50, 60);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 8;
+    controls.maxDistance = 800;
+    controls.target.set(0, 5, 0);
+
+    // 灯光
+    scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+    const key = new THREE.DirectionalLight(0xffffff, 1.0);
+    key.position.set(60, 100, 60);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xc0c8e0, 0.4);
+    fill.position.set(-50, 30, -40);
+    scene.add(fill);
+
+    // 移除地面网格 (容易让画面显乱); 改用细网格淡淡铺一层
+    const grid = new THREE.GridHelper(260, 26, 0xe5e7eb, 0xeef0fc);
+    grid.position.y = -0.5;
+    scene.add(grid);
+
+    // 坐标系标签 (用 CanvasTexture 做贴片)
+    SCENE.labelsGroup = new THREE.Group();
+    scene.add(SCENE.labelsGroup);
+
+    SCENE.renderer = renderer;
+    SCENE.scene = scene;
+    SCENE.camera = camera;
+    SCENE.controls = controls;
+
+    SCENE.cellsGroup = new THREE.Group();
+    scene.add(SCENE.cellsGroup);
+    SCENE.tracksGroup = new THREE.Group();
+    scene.add(SCENE.tracksGroup);
+    SCENE.markersGroup = new THREE.Group();
+    scene.add(SCENE.markersGroup);
+
+    new ResizeObserver(() => { resize3D(); requestRender(); }).observe(canvas);
+    resize3D();
+
+    document.getElementById('btnSceneFit').addEventListener('click', () => {
+        fitToScene();
+        requestRender();
+    });
+    const clearBtn = document.getElementById('btnClearVisited');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', async () => {
+            if (!confirm('确认清除已访问标记? (不影响任务进度)')) return;
+            try {
+                const res = await fetch('/api/v1/storage-task/clear-visited', { method: 'POST' });
+                const json = await res.json();
+                if (!json || json.success === false) throw new Error((json && json.message) || 'HTTP ' + res.status);
+                SCENE.lastSig = '';
+                if (window.update3DScene) window.update3DScene();
+            } catch (e) {
+                alert('清除失败: ' + e.message);
+            }
+        });
+    }
+    document.getElementById('scene3dHistN').addEventListener('change', () => updateTracks());
+    document.getElementById('scene3dShowEmpty').addEventListener('change', () => {
+        SCENE.lastSig = ''; // 强制重建
+        updateCells();
+    });
+    document.getElementById('scene3dAutoRotate').addEventListener('change', e => {
+        SCENE.autoRotate = e.target.checked;
+        controls.autoRotate = SCENE.autoRotate;
+        controls.autoRotateSpeed = 0.8;
+    });
+
+    animate();
+}
+
+function resize3D() {
+    if (!SCENE.renderer) return;
+    const canvas = SCENE.renderer.domElement;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    SCENE.renderer.setSize(w, h, false);
+    SCENE.camera.aspect = w / h;
+    SCENE.camera.updateProjectionMatrix();
+}
+
+function requestRender() { SCENE.needsRender = true; }
+
+function animate() {
+    SCENE.raf = requestAnimationFrame(animate);
+    if (SCENE.controls) SCENE.controls.update();
+    if (SCENE.needsRender || SCENE.autoRotate) {
+        SCENE.renderer.render(SCENE.scene, SCENE.camera);
+        SCENE.needsRender = false;
+    }
+}
+
+// 物理位置 -> 世界坐标
+function worldOf(p) {
+    if (!p) return null;
+    const cfg = window.CURRENT_CFG || {};
+    const maxCol = cfg.maxCol || 64;
+    const x = (p.col - (maxCol + 1) / 2) * COL_GAP;
+    const y = (p.layer - 1) * LAYER_GAP + 0.6;
+    const z = ROW_Z[p.row] || 0;
+    return { x, y, z };
+}
+
+function worldOfInbound() {
+    // 入库口 ND_xxx 放在 X 最大方向, Z=0, Y=0 处
+    const cfg = window.CURRENT_CFG || {};
+    const maxCol = cfg.maxCol || 64;
+    return { x: ((maxCol + 1) / 2 + 4) * COL_GAP / 1.4, y: 0.6, z: 0 };
+}
+
+function updateCells() {
+    if (!SCENE.cellsGroup) return;
+    const cfg = window.CURRENT_CFG || {};
+    const state = window.LATEST_STATE || {};
+    const valid = state.validCodes || [];
+    const showEmpty = document.getElementById('scene3dShowEmpty').checked;
+    const aisles = cfg.aisles || [];
+    const maxCol = cfg.maxCol || 64;
+    const totalLayers = cfg.totalLayers || 10;
+
+    // 签名: 不变就不重建
+    const visitedLen = (state.visitedCodes || []).length;
+    const sig = `${aisles.join(',')}-${maxCol}-${totalLayers}-${valid.length}-${showEmpty?1:0}-V${visitedLen}`;
+    if (sig === SCENE.lastSig) return;
+    SCENE.lastSig = sig;
+
+    // 清空
+    while (SCENE.cellsGroup.children.length) {
+        const m = SCENE.cellsGroup.children.pop();
+        if (m.geometry) m.geometry.dispose();
+        if (m.material) m.material.dispose();
+    }
+    SCENE.cellByCode = new Map();
+
+    if (!aisles.length) {
+        document.getElementById('scene3dStat').textContent = '尚未生成库位';
+        requestRender();
+        return;
+    }
+
+    // 把 validCodes 解析成 (aisle,row,col,layer) -> code 的 map, 加速查表
+    const cfg2 = window.CURRENT_CFG || {};
+    const _maxCol = cfg2.maxCol || 64;
+    const validKey = c => c.aisle + ':' + c.row + ':' + c.col + ':' + c.layer;
+    const validMap = new Map();
+    for (const v of valid) {
+        const p = window.parseCode(v);
+        if (p) validMap.set(validKey(p), v);
+    }
+    // 已访问库位 set
+    const visitedSet = new Set(state.visitedCodes || []);
+
+    // 用 InstancedMesh 提升性能
+    const geo = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE * 1.05, CELL_SIZE);
+    const edgeGeo = new THREE.EdgesGeometry(geo);
+    const matValid = [1,2,3,4].map(r => new THREE.MeshStandardMaterial({
+        color: ROW_COLOR_VALID[r],
+        roughness: 0.55, metalness: 0.05,
+        transparent: false
+    }));
+    const matVisited = new THREE.MeshStandardMaterial({
+        color: 0x10b981, roughness: 0.45, metalness: 0.05,
+        emissive: 0x065f46, emissiveIntensity: 0.15
+    });
+    const matEmpty = new THREE.MeshStandardMaterial({
+        color: ROW_COLOR_EMPTY, roughness: 0.9, metalness: 0,
+        transparent: true, opacity: 0.18
+    });
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0x4b5563, transparent: true, opacity: 0.25 });
+    edgeMat._shared = true;
+
+    const onlyAisle = aisles[0]; // 当前仅渲染第一个巷道, 多巷道后续可加切换
+    let cnt = 0;
+    for (let layer = 1; layer <= totalLayers; layer++) {
+        for (let row = 1; row <= 4; row++) {
+            for (let col = 1; col <= maxCol; col++) {
+                const key = onlyAisle + ':' + row + ':' + col + ':' + layer;
+                const fullCode = validMap.get(key);
+                const has = !!fullCode;
+                if (!has && !showEmpty) continue;
+
+                const isVisited = has && visitedSet.has(fullCode);
+                const mat = !has ? matEmpty
+                          : (isVisited ? matVisited : matValid[row-1]);
+                const mesh = new THREE.Mesh(geo, mat);
+                const w = worldOf({ aisle: onlyAisle, row, col, layer });
+                mesh.position.set(w.x, w.y, w.z);
+                mesh.castShadow = false;
+                mesh.userData = { row, col, layer };
+                if (fullCode) SCENE.cellByCode.set(fullCode, mesh);
+                SCENE.cellsGroup.add(mesh);
+
+                // 描边 (仅有效库位画, 否则太密)
+                if (has) {
+                    const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+                    edges.position.copy(mesh.position);
+                    SCENE.cellsGroup.add(edges);
+                }
+                cnt++;
+            }
+        }
+    }
+
+    // 巷道地板 (Z=0, 横贯所有列, 每层一条) - 用稍深的颜色, 一眼能看到巷道
+    const aisleW = (maxCol + 2) * COL_GAP;
+    const aisleD = 4.0;
+    for (let layer = 1; layer <= totalLayers; layer++) {
+        const floor = new THREE.Mesh(
+            new THREE.BoxGeometry(aisleW, 0.08, aisleD),
+            new THREE.MeshStandardMaterial({
+                color: 0x6b7280, roughness: 1, transparent: true, opacity: 0.55
+            })
+        );
+        floor.position.set(0, (layer - 1) * LAYER_GAP, 0);
+        SCENE.cellsGroup.add(floor);
+    }
+
+    // 地基
+    const base = new THREE.Mesh(
+        new THREE.BoxGeometry((maxCol + 6) * COL_GAP, 0.4, 14),
+        new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 1 })
+    );
+    base.position.set(0, -0.4, 0);
+    SCENE.cellsGroup.add(base);
+
+    // 立柱 (4 排末端, 让"立体仓库"框架感出来)
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.8 });
+    const pillarH = totalLayers * LAYER_GAP + 1;
+    const pillarXs = [
+        -((maxCol + 1) / 2) * COL_GAP - COL_GAP * 0.8,
+        ((maxCol + 1) / 2) * COL_GAP + COL_GAP * 0.8
+    ];
+    const pillarZs = [-5, 5];
+    for (const x of pillarXs) {
+        for (const z of pillarZs) {
+            const p = new THREE.Mesh(
+                new THREE.BoxGeometry(0.35, pillarH, 0.35),
+                pillarMat
+            );
+            p.position.set(x, pillarH / 2 - 0.5, z);
+            SCENE.cellsGroup.add(p);
+        }
+    }
+
+    // 列号刻度 (地面下方)
+    const colLabelStep = maxCol >= 30 ? 8 : (maxCol >= 16 ? 4 : 1);
+    const baseY = -0.2;
+    for (let c = 1; c <= maxCol; c += colLabelStep) {
+        const label = makeTextSprite(String(c), { fontPx: 70, color: '#6b7280', scale: 2.2 });
+        label.position.set((c - (maxCol + 1) / 2) * COL_GAP, baseY, 8);
+        SCENE.cellsGroup.add(label);
+    }
+    if ((maxCol - 1) % colLabelStep !== 0) {
+        const label = makeTextSprite(String(maxCol), { fontPx: 70, color: '#6b7280', scale: 2.2 });
+        label.position.set((maxCol - (maxCol + 1) / 2) * COL_GAP, baseY, 8);
+        SCENE.cellsGroup.add(label);
+    }
+
+    // 层号刻度 (左侧)
+    const layerLabelX = -((maxCol + 1) / 2) * COL_GAP - COL_GAP * 2.5;
+    for (let l = 1; l <= totalLayers; l++) {
+        const label = makeTextSprite(l + ' 层', { fontPx: 56, color: '#6b7280', scale: 3.0 });
+        label.position.set(layerLabelX, (l - 1) * LAYER_GAP + 0.6, 0);
+        SCENE.cellsGroup.add(label);
+    }
+
+    // 4 排标签 (在前后两端)
+    const rowEndX = ((maxCol + 1) / 2) * COL_GAP + COL_GAP * 2.2;
+    [['左远', 1], ['左近', 2], ['右近', 3], ['右远', 4]].forEach(([text, row]) => {
+        const lab = makeTextSprite(text, { fontPx: 60, color: '#374151', scale: 3.0 });
+        lab.position.set(rowEndX, 0.8, ROW_Z[row]);
+        SCENE.cellsGroup.add(lab);
+    });
+
+    // 入库口标记
+    if (!SCENE.inboundMarker) {
+        const ig = new THREE.SphereGeometry(0.7, 16, 12);
+        const im = new THREE.MeshLambertMaterial({ color: 0x6366f1 });
+        SCENE.inboundMarker = new THREE.Mesh(ig, im);
+        SCENE.cellsGroup.add(SCENE.inboundMarker);
+    }
+    const ip = worldOfInbound();
+    SCENE.inboundMarker.position.set(ip.x, ip.y, ip.z);
+
+    document.getElementById('scene3dStat').textContent =
+        `已渲染 ${cnt} 个库位 · 已访问 ${(state.visitedCodes||[]).length} / 有效 ${valid.length}`;
+
+    if (cnt > 0 && !SCENE.fittedOnce) {
+        fitToScene();
+        SCENE.fittedOnce = true;
+    }
+    requestRender();
+}
+
+function pad(n, w) { return String(n).padStart(w, '0'); }
+function rowDepth(r) { return (r === 1 || r === 4) ? 2 : 1; }
+
+// 文字贴片 (Sprite + CanvasTexture)
+function makeTextSprite(text, opts) {
+    opts = opts || {};
+    const fontPx = opts.fontPx || 64;
+    const color = opts.color || '#374151';
+    const bg = opts.bg || 'rgba(255,255,255,0)';
+    const cv = document.createElement('canvas');
+    cv.width = 256; cv.height = 128;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.font = 'bold ' + fontPx + 'px sans-serif';
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, cv.width / 2, cv.height / 2);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.minFilter = THREE.LinearFilter;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+    const sprite = new THREE.Sprite(mat);
+    const scale = opts.scale || 2.4;
+    sprite.scale.set(scale, scale * 0.5, 1);
+    return sprite;
+}
+
+// 高亮当前库位 + 画当前任务/历史轨迹
+function updateTracks() {
+    if (!SCENE.tracksGroup) return;
+
+    // 还原上一帧被着色的方块
+    if (SCENE.cellByCode) {
+        for (const m of SCENE.cellByCode.values()) {
+            if (m._origMat) {
+                if (m.material && m.material !== m._origMat) {
+                    m.material.dispose && m.material.dispose();
+                }
+                m.material = m._origMat;
+                m._origMat = null;
+            }
+        }
+    }
+
+    // 清空轨迹组
+    while (SCENE.tracksGroup.children.length) {
+        const m = SCENE.tracksGroup.children.pop();
+        if (m.geometry) m.geometry.dispose();
+        if (m.material && !m.material._shared) m.material.dispose();
+    }
+    while (SCENE.markersGroup.children.length) {
+        const obj = SCENE.markersGroup.children.pop();
+        obj.traverse && obj.traverse(o => {
+            if (o.geometry) o.geometry.dispose();
+            if (o.material && !o.material._shared) o.material.dispose();
+        });
+    }
+
+    const state = window.LATEST_STATE || {};
+    const histN = Math.max(0, parseInt(document.getElementById('scene3dHistN').value, 10) || 0);
+    const hist = (state.recentTasks || []).slice(0, histN);
+
+    // 历史 (旧到新)
+    for (let i = hist.length - 1; i >= 0; i--) {
+        addTrackLine(hist[i], 0x818cf8, 0.35);
+    }
+    // 当前
+    if (state.currentTask) {
+        addTrackLine(state.currentTask, 0x059669, 0.95, true);
+        addTaskMarker(state.currentTask);
+    }
+    requestRender();
+}
+
+function addTrackLine(t, color, opacity, isCurrent) {
+    if (!t) return;
+    const ps = window.parseCode(t.startNode);
+    const pe = window.parseCode(t.endNode);
+    const wa = ps ? worldOf(ps) : worldOfInbound();
+    const wb = pe ? worldOf(pe) : worldOfInbound();
+    if (!wa || !wb) return;
+    const geo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(wa.x, wa.y, wa.z),
+        new THREE.Vector3(wb.x, wb.y, wb.z)
+    ]);
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity, linewidth: isCurrent ? 3 : 1 });
+    const line = new THREE.Line(geo, mat);
+    SCENE.tracksGroup.add(line);
+}
+
+function addTaskMarker(t) {
+    if (!t) return;
+
+    // 把当前任务起点、终点对应的方块直接换色
+    const ps = window.parseCode(t.startNode);
+    const pe = window.parseCode(t.endNode);
+    if (ps && SCENE.cellByCode && SCENE.cellByCode.has(t.startNode)) {
+        const m = SCENE.cellByCode.get(t.startNode);
+        m._origMat = m._origMat || m.material;
+        m.material = new THREE.MeshStandardMaterial({ color: COLOR_CURRENT_START, roughness: 0.5 });
+    }
+    if (pe && SCENE.cellByCode && SCENE.cellByCode.has(t.endNode)) {
+        const m = SCENE.cellByCode.get(t.endNode);
+        m._origMat = m._origMat || m.material;
+        m.material = new THREE.MeshStandardMaterial({ color: COLOR_CURRENT_END, roughness: 0.5 });
+    }
+
+    // 起点终点上方加个小球, 让位置即使被遮挡也容易看到
+    const sgeo = new THREE.SphereGeometry(0.55, 16, 12);
+    const wPs = ps ? worldOf(ps) : worldOfInbound();
+    const wPe = pe ? worldOf(pe) : worldOfInbound();
+    const sStart = new THREE.Mesh(sgeo, new THREE.MeshStandardMaterial({ color: COLOR_CURRENT_START, emissive: 0x854d0e, emissiveIntensity: 0.4 }));
+    sStart.position.set(wPs.x, wPs.y + 1.0, wPs.z);
+    SCENE.markersGroup.add(sStart);
+    const sEnd = new THREE.Mesh(sgeo, new THREE.MeshStandardMaterial({ color: COLOR_CURRENT_END, emissive: 0x064e3b, emissiveIntensity: 0.4 }));
+    sEnd.position.set(wPe.x, wPe.y + 1.0, wPe.z);
+    SCENE.markersGroup.add(sEnd);
+
+    // 堆垛机模型: 站在当前起点所在的列上, 沿巷道
+    const sxStart = ps ? wPs.x : 0;
+    const stacker = new THREE.Group();
+    const stackerColor = 0xfbbf24;
+    const baseBox = new THREE.Mesh(
+        new THREE.BoxGeometry(1.4, 0.6, 3.6),
+        new THREE.MeshStandardMaterial({ color: stackerColor, roughness: 0.6 })
+    );
+    baseBox.position.y = 0.3;
+    stacker.add(baseBox);
+    const totalLayers = (window.CURRENT_CFG || {}).totalLayers || 10;
+    const mast = new THREE.Mesh(
+        new THREE.BoxGeometry(0.4, totalLayers * LAYER_GAP, 0.4),
+        new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.5 })
+    );
+    mast.position.y = totalLayers * LAYER_GAP / 2;
+    stacker.add(mast);
+    // 平台 (升降到当前任务起点的层高)
+    const platY = ps ? wPs.y : 0.6;
+    const platform = new THREE.Mesh(
+        new THREE.BoxGeometry(1.6, 0.25, 2.6),
+        new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.5 })
+    );
+    platform.position.set(0, platY, 0);
+    stacker.add(platform);
+
+    stacker.position.set(sxStart, 0, 0);
+    SCENE.markersGroup.add(stacker);
+}
+
+function fitToScene() {
+    if (!SCENE.camera || !SCENE.controls) return;
+    const cfg = window.CURRENT_CFG || {};
+    const maxCol = cfg.maxCol || 64;
+    const totalLayers = cfg.totalLayers || 10;
+    const distance = Math.max(maxCol * 1.6, 80);
+    SCENE.camera.position.set(distance * 0.45, distance * 0.55, distance * 0.7);
+    SCENE.controls.target.set(0, totalLayers * 1.0, 0);
+    SCENE.controls.update();
+}
+
+// ========== 预览动画 ==========
+let previewTimer = null;
+let previewTasks = [];
+let previewIdx = 0;
+let previewLitSet = new Set(); // 动画过程中点亮的库位
+
+const matPreviewLit = new THREE.MeshStandardMaterial({
+    color: 0x10b981, roughness: 0.45, metalness: 0.05,
+    emissive: 0x065f46, emissiveIntensity: 0.2
+});
+const matPreviewCurrent = new THREE.MeshStandardMaterial({
+    color: 0xf59e0b, roughness: 0.4, metalness: 0.1,
+    emissive: 0x92400e, emissiveIntensity: 0.3
+});
+
+function startPreviewAnim() {
+    stopPreviewAnim();
+    const totalCodes = (window.LATEST_STATE?.validCodes || []).length;
+    // 预览足够多的任务以覆盖所有库位 (每个任务覆盖约 2 个新库位)
+    const n = Math.min(2000, Math.max(200, totalCodes));
+    fetch('/api/v1/storage-task/preview?n=' + n)
+        .then(r => r.json())
+        .then(json => {
+            if (!json || json.success === false || !json.data || !json.data.length) {
+                alert('无法获取预览数据');
+                return;
+            }
+            previewTasks = json.data;
+            previewIdx = 0;
+            previewLitSet = new Set(window.LATEST_STATE?.visitedCodes || []);
+
+            document.getElementById('btnPreviewAnim').style.display = 'none';
+            document.getElementById('btnPreviewStop').style.display = '';
+            document.getElementById('previewSpeedLabel').style.display = '';
+            document.getElementById('previewProgress').style.display = '';
+
+            stepPreview();
+        })
+        .catch(e => alert('预览请求失败: ' + e.message));
+}
+
+function stopPreviewAnim() {
+    if (previewTimer) { clearTimeout(previewTimer); previewTimer = null; }
+    previewTasks = [];
+    previewIdx = 0;
+
+    document.getElementById('btnPreviewAnim').style.display = '';
+    document.getElementById('btnPreviewStop').style.display = 'none';
+    document.getElementById('previewSpeedLabel').style.display = 'none';
+    document.getElementById('previewProgress').style.display = 'none';
+
+    // 恢复所有被预览改色的方块
+    if (SCENE.cellByCode) {
+        for (const m of SCENE.cellByCode.values()) {
+            if (m._previewMat) {
+                m.material = m._previewMat;
+                m._previewMat = null;
+            }
+        }
+    }
+    // 清掉预览轨迹
+    if (SCENE.previewTracksGroup) {
+        while (SCENE.previewTracksGroup.children.length) {
+            const c = SCENE.previewTracksGroup.children.pop();
+            if (c.geometry) c.geometry.dispose();
+            if (c.material && !c.material._shared) c.material.dispose();
+        }
+    }
+    requestRender();
+}
+
+function stepPreview() {
+    if (previewIdx >= previewTasks.length) {
+        document.getElementById('previewProgress').textContent = `完成 ${previewTasks.length}/${previewTasks.length}`;
+        return;
+    }
+
+    const task = previewTasks[previewIdx];
+    const startCode = task.startNode;
+    const endCode = task.endNode;
+
+    // 还原上一步的"当前"高亮为"已点亮"
+    if (SCENE.cellByCode) {
+        for (const [code, mesh] of SCENE.cellByCode.entries()) {
+            if (mesh.material === matPreviewCurrent && previewLitSet.has(code)) {
+                mesh.material = matPreviewLit;
+            }
+        }
+    }
+
+    // 点亮起终点
+    if (startCode && startCode.startsWith('SL_')) {
+        previewLitSet.add(startCode);
+        const mesh = SCENE.cellByCode?.get(startCode);
+        if (mesh) {
+            if (!mesh._previewMat) mesh._previewMat = mesh.material;
+            mesh.material = matPreviewCurrent;
+        }
+    }
+    if (endCode && endCode.startsWith('SL_')) {
+        previewLitSet.add(endCode);
+        const mesh = SCENE.cellByCode?.get(endCode);
+        if (mesh) {
+            if (!mesh._previewMat) mesh._previewMat = mesh.material;
+            mesh.material = matPreviewCurrent;
+        }
+    }
+
+    // 画轨迹线
+    if (!SCENE.previewTracksGroup) {
+        SCENE.previewTracksGroup = new THREE.Group();
+        SCENE.scene.add(SCENE.previewTracksGroup);
+    }
+    // 只保留最近 20 条预览轨迹线
+    while (SCENE.previewTracksGroup.children.length > 20) {
+        const old = SCENE.previewTracksGroup.children.shift();
+        if (old.geometry) old.geometry.dispose();
+        if (old.material) old.material.dispose();
+    }
+    const ps = window.parseCode(startCode);
+    const pe = window.parseCode(endCode);
+    const wa = ps ? worldOf(ps) : worldOfInbound();
+    const wb = pe ? worldOf(pe) : worldOfInbound();
+    if (wa && wb) {
+        const geo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(wa.x, wa.y, wa.z),
+            new THREE.Vector3(wb.x, wb.y, wb.z)
+        ]);
+        const mat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.6 });
+        SCENE.previewTracksGroup.add(new THREE.Line(geo, mat));
+    }
+
+    // 更新进度
+    previewIdx++;
+    const litCount = previewLitSet.size;
+    const total = (window.LATEST_STATE?.validCodes || []).length;
+    document.getElementById('previewProgress').textContent =
+        `${previewIdx}/${previewTasks.length} · 覆盖 ${litCount}/${total}`;
+
+    requestRender();
+
+    // 下一步
+    const speed = parseInt(document.getElementById('previewSpeed').value, 10) || 300;
+    previewTimer = setTimeout(stepPreview, speed);
+}
+
+// 绑定按钮
+document.getElementById('btnPreviewAnim').addEventListener('click', startPreviewAnim);
+document.getElementById('btnPreviewStop').addEventListener('click', stopPreviewAnim);
+
+// 暴露给主脚本
+window.update3DScene = function() {
+    if (!SCENE.renderer) {
+        // 等到 LATEST_STATE 有数据再 init, 避免空跑
+        init3D();
+    }
+    updateCells();
+    updateTracks();
+};
+
+// 初始化(等 DOM 准备好)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init3D);
+} else {
+    init3D();
+}
 </script>
 
 </body>

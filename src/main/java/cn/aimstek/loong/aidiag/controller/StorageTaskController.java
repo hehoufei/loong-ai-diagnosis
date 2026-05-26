@@ -116,6 +116,76 @@ public class StorageTaskController {
         }
     }
 
+    @PostMapping("/clear-visited")
+    public Response<Void> clearVisited() {
+        try {
+            runner.clearVisited();
+            return BaseResponse.success(null);
+        } catch (Exception e) {
+            return BaseResponse.failure("CLEAR_ERROR", e.getMessage());
+        }
+    }
+
+    /** 重试当前未完成任务 (addTask 失败后用户处理掉冲突再重发) */
+    @PostMapping("/retry")
+    public Response<Void> retryCurrent() {
+        try {
+            runner.retryCurrent();
+            return BaseResponse.success(null);
+        } catch (IllegalStateException e) {
+            return BaseResponse.failure("INVALID_STATE", e.getMessage());
+        } catch (Exception e) {
+            log.error("重试当前任务失败", e);
+            return BaseResponse.failure("RETRY_ERROR", e.getMessage());
+        }
+    }
+
+    /** 下载完整任务历史 CSV (UTF-8 BOM, Excel 直接打开) */
+    @GetMapping("/history.csv")
+    public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadHistory() {
+        java.io.File f = runner.historyFile();
+        if (!f.exists()) {
+            return org.springframework.http.ResponseEntity.notFound().build();
+        }
+        org.springframework.core.io.FileSystemResource res = new org.springframework.core.io.FileSystemResource(f);
+        String fname = "storage-task-history-" +
+                java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+                + ".csv";
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + fname + "\"")
+                .header(org.springframework.http.HttpHeaders.CONTENT_TYPE, "text/csv; charset=UTF-8")
+                .contentLength(f.length())
+                .body(res);
+    }
+
+    @PostMapping("/history/clear")
+    public Response<Void> clearHistory() {
+        try {
+            runner.clearHistoryCsv();
+            return BaseResponse.success(null);
+        } catch (Exception e) {
+            return BaseResponse.failure("CLEAR_HISTORY_ERROR", e.getMessage());
+        }
+    }
+
+    /**
+     * 预览未来 N 个任务 (干跑), 不下发不修改任何状态.
+     * 用于在 UI 上看路径再决定要不要 启动.
+     */
+    @GetMapping("/preview")
+    public Response<java.util.List<cn.aimstek.loong.aidiag.storagetask.dto.StorageTaskRecord>> preview(
+            @org.springframework.web.bind.annotation.RequestParam(defaultValue = "30") int n) {
+        try {
+            return BaseResponse.success(runner.previewTasks(n));
+        } catch (IllegalStateException e) {
+            return BaseResponse.failure("INVALID_STATE", e.getMessage());
+        } catch (Exception e) {
+            log.error("预览任务失败", e);
+            return BaseResponse.failure("PREVIEW_ERROR", e.getMessage());
+        }
+    }
+
     /**
      * 校验配置中的两段 SQL 是否合法 (仅做语法形态校验, 不实际执行).
      * 请求体: 完整 StorageTaskConfig (用于试改还没保存的草稿)

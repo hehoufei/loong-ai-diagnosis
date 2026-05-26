@@ -84,7 +84,7 @@ fn main() {
             let window = app.get_webview_window("main").unwrap();
             std::thread::spawn(move || {
                 if wait_for_backend("http://localhost:18080", 60) {
-                    let _ = window.eval("window.location.replace('http://localhost:18080')");
+                    let _ = window.eval("window.location.replace('http://localhost:18080/home.html')");
                 } else {
                     let _ = window.eval(
                         "document.body.innerHTML = '<h2 style=\"text-align:center;margin-top:200px;color:#cf1322\">后端启动失败，请检查 Java 环境</h2>'"

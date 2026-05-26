@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WCS 智能诊断平台</title>
+<link rel="stylesheet" href="common.css">
+<style>
+html, body { height: 100%; margin: 0; }
+body {
+    display: flex; flex-direction: column;
+    background: var(--bg-gradient);
+    font-family: var(--font-family);
+}
+
+/* Header */
+.home-header {
+    text-align: center;
+    padding: 60px 20px 20px;
+}
+.home-header h1 {
+    font-size: 32px;
+    font-weight: 800;
+    background: var(--gradient-text);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+}
+.home-header p {
+    font-size: 15px;
+    color: var(--color-text-muted);
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.6;
+}
+
+/* Cards Grid */
+.cards-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 40px 60px;
+    gap: 40px;
+    flex-wrap: wrap;
+}
+
+.feature-card {
+    position: relative;
+    width: 360px;
+    min-height: 320px;
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: var(--glass-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--glass-shadow);
+    padding: 40px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    text-decoration: none;
+    color: var(--color-text);
+    transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    overflow: hidden;
+}
+.feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    opacity: 0;
+    transition: opacity 300ms ease;
+}
+.feature-card:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--glass-shadow-hover);
+}
+.feature-card:hover::before {
+    opacity: 1;
+}
+
+/* Card icon */
+.card-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+    font-size: 36px;
+    transition: transform 300ms ease;
+}
+.feature-card:hover .card-icon {
+    transform: scale(1.08);
+}
+
+/* AI Diagnosis card */
+.card-ai .card-icon {
+    background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.12));
+    color: var(--color-primary);
+}
+.card-ai::before {
+    background: linear-gradient(90deg, var(--color-primary), var(--color-secondary));
+}
+
+/* Storage Test card */
+.card-storage .card-icon {
+    background: linear-gradient(135deg, rgba(8,145,178,0.12), rgba(5,150,105,0.12));
+    color: var(--color-accent);
+}
+.card-storage::before {
+    background: linear-gradient(90deg, var(--color-accent), var(--color-success));
+}
+
+.card-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--color-text);
+}
+.card-desc {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    line-height: 1.7;
+    margin-bottom: 24px;
+}
+.card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+}
+.card-tag {
+    padding: 4px 12px;
+    border-radius: var(--radius-tag);
+    font-size: 12px;
+    font-weight: 500;
+    background: rgba(99,102,241,0.06);
+    color: var(--color-text-muted);
+    border: 1px solid rgba(99,102,241,0.1);
+}
+.card-storage .card-tag {
+    background: rgba(8,145,178,0.06);
+    border-color: rgba(8,145,178,0.1);
+}
+
+.card-arrow {
+    position: absolute;
+    bottom: 24px;
+    right: 28px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(99,102,241,0.08);
+    color: var(--color-primary);
+    font-size: 16px;
+    opacity: 0;
+    transform: translateX(-8px);
+    transition: opacity 300ms ease, transform 300ms ease;
+}
+.card-storage .card-arrow {
+    background: rgba(8,145,178,0.08);
+    color: var(--color-accent);
+}
+.feature-card:hover .card-arrow {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Footer */
+.home-footer {
+    text-align: center;
+    padding: 20px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+/* Responsive */
+@media (max-width: 820px) {
+    .cards-container {
+        flex-direction: column;
+        gap: 24px;
+        padding: 20px;
+    }
+    .feature-card {
+        width: 100%;
+        max-width: 400px;
+        min-height: 260px;
+    }
+}
+</style>
+</head>
+<body>
+
+<div class="home-header">
+    <h1>🤖 WCS 智能诊断平台</h1>
+    <p>集成 AI 诊断分析与立库自动化测试，助力仓储调度系统高效运维</p>
+</div>
+
+<div class="cards-container">
+    <!-- AI 诊断 -->
+    <a href="index.html" class="feature-card card-ai">
+        <div class="card-icon">🧠</div>
+        <div class="card-title">AI 智能诊断</div>
+        <div class="card-desc">
+            基于大模型的任务异常诊断，支持规则引擎、知识库检索与 Agent 对话，快速定位 WCS 调度问题
+        </div>
+        <div class="card-tags">
+            <span class="card-tag">诊断模式</span>
+            <span class="card-tag">Agent 对话</span>
+            <span class="card-tag">规则管理</span>
+            <span class="card-tag">知识库</span>
+        </div>
+        <div class="card-arrow">→</div>
+    </a>
+
+    <!-- 立库循环测试 -->
+    <a href="storage-task.html" class="feature-card card-storage">
+        <div class="card-icon">🏭</div>
+        <div class="card-title">立库循环测试</div>
+        <div class="card-desc">
+            自动化立库出入库循环压测工具，支持多轮次任务编排、实时状态监控与历史数据分析
+        </div>
+        <div class="card-tags">
+            <span class="card-tag">循环测试</span>
+            <span class="card-tag">任务编排</span>
+            <span class="card-tag">状态监控</span>
+            <span class="card-tag">数据分析</span>
+        </div>
+        <div class="card-arrow">→</div>
+    </a>
+</div>
+
+<div class="home-footer">
+    WCS 智能诊断平台 · Loong AI Diagnosis v1.0
+</div>
+
+</body>
+</html>

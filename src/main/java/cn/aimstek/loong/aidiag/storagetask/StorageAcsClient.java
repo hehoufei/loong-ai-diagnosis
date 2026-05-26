@@ -1,6 +1,7 @@
 package cn.aimstek.loong.aidiag.storagetask;
 
 import cn.aimstek.loong.aidiag.storagetask.dto.StorageTaskConfig;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 
@@ -21,6 +22,19 @@ import java.util.Map;
  */
 @Slf4j
 public class StorageAcsClient {
+
+    /** addTask 调用业务失败时抛出, 调用方可据此判断是否重试 */
+    public static class AddTaskException extends RuntimeException {
+        private final String code;
+        private final boolean retryable;
+        public AddTaskException(String code, String message, boolean retryable) {
+            super(message);
+            this.code = code;
+            this.retryable = retryable;
+        }
+        public String getCode() { return code; }
+        public boolean isRetryable() { return retryable; }
+    }
 
     private final StorageTaskConfig cfg;
     private final ObjectMapper mapper;
@@ -58,14 +72,46 @@ public class StorageAcsClient {
             int code = conn.getResponseCode();
             String respBody = readBody(conn);
             if (code >= 300) {
-                throw new RuntimeException("addTask HTTP " + code + ": " + respBody);
+                throw new AddTaskException("HTTP_" + code,
+                        "addTask HTTP " + code + ": " + respBody, false);
             }
+            // 解析 body, 业务码非 0/200/SUCCESS 视为失败
+            checkBusinessCode(respBody);
             log.info("addTask {} -> HTTP {} body={}", taskNo, code, abbreviate(respBody, 200));
             return respBody;
+        } catch (AddTaskException e) {
+            throw e;
         } catch (IOException e) {
-            throw new RuntimeException("addTask 调用失败: " + e.getMessage(), e);
+            // 网络层异常, 视为可重试
+            throw new AddTaskException("NETWORK", "addTask 网络异常: " + e.getMessage(), true);
         } finally {
             if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
+     * 检查响应体业务码. 接口返回 {"code":"500","msg":"xxx",...} 时抛出 AddTaskException.
+     * 仅当 code 为 0 / 200 / SUCCESS / null 视为成功.
+     */
+    private void checkBusinessCode(String respBody) {
+        if (respBody == null || respBody.isBlank()) return;
+        try {
+            JsonNode root = mapper.readTree(respBody);
+            JsonNode codeNode = root.get("code");
+            if (codeNode == null || codeNode.isNull()) return;
+            String code = codeNode.asText();
+            if (code == null || code.isBlank()) return;
+            // 成功值
+            if ("0".equals(code) || "200".equals(code) || "SUCCESS".equalsIgnoreCase(code)) return;
+            JsonNode msgNode = root.get("msg");
+            String msg = msgNode == null ? "" : msgNode.asText();
+            // body 业务码非成功 -> 抛错; 这种情况一律标记 retryable=true, 由用户手动决定是否重试
+            throw new AddTaskException("BIZ_" + code, "ACS 业务失败 code=" + code + " msg=" + msg, true);
+        } catch (AddTaskException e) {
+            throw e;
+        } catch (Exception e) {
+            // 解析失败, 不阻塞 (兼容老接口可能返回非 json)
+            log.debug("解析 addTask 响应体失败 (忽略): {}", e.getMessage());
         }
     }
 
