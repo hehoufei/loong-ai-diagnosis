@@ -119,6 +119,23 @@ body {
     background: linear-gradient(90deg, var(--color-accent), var(--color-success));
 }
 
+/* Quick Task card */
+.card-quick .card-icon {
+    background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(239,68,68,0.10));
+    color: #d97706;
+}
+.card-quick::before {
+    background: linear-gradient(90deg, #f59e0b, #ef4444);
+}
+.card-quick .card-tag {
+    background: rgba(245,158,11,0.06);
+    border-color: rgba(245,158,11,0.12);
+}
+.card-quick .card-arrow {
+    background: rgba(245,158,11,0.08);
+    color: #d97706;
+}
+
 .card-title {
     font-size: 20px;
     font-weight: 700;
@@ -186,6 +203,16 @@ body {
 }
 
 /* Responsive */
+@media (max-width: 1200px) {
+    .cards-container {
+        gap: 24px;
+        padding: 20px;
+    }
+    .feature-card {
+        width: 320px;
+        min-height: 280px;
+    }
+}
 @media (max-width: 820px) {
     .cards-container {
         flex-direction: column;
@@ -236,6 +263,22 @@ body {
             <span class="card-tag">任务编排</span>
             <span class="card-tag">状态监控</span>
             <span class="card-tag">数据分析</span>
+        </div>
+        <div class="card-arrow">→</div>
+    </a>
+
+    <!-- 快捷任务调试 -->
+    <a href="quick-task.html" class="feature-card card-quick">
+        <div class="card-icon">⚡</div>
+        <div class="card-title">快捷任务调试</div>
+        <div class="card-desc">
+            一键下发各类 WCS 任务，支持输送、入库、出库、移库、任务组等模板，快速验证调度逻辑
+        </div>
+        <div class="card-tags">
+            <span class="card-tag">输送任务</span>
+            <span class="card-tag">入库出库</span>
+            <span class="card-tag">外形检测</span>
+            <span class="card-tag">任务组</span>
         </div>
         <div class="card-arrow">→</div>
     </a>

@@ -351,6 +351,21 @@
 
 <div class="container">
 
+    <!-- ========== 巷道总览 + Tab ========== -->
+    <div class="glass-card section-card" id="aisleOverviewCard">
+        <div class="section-header">
+            <div class="section-title">📊 巷道总览</div>
+            <div class="actions-row">
+                <label style="font-size:12.5px;color:var(--color-text-secondary);">新增巷道
+                    <input type="number" id="newAisleInput" min="1" max="99" style="width:60px;height:30px;border:1.5px solid rgba(99,102,241,0.15);border-radius:8px;padding:0 8px;font-size:12px;background:rgba(255,255,255,0.7);outline:none;">
+                </label>
+                <button class="glass-btn-outline" id="btnAddAisle" style="padding:5px 12px;font-size:12px;">+ 添加</button>
+            </div>
+        </div>
+        <div id="aisleOverviewGrid" class="stats-overview" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));"></div>
+        <div id="aisleTabs" style="display:flex;gap:6px;margin-top:14px;flex-wrap:wrap;"></div>
+    </div>
+
     <!-- ========== 状态 + 控制 ========== -->
     <div class="glass-card section-card">
         <div class="section-header">
@@ -491,7 +506,7 @@
         <div class="section-header">
             <div class="section-title">🗂 任务历史 <span class="cfg-hint" id="historyCount">最近 0 条</span></div>
             <div class="actions-row">
-                <a class="glass-btn-outline" href="/api/v1/storage-task/history.csv"
+                <a class="glass-btn-outline" id="csvDownloadLink" href="/api/v1/storage-task/8/history.csv"
                    download style="text-decoration:none;padding:5px 12px;font-size:12px;">⬇ 下载 CSV</a>
                 <button class="glass-btn-outline" id="btnClearHistoryCsv" style="padding:5px 12px;font-size:12px;">🧹 清空 CSV</button>
             </div>
@@ -638,7 +653,10 @@
 <script>
 'use strict';
 
-const API_BASE = '/api/v1/storage-task';
+let currentAisle = 8; // 默认巷道
+function apiBase() { return '/api/v1/storage-task/' + currentAisle; }
+window.apiBase = apiBase; // 暴露给 module script
+const API_BASE_OVERVIEW = '/api/v1/storage-task';
 const $ = id => document.getElementById(id);
 
 // --------- HTTP ---------
@@ -648,7 +666,7 @@ async function api(path, opts = {}) {
         headers: { 'Content-Type': 'application/json' }
     };
     if (opts.body !== undefined) init.body = JSON.stringify(opts.body);
-    const res = await fetch(API_BASE + path, init);
+    const res = await fetch(apiBase() + path, init);
     let json = null;
     try { json = await res.json(); } catch (e) {}
     if (!res.ok || !json || json.success === false) {
@@ -659,6 +677,88 @@ async function api(path, opts = {}) {
     }
     return json.data;
 }
+
+// --------- 巷道总览 + Tab ---------
+async function loadOverview() {
+    try {
+        const res = await fetch(API_BASE_OVERVIEW + '/overview');
+        const json = await res.json();
+        if (!json || json.success === false) return;
+        renderOverview(json.data || []);
+    } catch (e) { console.warn('loadOverview failed', e); }
+}
+
+function renderOverview(list) {
+    const grid = $('aisleOverviewGrid');
+    const tabs = $('aisleTabs');
+    grid.innerHTML = '';
+    tabs.innerHTML = '';
+
+    if (!list.length) {
+        grid.innerHTML = '<div class="empty-hint">暂无巷道数据</div>';
+        return;
+    }
+
+    for (const o of list) {
+        // 总览卡片
+        const statusColor = o.status === 'RUNNING' ? 'var(--color-success)'
+            : o.status === 'PAUSED' ? 'var(--color-warning)'
+            : o.status === 'ERROR' ? 'var(--color-error)'
+            : 'var(--color-text-muted)';
+        const card = document.createElement('div');
+        card.className = 'glass-card stat-card clickable';
+        card.style.cursor = 'pointer';
+        card.onclick = () => switchAisle(o.aisle);
+        card.innerHTML = `
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                <span style="font-size:14px;font-weight:700;">${o.aisle} 巷道</span>
+                <span style="width:8px;height:8px;border-radius:50%;background:${statusColor};"></span>
+                <span style="font-size:11px;color:${statusColor};">${o.status}</span>
+            </div>
+            <div class="stat-value" style="font-size:18px;">${o.progress}%</div>
+            <div class="stat-label">已访问 ${o.visitedCodes} / ${o.totalCodes} · 第${o.currentRound}轮</div>
+        `;
+        grid.appendChild(card);
+
+        // Tab 按钮
+        const tab = document.createElement('button');
+        tab.className = 'glass-btn-outline aisle-tab' + (o.aisle === currentAisle ? ' active' : '');
+        tab.style.cssText = 'padding:6px 16px;font-size:13px;font-weight:600;';
+        if (o.aisle === currentAisle) {
+            tab.style.background = 'rgba(99,102,241,0.12)';
+            tab.style.borderColor = 'var(--color-primary)';
+            tab.style.color = 'var(--color-primary)';
+        }
+        tab.textContent = o.aisle + ' 巷道';
+        tab.onclick = () => switchAisle(o.aisle);
+        tabs.appendChild(tab);
+    }
+}
+
+function switchAisle(aisle) {
+    if (aisle === currentAisle) return;
+    currentAisle = aisle;
+    // 更新 CSV 下载链接
+    const csvLink = document.getElementById('csvDownloadLink');
+    if (csvLink) csvLink.href = apiBase() + '/history.csv';
+    // 强制刷新 3D
+    if (typeof SCENE !== 'undefined' && SCENE.lastSig) SCENE.lastSig = '';
+    // 重新拉取数据
+    loadConfig();
+    fetchState(true);
+    loadOverview();
+}
+
+$('btnAddAisle').addEventListener('click', () => {
+    const v = parseInt($('newAisleInput').value, 10);
+    if (!v || v < 1 || v > 99) { toast('请输入 1~99 的巷道号', 'error'); return; }
+    switchAisle(v);
+    // 触发一次 state 请求, 后端会自动创建该巷道的 Runner
+    api('/state').then(() => {
+        loadOverview();
+        toast(v + ' 巷道已添加', 'success');
+    }).catch(e => toast('添加失败: ' + e.message, 'error'));
+});
 
 // --------- Toast ---------
 function toast(msg, kind = 'info', ttl = 2400) {
@@ -1839,9 +1939,12 @@ function startPolling() {
 (async function init() {
     bindActions();
     bindHistoryFilters();
+    await loadOverview();
     await loadConfig();
     await fetchState(true);
     startPolling();
+    // 每 5 秒刷新总览
+    setInterval(loadOverview, 5000);
 })();
 </script>
 
@@ -1945,7 +2048,7 @@ function init3D() {
         clearBtn.addEventListener('click', async () => {
             if (!confirm('确认清除已访问标记? (不影响任务进度)')) return;
             try {
-                const res = await fetch('/api/v1/storage-task/clear-visited', { method: 'POST' });
+                const res = await fetch(window.apiBase() + '/clear-visited', { method: 'POST' });
                 const json = await res.json();
                 if (!json || json.success === false) throw new Error((json && json.message) || 'HTTP ' + res.status);
                 SCENE.lastSig = '';
@@ -2370,7 +2473,7 @@ function startPreviewAnim() {
     const totalCodes = (window.LATEST_STATE?.validCodes || []).length;
     // 预览足够多的任务以覆盖所有库位 (每个任务覆盖约 2 个新库位)
     const n = Math.min(2000, Math.max(200, totalCodes));
-    fetch('/api/v1/storage-task/preview?n=' + n)
+    fetch(window.apiBase() + '/preview?n=' + n)
         .then(r => r.json())
         .then(json => {
             if (!json || json.success === false || !json.data || !json.data.length) {

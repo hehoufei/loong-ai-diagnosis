@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WCS 智能诊断 - 快捷任务下发</title>
+<link rel="stylesheet" href="common.css">
+<style>
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+    .topbar-logo { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--color-primary); white-space: nowrap; }
+    .topbar-logo .icon { font-size: 20px; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+    .topbar-link { text-decoration: none; display: inline-flex; align-items: center; gap: 4px; padding: 5px 14px; border-radius: var(--radius-tag); font-size: 13px; font-weight: 500; color: var(--color-primary); border: 1.5px solid rgba(99,102,241,0.25); transition: var(--transition); white-space: nowrap; }
+    .topbar-link:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); }
+
+    .server-bar { display: flex; align-items: center; gap: 12px; padding: 12px 18px; background: rgba(255,255,255,0.6); border: 1px solid rgba(99,102,241,0.1); border-radius: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+    .server-bar label { font-size: 13px; font-weight: 600; color: var(--color-text-secondary); }
+    .server-chip { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1.5px solid rgba(99,102,241,0.15); background: rgba(255,255,255,0.5); color: var(--color-text-secondary); cursor: pointer; transition: var(--transition); }
+    .server-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .server-chip.active { background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.1)); border-color: var(--color-primary); color: var(--color-primary); box-shadow: 0 2px 8px rgba(99,102,241,0.15); }
+    .server-custom { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .server-custom input { height: 32px; padding: 0 10px; width: 220px; font-size: 13px; border: 1.5px solid rgba(99,102,241,0.12); border-radius: 8px; background: rgba(255,255,255,0.6); outline: none; transition: var(--transition); }
+    .server-custom input:focus { border-color: var(--color-primary); }
+    .server-custom button { height: 32px; font-size: 12px; padding: 0 12px; }
+
+    .main-layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr; } }
+
+    .template-panel { position: sticky; top: 70px; }
+    .template-group { margin-bottom: 14px; }
+    .template-group-title { font-size: 11px; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; padding-left: 4px; }
+    .template-card { padding: 8px 12px; margin-bottom: 4px; border-radius: 10px; cursor: pointer; background: rgba(255,255,255,0.5); border: 1.5px solid rgba(99,102,241,0.08); transition: var(--transition); display: flex; align-items: center; gap: 8px; }
+    .template-card:hover { border-color: rgba(99,102,241,0.2); background: rgba(255,255,255,0.7); transform: translateX(2px); }
+    .template-card .t-icon { font-size: 16px; flex-shrink: 0; }
+    .template-card .t-name { font-size: 12px; font-weight: 600; color: var(--color-text); flex: 1; }
+    .template-card .t-tag { font-size: 10px; padding: 2px 6px; border-radius: 999px; font-weight: 700; background: rgba(99,102,241,0.08); color: var(--color-primary); }
+
+    /* Queue */
+    .queue-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .queue-title { font-size: 15px; font-weight: 700; color: var(--color-text); display: flex; align-items: center; gap: 8px; }
+    .queue-count { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(99,102,241,0.1); color: var(--color-primary); }
+    .queue-actions { display: flex; gap: 8px; }
+    .btn-sm { height: 34px; padding: 0 14px; font-size: 12px; font-weight: 600; border: 1.5px solid rgba(99,102,241,0.2); background: transparent; color: var(--color-text-secondary); border-radius: 10px; cursor: pointer; transition: var(--transition); }
+    .btn-sm:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .btn-send-all { height: 34px; padding: 0 18px; font-size: 13px; font-weight: 700; background: var(--gradient-btn); color: #fff; border: none; border-radius: 10px; cursor: pointer; transition: var(--transition); }
+    .btn-send-all:hover { box-shadow: 0 4px 16px rgba(99,102,241,0.3); }
+    .btn-send-all:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .queue-empty { text-align: center; padding: 60px 20px; color: var(--color-text-muted); font-size: 14px; border: 2px dashed rgba(99,102,241,0.15); border-radius: 16px; background: rgba(255,255,255,0.3); }
+
+    .q-card { padding: 14px 16px; margin-bottom: 10px; border-radius: 12px; background: rgba(255,255,255,0.62); border: 1.5px solid rgba(99,102,241,0.1); backdrop-filter: blur(12px); transition: var(--transition); }
+    .q-card:hover { border-color: rgba(99,102,241,0.2); }
+    .q-card.sent { opacity: 0.5; border-color: rgba(16,185,129,0.3); background: rgba(16,185,129,0.03); }
+    .q-card.error { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.03); }
+    .q-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .q-card-info { display: flex; align-items: center; gap: 8px; }
+    .q-card-type { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; background: rgba(99,102,241,0.08); color: var(--color-primary); }
+    .q-card-type.group { background: rgba(245,158,11,0.1); color: #d97706; }
+    .q-card-name { font-size: 13px; font-weight: 600; color: var(--color-text); }
+    .q-card-btns { display: flex; gap: 4px; }
+    .q-btn { width: 26px; height: 26px; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; background: rgba(99,102,241,0.06); color: var(--color-text-muted); transition: var(--transition); }
+    .q-btn:hover { background: rgba(99,102,241,0.12); color: var(--color-primary); }
+    .q-btn.del:hover { background: rgba(239,68,68,0.1); color: var(--color-error); }
+    .q-btn.go { background: rgba(16,185,129,0.08); color: var(--color-success); }
+    .q-btn.go:hover { background: rgba(16,185,129,0.15); }
+    .q-card-body { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; }
+    .q-field { display: flex; flex-direction: column; gap: 2px; }
+    .q-field label { font-size: 10px; color: var(--color-text-muted); }
+    .q-field input, .q-field select { height: 28px; padding: 0 8px; font-size: 12px; border: 1px solid rgba(99,102,241,0.1); border-radius: 6px; background: rgba(255,255,255,0.6); outline: none; }
+    .q-field input:focus, .q-field select:focus { border-color: var(--color-primary); }
+    .q-card-funcs { grid-column: 1/-1; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .qf-tag { padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; border: 1px solid rgba(99,102,241,0.12); background: rgba(255,255,255,0.5); color: var(--color-text-muted); cursor: pointer; transition: var(--transition); user-select: none; }
+    .qf-tag:hover { border-color: rgba(99,102,241,0.25); }
+    .qf-tag.active { background: rgba(99,102,241,0.1); border-color: var(--color-primary); color: var(--color-primary); }
+
+    .response-section { margin-top: 16px; padding: 14px 18px; background: rgba(255,255,255,0.5); border: 1px solid rgba(99,102,241,0.08); border-radius: 14px; display: none; }
+    .response-section.show { display: block; }
+    .response-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .response-status { font-size: 13px; font-weight: 700; }
+    .response-status.success { color: var(--color-success); }
+    .response-status.error { color: var(--color-error); }
+    .response-time { font-size: 12px; color: var(--color-text-muted); }
+    .response-body { background: #1a1b2e; color: #e2e8f0; border-radius: 10px; padding: 12px; font-family: var(--font-mono); font-size: 11px; line-height: 1.5; max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+
+    /* JSON Preview Modal */
+    .json-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); backdrop-filter: blur(6px); z-index: 2000; align-items: center; justify-content: center; }
+    .json-modal-overlay.show { display: flex; animation: fadeIn .2s ease; }
+    .json-modal { background: #1a1b2e; border-radius: 16px; padding: 0; width: 720px; max-width: calc(100vw - 40px); max-height: calc(100vh - 80px); display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,0.4); }
+    .json-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .json-modal-title { font-size: 14px; font-weight: 700; color: #e2e8f0; display: flex; align-items: center; gap: 8px; }
+    .json-modal-actions { display: flex; gap: 8px; }
+    .json-modal-btn { height: 30px; padding: 0 12px; font-size: 12px; font-weight: 600; border: 1px solid rgba(99,102,241,0.3); background: transparent; color: rgba(99,102,241,0.9); border-radius: 8px; cursor: pointer; transition: all .15s; }
+    .json-modal-btn:hover { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.5); }
+    .json-modal-btn.close { border-color: rgba(239,68,68,0.3); color: rgba(239,68,68,0.8); }
+    .json-modal-btn.close:hover { background: rgba(239,68,68,0.1); }
+    .json-modal-body { flex: 1; overflow: auto; padding: 16px 18px; }
+    .json-modal-body pre { margin: 0; color: #e2e8f0; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    .history-section { margin-top: 16px; }
+    .history-title { font-size: 13px; font-weight: 700; color: var(--color-text); margin-bottom: 8px; }
+    .history-list { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
+    .h-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(255,255,255,0.4); border: 1px solid rgba(99,102,241,0.06); border-radius: 8px; font-size: 11px; }
+    .h-item .h-time { color: var(--color-text-muted); width: 60px; flex-shrink: 0; }
+    .h-item .h-type { font-weight: 700; color: var(--color-primary); width: 50px; flex-shrink: 0; }
+    .h-item .h-route { flex: 1; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .h-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .h-dot.ok { background: var(--color-success); }
+    .h-dot.fail { background: var(--color-error); }
+</style>
+</head>
+<body>
+<header class="glass-topbar">
+    <div class="topbar-logo"><span class="icon">⚡</span> 快捷任务下发</div>
+    <div class="topbar-right"><a href="home.html" class="topbar-link">🏠 首页</a></div>
+</header>
+<div class="container">
+    <div class="server-bar">
+        <label>🖥️ 目标服务器：</label>
+        <span class="server-chip active" data-url="http://10.15.58.250:18088" onclick="selectServer(this)">输送线 250:18088</span>
+        <span class="server-chip" data-url="http://10.15.58.249:8088" onclick="selectServer(this)">立库 249:8088</span>
+        <span class="server-chip" data-url="http://localhost:8088" onclick="selectServer(this)">本地 localhost</span>
+        <div class="server-custom">
+            <input type="text" id="customServer" placeholder="自定义 如 http://10.0.0.1:8088">
+            <button class="server-chip" onclick="applyCustomServer()" style="border-color:var(--color-success);color:var(--color-success);">✓ 使用</button>
+        </div>
+    </div>
+    <div class="main-layout">
+        <!-- Left: Templates -->
+        <div class="template-panel glass-card" style="padding:14px;">
+            <div class="template-group">
+                <div class="template-group-title">📦 输送任务</div>
+                <div class="template-card" onclick="addToQueue('n2n')"><span class="t-icon">🚚</span><span class="t-name">点到点输送</span><span class="t-tag">N2N</span></div>
+                <div class="template-card" onclick="addToQueue('n2n_shape')"><span class="t-icon">📐</span><span class="t-name">输送+外形检测</span><span class="t-tag">N2N</span></div>
+                <div class="template-card" onclick="addToQueue('n2n_disassemble')"><span class="t-icon">🔧</span><span class="t-name">输送+拆子托盘</span><span class="t-tag">N2N</span></div>
+            </div>
+            <div class="template-group">
+                <div class="template-group-title">🏗️ 入库/出库/移库</div>
+                <div class="template-card" onclick="addToQueue('n2s')"><span class="t-icon">📥</span><span class="t-name">入库任务</span><span class="t-tag">N2S</span></div>
+                <div class="template-card" onclick="addToQueue('s2n')"><span class="t-icon">📤</span><span class="t-name">出库任务</span><span class="t-tag">S2N</span></div>
+                <div class="template-card" onclick="addToQueue('s2s')"><span class="t-icon">🔄</span><span class="t-name">移库任务</span><span class="t-tag">S2S</span></div>
+            </div>
+            <div class="template-group">
+                <div class="template-group-title">📋 任务组</div>
+                <div class="template-card" onclick="addToQueue('group_add')"><span class="t-icon">➕</span><span class="t-name">合托任务组</span><span class="t-tag">GROUP</span></div>
+                <div class="template-card" onclick="addToQueue('group_remove_add')"><span class="t-icon">🔀</span><span class="t-name">拆合托任务组</span><span class="t-tag">GROUP</span></div>
+            </div>
+        </div>
+        <!-- Right: Queue -->
+        <div class="form-panel">
+            <div class="queue-header">
+                <div class="queue-title">📋 发送队列 <span class="queue-count" id="queueCount">0</span></div>
+                <div class="queue-actions">
+                    <button class="btn-sm" onclick="previewAllJson()" title="查看完整 JSON">{ } 查看 JSON</button>
+                    <button class="btn-sm" onclick="clearQueue()">🗑️ 清空</button>
+                    <button class="btn-send-all" onclick="sendAll()" id="btnSendAll">🚀 全部下发</button>
+                </div>
+            </div>
+            <div id="queueContainer">
+                <div class="queue-empty" id="emptyHint">👈 点击左侧模板添加任务到队列<br><span style="font-size:12px;margin-top:6px;display:inline-block;">可添加多个任务，组合下发</span></div>
+            </div>
+            <div class="response-section" id="responseSection">
+                <div class="response-header"><span class="response-status" id="responseStatus"></span><span class="response-time" id="responseTime"></span></div>
+                <div class="response-body" id="responseBody"></div>
+            </div>
+            <div class="history-section">
+                <div class="history-title">📜 下发历史</div>
+                <div class="history-list" id="historyList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============ 全局状态 ============
+let currentServer = 'http://10.15.58.250:18088';
+let queue = []; // [{id, type, tplName, data}]
+let taskSeq = 1;
+let history = JSON.parse(localStorage.getItem('quickTaskHistory') || '[]');
+
+// ============ 托盘/货物模板 ============
+const PALLET_MOTHER = { containerCode: "C_1224", containerType: "PALLET", size: { length: "1160", width: "1160", height: "1600", unit: "mm" }, weight: { value: "500", unit: "kg" }, innerSize: { length: "1100", width: "1100", height: "1500", unit: "mm" }, loadHeightOffset: { length: "50", unit: "mm" } };
+const PALLET_CHILD = { containerCode: "C_1225", containerType: "PALLET", size: { length: "1160", width: "1160", height: "1300", unit: "mm" }, weight: { value: "400", unit: "kg" }, innerSize: { length: "1100", width: "1100", height: "1200", unit: "mm" }, loadHeightOffset: { length: "50", unit: "mm" } };
+const DEFAULT_GOODS = { goodsCode: "GS_1223", goodsType: "GOODS", size: { length: "800", width: "900", height: "1000", unit: "mm" }, weight: { value: "200", unit: "kg" } };
+
+const FUNC_OPTIONS = [
+    { key: 'SHAPE_DETECTION', label: '📐 外检' },
+    { key: 'SCANNER_NODE', label: '🔍 扫码' },
+    { key: 'WEIGHING_NODE', label: '⚖️ 称重' },
+    { key: 'FILM_WRAPPING_BAGGING_NODE', label: '🎞️ 缠膜' },
+    { key: 'DISASSEMBLE_SUB_PALLET_NODE', label: '🔧 拆子托' },
+    { key: 'WHOLE_DISASSEMBLE_PALLET_NODE', label: '🔨 整拆托' },
+    { key: 'WHOLE_PLACE_NODE', label: '📦 整放托' },
+];
+
+// ============ 工具函数 ============
+function genId() { return 'q_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); }
+function genTaskNo() { const d = new Date(); return `ZDYNDTASK_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(taskSeq++).padStart(2,'0')}`; }
+function genGroupCode() { const d = new Date(); return `GROUP_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(taskSeq++).padStart(2,'0')}`; }
+function nowStr() { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`; }
+
+// ============ 服务器选择 ============
+function selectServer(el) {
+    document.querySelectorAll('.server-chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    currentServer = el.dataset.url;
+    document.getElementById('customServer').value = '';
+    document.getElementById('customServer').style.borderColor = '';
+}
+function applyCustomServer() {
+    const val = document.getElementById('customServer').value.trim();
+    if (!val) return;
+    document.querySelectorAll('.server-chip').forEach(c => c.classList.remove('active'));
+    currentServer = val;
+    document.getElementById('customServer').style.borderColor = 'var(--color-success)';
+}
+</script>
+
+<script>
+// ============ 模板定义 ============
+function getTemplateData(tpl) {
+    const base = { taskSource: 'WMS', bizType: '默认', bizPriority: 0, independentRun: '', remark: '输送' };
+    switch(tpl) {
+        case 'n2n': return { ...base, type: 'single', tplName: '点到点输送', taskType: 'N2N', startNode: 'ND_22062', endNode: 'ND_22048', funcs: [] };
+        case 'n2n_shape': return { ...base, type: 'single', tplName: '输送+外检', taskType: 'N2N', startNode: 'ND_22062', endNode: 'ND_22029', funcs: ['SHAPE_DETECTION'] };
+        case 'n2n_disassemble': return { ...base, type: 'single', tplName: '输送+拆子托', taskType: 'N2N', startNode: 'ND_22067', endNode: 'ND_22037', funcs: ['DISASSEMBLE_SUB_PALLET_NODE'], containerNum: '7', deviceLocationCode: 'ND_22069' };
+        case 'n2s': return { ...base, type: 'single', tplName: '入库任务', taskType: 'N2S', startNode: 'ND_11025', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', funcs: [], remark: '入库' };
+        case 's2n': return { ...base, type: 'single', tplName: '出库任务', taskType: 'S2N', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', endNode: 'ND_11025', funcs: [], remark: '出库' };
+        case 's2s': return { ...base, type: 'single', tplName: '移库任务', taskType: 'S2S', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-02-01-0003-03', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-R-01-03-0003-04', funcs: [], remark: '移库' };
+        case 'group_add': return { type: 'group', tplName: '合托任务组', groupType: 'HALF_ADD_CONTAINER', mainStart: 'ND_22057', mainEnd: '', mainTaskType: 'N2S', mainIndependent: 'NO', mainFunc: 'WHOLE_PLACE_NODE', subStart: 'ND_22015', subEnd: '', subTaskType: 'N2S', subIndependent: 'NO', subFunc: 'NONE', subTargetEnd: '' };
+        case 'group_remove_add': return { type: 'group', tplName: '拆合托任务组', groupType: 'HALF_REMOVE_ADD_CONTAINER', mainStart: 'ND_11066', mainEnd: '', mainTaskType: 'N2N', mainIndependent: 'NO', mainFunc: 'WHOLE_DISASSEMBLE_PALLET_NODE', subStart: 'ND_11013', subEnd: '', subTaskType: 'N2N', subIndependent: 'NO', subFunc: 'WHOLE_PLACE_NODE', subTargetEnd: 'ND_11091' };
+        default: return { ...base, type: 'single', tplName: '点到点', taskType: 'N2N', startNode: '', endNode: '', funcs: [] };
+    }
+}
+
+// ============ 队列操作 ============
+function addToQueue(tpl) {
+    const data = getTemplateData(tpl);
+    const item = { id: genId(), tpl, data };
+    queue.push(item);
+    renderQueue();
+}
+
+function removeFromQueue(id) {
+    queue = queue.filter(q => q.id !== id);
+    renderQueue();
+}
+
+function clearQueue() {
+    queue = [];
+    renderQueue();
+}
+
+function updateQueueCount() {
+    document.getElementById('queueCount').textContent = queue.length;
+    document.getElementById('emptyHint').style.display = queue.length === 0 ? 'block' : 'none';
+}
+</script>
+
+<script>
+// ============ 渲染队列 ============
+function renderQueue() {
+    updateQueueCount();
+    const container = document.getElementById('queueContainer');
+    const cards = queue.map((item, idx) => item.data.type === 'group' ? renderGroupCard(item, idx) : renderSingleCard(item, idx));
+    // 保留 emptyHint
+    container.innerHTML = `<div class="queue-empty" id="emptyHint" style="display:${queue.length===0?'block':'none'}">👈 点击左侧模板添加任务到队列<br><span style="font-size:12px;margin-top:6px;display:inline-block;">可添加多个任务，组合下发</span></div>` + cards.join('');
+}
+
+function renderSingleCard(item, idx) {
+    const d = item.data;
+    const funcTags = FUNC_OPTIONS.map(f => `<span class="qf-tag ${d.funcs.includes(f.key)?'active':''}" onclick="toggleQFunc('${item.id}','${f.key}')">${f.label}</span>`).join('');
+    return `<div class="q-card" id="card_${item.id}">
+        <div class="q-card-head">
+            <div class="q-card-info"><span class="q-card-type">${d.taskType}</span><span class="q-card-name">${d.tplName}</span></div>
+            <div class="q-card-btns">
+                <button class="q-btn" onclick="previewOneJson('${item.id}')" title="查看 JSON">{ }</button>
+                <button class="q-btn go" onclick="sendOne('${item.id}')" title="单独下发">▶</button>
+                <button class="q-btn del" onclick="removeFromQueue('${item.id}')" title="删除">✕</button>
+            </div>
+        </div>
+        <div class="q-card-body">
+            <div class="q-field"><label>起点</label><input value="${d.startNode}" onchange="updateQField('${item.id}','startNode',this.value)"></div>
+            <div class="q-field"><label>终点</label><input value="${d.endNode}" onchange="updateQField('${item.id}','endNode',this.value)"></div>
+            <div class="q-field"><label>类型</label><select onchange="updateQField('${item.id}','taskType',this.value)"><option ${d.taskType==='N2N'?'selected':''}>N2N</option><option ${d.taskType==='N2S'?'selected':''}>N2S</option><option ${d.taskType==='S2N'?'selected':''}>S2N</option><option ${d.taskType==='S2S'?'selected':''}>S2S</option></select></div>
+            <div class="q-field"><label>独立运行</label><select onchange="updateQField('${item.id}','independentRun',this.value)"><option value="" ${d.independentRun===''?'selected':''}>空</option><option value="YES" ${d.independentRun==='YES'?'selected':''}>YES</option><option value="NO" ${d.independentRun==='NO'?'selected':''}>NO</option></select></div>
+            <div class="q-card-funcs">${funcTags}</div>
+        </div>
+    </div>`;
+}
+
+function renderGroupCard(item, idx) {
+    const d = item.data;
+    return `<div class="q-card" id="card_${item.id}">
+        <div class="q-card-head">
+            <div class="q-card-info"><span class="q-card-type group">GROUP</span><span class="q-card-name">${d.tplName}</span></div>
+            <div class="q-card-btns">
+                <button class="q-btn" onclick="previewOneJson('${item.id}')" title="查看 JSON">{ }</button>
+                <button class="q-btn go" onclick="sendOne('${item.id}')" title="单独下发">▶</button>
+                <button class="q-btn del" onclick="removeFromQueue('${item.id}')" title="删除">✕</button>
+            </div>
+        </div>
+        <div class="q-card-body" style="grid-template-columns:1fr 1fr;">
+            <div style="grid-column:1/-1;margin-bottom:4px;">
+                <div class="q-field"><label>组类型</label><select onchange="updateQField('${item.id}','groupType',this.value)">
+                    <option ${d.groupType==='HALF_REMOVE_ADD_CONTAINER'?'selected':''} value="HALF_REMOVE_ADD_CONTAINER">拆合托无输送</option>
+                    <option ${d.groupType==='REMOVE_ADD_CONTAINER'?'selected':''} value="REMOVE_ADD_CONTAINER">拆合托</option>
+                    <option ${d.groupType==='HALF_ADD_CONTAINER'?'selected':''} value="HALF_ADD_CONTAINER">合托无输送</option>
+                    <option ${d.groupType==='ADD_CONTAINER'?'selected':''} value="ADD_CONTAINER">整体合托</option>
+                    <option ${d.groupType==='REMOVE_CONTAINER'?'selected':''} value="REMOVE_CONTAINER">整体拆托</option>
+                    <option ${d.groupType==='REMOVE_ADD_GOODS'?'selected':''} value="REMOVE_ADD_GOODS">按件拆合</option>
+                    <option ${d.groupType==='HALF_REMOVE_ADD_GOODS'?'selected':''} value="HALF_REMOVE_ADD_GOODS">按件拆合无终点</option>
+                </select></div>
+            </div>
+            <div style="padding:8px;background:rgba(99,102,241,0.03);border-radius:8px;border:1px solid rgba(99,102,241,0.08);">
+                <div style="font-size:11px;font-weight:700;color:var(--color-primary);margin-bottom:6px;">🔵 主任务</div>
+                <div class="q-field" style="margin-bottom:4px;"><label>起点</label><input value="${d.mainStart}" onchange="updateQField('${item.id}','mainStart',this.value)"></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>终点</label><input value="${d.mainEnd}" onchange="updateQField('${item.id}','mainEnd',this.value)" placeholder="可为空"></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','mainTaskType',this.value)"><option ${d.mainTaskType==='N2N'?'selected':''}>N2N</option><option ${d.mainTaskType==='N2S'?'selected':''}>N2S</option><option ${d.mainTaskType==='S2N'?'selected':''}>S2N</option></select></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','mainIndependent',this.value)"><option value="NO" ${d.mainIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.mainIndependent==='YES'?'selected':''}>YES</option></select></div>
+                <div class="q-field"><label>功能</label><select onchange="updateQField('${item.id}','mainFunc',this.value)"><option ${d.mainFunc==='WHOLE_DISASSEMBLE_PALLET_NODE'?'selected':''} value="WHOLE_DISASSEMBLE_PALLET_NODE">WHOLE_DISASSEMBLE_PALLET_NODE (整体拆垛)</option><option ${d.mainFunc==='WHOLE_PLACE_NODE'?'selected':''} value="WHOLE_PLACE_NODE">WHOLE_PLACE_NODE (整体合垛)</option><option ${d.mainFunc==='DISASSEMBLE_BY_PIECE_NODE'?'selected':''} value="DISASSEMBLE_BY_PIECE_NODE">DISASSEMBLE_BY_PIECE_NODE (按件拆垛)</option><option ${d.mainFunc==='ASSEMBLE_BY_PIECE_NODE'?'selected':''} value="ASSEMBLE_BY_PIECE_NODE">ASSEMBLE_BY_PIECE_NODE (按件码垛)</option><option ${d.mainFunc==='SCANNER_NODE'?'selected':''} value="SCANNER_NODE">SCANNER_NODE (扫码)</option></select></div>
+            </div>
+            <div style="padding:8px;background:rgba(16,185,129,0.03);border-radius:8px;border:1px solid rgba(16,185,129,0.08);">
+                <div style="font-size:11px;font-weight:700;color:var(--color-success);margin-bottom:6px;">🟢 子任务</div>
+                <div class="q-field" style="margin-bottom:4px;"><label>起点</label><input value="${d.subStart}" onchange="updateQField('${item.id}','subStart',this.value)"></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>终点</label><input value="${d.subEnd}" onchange="updateQField('${item.id}','subEnd',this.value)" placeholder="可为空"></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','subTaskType',this.value)"><option ${d.subTaskType==='N2N'?'selected':''}>N2N</option><option ${d.subTaskType==='N2S'?'selected':''}>N2S</option><option ${d.subTaskType==='S2N'?'selected':''}>S2N</option></select></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','subIndependent',this.value)"><option value="NO" ${d.subIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.subIndependent==='YES'?'selected':''}>YES</option></select></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>功能</label><select onchange="updateQField('${item.id}','subFunc',this.value)"><option ${d.subFunc==='WHOLE_PLACE_NODE'?'selected':''} value="WHOLE_PLACE_NODE">WHOLE_PLACE_NODE (整体合垛)</option><option ${d.subFunc==='WHOLE_DISASSEMBLE_PALLET_NODE'?'selected':''} value="WHOLE_DISASSEMBLE_PALLET_NODE">WHOLE_DISASSEMBLE_PALLET_NODE (整体拆垛)</option><option ${d.subFunc==='ASSEMBLE_BY_PIECE_NODE'?'selected':''} value="ASSEMBLE_BY_PIECE_NODE">ASSEMBLE_BY_PIECE_NODE (按件码垛)</option><option ${d.subFunc==='NONE'?'selected':''} value="NONE">NONE (无)</option></select></div>
+                <div class="q-field"><label>合垛目标</label><input value="${d.subTargetEnd||''}" onchange="updateQField('${item.id}','subTargetEnd',this.value)" placeholder="TARGET_END_NODE"></div>
+            </div>
+        </div>
+    </div>`;
+}
+
+function updateQField(id, field, value) {
+    const item = queue.find(q => q.id === id);
+    if (item) item.data[field] = value;
+}
+
+function toggleQFunc(id, funcKey) {
+    const item = queue.find(q => q.id === id);
+    if (!item) return;
+    const idx = item.data.funcs.indexOf(funcKey);
+    if (idx >= 0) item.data.funcs.splice(idx, 1);
+    else item.data.funcs.push(funcKey);
+    renderQueue();
+}
+</script>
+
+<script>
+// ============ 构建 Payload ============
+function buildSinglePayload(data) {
+    return {
+        taskNo: genTaskNo(),
+        taskSource: data.taskSource || 'WMS',
+        taskType: data.taskType,
+        bizType: data.bizType || '默认',
+        bizPriority: data.bizPriority || 0,
+        independentRun: data.independentRun || '',
+        preStartTaskNo: '', preEndTaskNo: '',
+        startNode: data.startNode,
+        endNode: data.endNode,
+        requiredFunctionList: buildFuncList(data),
+        containerList: [{ ...PALLET_MOTHER }],
+        goodsInfoList: [{ ...DEFAULT_GOODS }],
+        expectedStartTime: '', expectedFinishTime: '',
+        remark: data.remark || '输送'
+    };
+}
+
+function buildFuncList(data) {
+    if (!data.funcs || data.funcs.length === 0) return [];
+    return data.funcs.map(ft => {
+        if (ft === 'SHAPE_DETECTION') return { extData: {}, deviceCode: '', functionCode: '', functionName: '', deviceType: 'SHAPE_DETECTOR', functionType: 'SHAPE_DETECTION', rootFunctionType: '' };
+        if (ft === 'DISASSEMBLE_SUB_PALLET_NODE') return { functionType: 'DISASSEMBLE_SUB_PALLET_NODE', extData: { CONTAINER_NUM: data.containerNum || '1', DEVICE_LOCATION_CODE: data.deviceLocationCode || '' } };
+        if (ft === 'WHOLE_PLACE_NODE') return { functionType: 'WHOLE_PLACE_NODE', extData: { TARGET_END_NODE: data.targetEndNode || '' } };
+        return { functionType: ft };
+    });
+}
+
+function buildGroupPayload(data) {
+    const taskNo = genTaskNo();
+    let mainFuncList = [];
+    if (data.mainFunc === 'WHOLE_PLACE_NODE') mainFuncList = [{ functionType: 'WHOLE_PLACE_NODE', extData: { TARGET_END_NODE: data.mainEnd || '' } }];
+    else if (data.mainFunc === 'DISASSEMBLE_BY_PIECE_NODE') mainFuncList = [{ functionType: 'DISASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: 8 } }];
+    else mainFuncList = [{ functionType: data.mainFunc }];
+
+    let subFuncList = [];
+    if (data.subFunc === 'NONE') subFuncList = [];
+    else if (data.subFunc === 'WHOLE_PLACE_NODE') subFuncList = data.subTargetEnd ? [{ functionType: 'WHOLE_PLACE_NODE', extData: { TARGET_END_NODE: data.subTargetEnd } }] : [{ functionType: 'WHOLE_PLACE_NODE' }];
+    else if (data.subFunc === 'ASSEMBLE_BY_PIECE_NODE') subFuncList = [{ functionType: 'ASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: 8 } }];
+    else subFuncList = [{ functionType: data.subFunc }];
+
+    return {
+        groupCode: genGroupCode(),
+        groupType: data.groupType,
+        taskSource: 'WMS',
+        bizPriority: 0,
+        mainTaskList: [{
+            taskNo: taskNo + '_M', taskSource: 'WMS', taskType: data.mainTaskType, bizType: '默认', bizPriority: 0,
+            preStartTaskNo: '', preEndTaskNo: '',
+            startNode: data.mainStart, endNode: data.mainEnd || '',
+            independentRun: data.mainIndependent,
+            requiredFunctionList: mainFuncList,
+            containerList: [{ ...PALLET_MOTHER }],
+            goodsInfoList: [{ ...DEFAULT_GOODS }],
+            expectedStartTime: '', expectedFinishTime: '', remark: '主任务'
+        }],
+        subTaskList: [{
+            taskNo: taskNo + '_S', taskSource: 'WMS', taskType: data.subTaskType, bizType: '默认', bizPriority: 0,
+            preStartTaskNo: '', preEndTaskNo: '',
+            startNode: data.subStart, endNode: data.subEnd || '',
+            independentRun: data.subIndependent,
+            requiredFunctionList: subFuncList,
+            containerList: [{ ...PALLET_MOTHER }],
+            goodsInfoList: [{ ...DEFAULT_GOODS }],
+            expectedStartTime: '', expectedFinishTime: '', remark: '子任务'
+        }]
+    };
+}
+
+// ============ 发送逻辑 ============
+async function sendOne(id) {
+    const item = queue.find(q => q.id === id);
+    if (!item) return;
+    const cardEl = document.getElementById('card_' + id);
+
+    const isGroup = item.data.type === 'group';
+    const url = currentServer + (isGroup ? '/task/addTaskGroup' : '/task/addTask');
+    const payload = isGroup ? buildGroupPayload(item.data) : buildSinglePayload(item.data);
+    const startTime = Date.now();
+
+    try {
+        const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': '*/*' }, body: JSON.stringify(payload) });
+        const elapsed = Date.now() - startTime;
+        const text = await resp.text();
+        let body; try { body = JSON.parse(text); } catch(e) { body = text; }
+        showResponse(resp.ok, body, elapsed);
+        if (cardEl) cardEl.className = 'q-card ' + (resp.ok ? 'sent' : 'error');
+        addHistory(isGroup ? 'GROUP' : item.data.taskType, item.data.startNode || item.data.mainStart || '-', item.data.endNode || item.data.mainEnd || '-', resp.ok);
+    } catch(e) {
+        const elapsed = Date.now() - startTime;
+        showResponse(false, { error: e.message }, elapsed);
+        if (cardEl) cardEl.className = 'q-card error';
+        addHistory(isGroup ? 'GROUP' : item.data.taskType, '-', '-', false);
+    }
+}
+
+async function sendAll() {
+    const btn = document.getElementById('btnSendAll');
+    btn.disabled = true; btn.textContent = '⏳ 下发中...';
+    for (const item of queue) {
+        await sendOne(item.id);
+        await new Promise(r => setTimeout(r, 300)); // 间隔300ms
+    }
+    btn.disabled = false; btn.textContent = '🚀 全部下发';
+}
+</script>
+
+<script>
+// ============ 响应展示 ============
+function showResponse(ok, body, elapsed) {
+    const sec = document.getElementById('responseSection');
+    sec.classList.add('show');
+    document.getElementById('responseStatus').className = 'response-status ' + (ok ? 'success' : 'error');
+    document.getElementById('responseStatus').innerHTML = ok ? '✅ 成功' : '❌ 失败';
+    document.getElementById('responseTime').textContent = `耗时 ${elapsed}ms`;
+    document.getElementById('responseBody').textContent = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+}
+
+// ============ 历史记录 ============
+function addHistory(type, from, to, ok) {
+    history.unshift({ time: nowStr(), type, from, to, ok });
+    if (history.length > 50) history.pop();
+    localStorage.setItem('quickTaskHistory', JSON.stringify(history));
+    renderHistory();
+}
+function renderHistory() {
+    const list = document.getElementById('historyList');
+    if (history.length === 0) { list.innerHTML = '<div style="text-align:center;color:var(--color-text-muted);font-size:12px;padding:16px;">暂无记录</div>'; return; }
+    list.innerHTML = history.slice(0, 15).map(h => `<div class="h-item"><span class="h-time">${h.time}</span><span class="h-type">${h.type}</span><span class="h-route">${h.from} → ${h.to}</span><span class="h-dot ${h.ok?'ok':'fail'}"></span></div>`).join('');
+}
+
+// ============ 初始化 ============
+renderHistory();
+renderQueue();
+</script>
+
+<!-- JSON Preview Modal -->
+<div class="json-modal-overlay" id="jsonModal" onclick="if(event.target===this)closeJsonModal()">
+    <div class="json-modal">
+        <div class="json-modal-head">
+            <div class="json-modal-title">{ } 请求 JSON 预览</div>
+            <div class="json-modal-actions">
+                <button class="json-modal-btn" onclick="copyJson()">📋 复制</button>
+                <button class="json-modal-btn close" onclick="closeJsonModal()">✕ 关闭</button>
+            </div>
+        </div>
+        <div class="json-modal-body"><pre id="jsonPreviewContent"></pre></div>
+    </div>
+</div>
+
+<script>
+// ============ JSON 预览 ============
+let _lastPreviewJson = '';
+
+function previewAllJson() {
+    if (queue.length === 0) { alert('队列为空，请先添加任务'); return; }
+    const payloads = queue.map(item => {
+        const isGroup = item.data.type === 'group';
+        const url = currentServer + (isGroup ? '/task/addTaskGroup' : '/task/addTask');
+        const payload = isGroup ? buildGroupPayload(item.data) : buildSinglePayload(item.data);
+        return { url, method: 'POST', body: payload };
+    });
+    const display = payloads.length === 1 ? payloads[0] : payloads;
+    _lastPreviewJson = JSON.stringify(display, null, 2);
+    document.getElementById('jsonPreviewContent').textContent = _lastPreviewJson;
+    document.getElementById('jsonModal').classList.add('show');
+}
+
+function previewOneJson(id) {
+    const item = queue.find(q => q.id === id);
+    if (!item) return;
+    const isGroup = item.data.type === 'group';
+    const url = currentServer + (isGroup ? '/task/addTaskGroup' : '/task/addTask');
+    const payload = isGroup ? buildGroupPayload(item.data) : buildSinglePayload(item.data);
+    const display = { url, method: 'POST', body: payload };
+    _lastPreviewJson = JSON.stringify(display, null, 2);
+    document.getElementById('jsonPreviewContent').textContent = _lastPreviewJson;
+    document.getElementById('jsonModal').classList.add('show');
+}
+
+function closeJsonModal() {
+    document.getElementById('jsonModal').classList.remove('show');
+}
+
+function copyJson() {
+    navigator.clipboard.writeText(_lastPreviewJson).then(() => {
+        const btn = event.target;
+        btn.textContent = '✅ 已复制';
+        setTimeout(() => { btn.textContent = '📋 复制'; }, 1500);
+    });
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeJsonModal();
+});
+</script>
+</body>
+</html>

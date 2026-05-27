@@ -19,7 +19,9 @@ public class StorageTaskConfig {
     private String dbPassword = "root";
 
     // ========== ACS addTask ==========
-    private String acsAddTaskUrl = "http://10.15.58.249:8088/task/addTask";
+    private String acsAddTaskUrl = System.getenv("ACS_ADD_TASK_URL") != null
+            ? System.getenv("ACS_ADD_TASK_URL")
+            : "http://localhost:8088/task/addTask";
     private int httpTimeoutSeconds = 15;
 
     // ========== 库位编码规则 ==========

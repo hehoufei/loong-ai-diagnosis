@@ -7,11 +7,7 @@ import cn.aimstek.loong.aidiag.storagetask.dto.StorageTaskRunnerState.Status;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -30,7 +26,6 @@ import java.util.Set;
  *  - 状态/配置/任务历史 持久化到 ~/.loong-ai-diagnosis/, 进程重启可断点续跑
  */
 @Slf4j
-@Component
 public class StorageTaskRunner {
 
     private static final DateTimeFormatter TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -55,16 +50,17 @@ public class StorageTaskRunner {
     private volatile boolean stopRequested = false;
     private volatile Thread workerThread;
 
-    @Autowired
-    public StorageTaskRunner(ObjectMapper mapper) {
+    public StorageTaskRunner(int aisle, ObjectMapper mapper) {
+        this.aisle = aisle;
         ObjectMapper m = mapper.copy();
         m.enable(SerializationFeature.INDENT_OUTPUT);
         this.mapper = m;
     }
 
-    @PostConstruct
     public synchronized void init() {
         loadConfig();
+        // 确保 config 中的 aisles 只包含本巷道
+        config.setAisles(new ArrayList<>(List.of(aisle)));
         loadState();
         // 进程重启后, 重新进入 PAUSED 状态, 由用户决定是否继续
         if (state.getStatus() == Status.RUNNING) {
@@ -73,7 +69,6 @@ public class StorageTaskRunner {
         }
     }
 
-    @PreDestroy
     public synchronized void shutdown() {
         stopRequested = true;
         synchronized (pauseLock) {
@@ -150,7 +145,7 @@ public class StorageTaskRunner {
         state.setStatus(Status.RUNNING);
         saveState();
 
-        workerThread = new Thread(this::runLoop, "storage-task-runner");
+        workerThread = new Thread(this::runLoop, "storage-task-runner-aisle" + aisle);
         workerThread.setDaemon(true);
         workerThread.start();
     }
@@ -319,7 +314,7 @@ public class StorageTaskRunner {
         state.setStatus(Status.RUNNING);
         saveState();
 
-        workerThread = new Thread(this::runLoop, "storage-task-runner");
+        workerThread = new Thread(this::runLoop, "storage-task-runner-aisle" + aisle);
         workerThread.setDaemon(true);
         workerThread.start();
     }
@@ -829,17 +824,21 @@ public class StorageTaskRunner {
 
     // ============== 持久化 ==============
 
+    private final int aisle;
+
     private File configFile() {
-        return new File(homeDir(), "storage-task-config.json");
+        return new File(homeDir(), "storage-task-config-aisle" + aisle + ".json");
     }
 
     private File stateFile() {
-        return new File(homeDir(), "storage-task-state.json");
+        return new File(homeDir(), "storage-task-state-aisle" + aisle + ".json");
     }
 
     public File historyFile() {
-        return new File(homeDir(), "storage-task-history.csv");
+        return new File(homeDir(), "storage-task-history-aisle" + aisle + ".csv");
     }
+
+    public int getAisle() { return aisle; }
 
     /** 清空 CSV 历史 (不影响 state / 进度) */
     public synchronized void clearHistoryCsv() {
