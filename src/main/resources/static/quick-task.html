@@ -98,15 +98,21 @@
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
     .history-section { margin-top: 16px; }
-    .history-title { font-size: 13px; font-weight: 700; color: var(--color-text); margin-bottom: 8px; }
-    .history-list { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
+    .history-title { font-size: 13px; font-weight: 700; color: var(--color-text); margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+    .history-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
     .h-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(255,255,255,0.4); border: 1px solid rgba(99,102,241,0.06); border-radius: 8px; font-size: 11px; }
-    .h-item .h-time { color: var(--color-text-muted); width: 60px; flex-shrink: 0; }
+    .h-item .h-time { color: var(--color-text-muted); width: 70px; flex-shrink: 0; }
     .h-item .h-type { font-weight: 700; color: var(--color-primary); width: 50px; flex-shrink: 0; }
     .h-item .h-route { flex: 1; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .h-item .h-server { font-size: 10px; color: var(--color-text-muted); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .h-item .h-elapsed { font-size: 10px; color: var(--color-text-muted); width: 50px; text-align: right; flex-shrink: 0; }
+    .h-item .h-taskno { font-size: 10px; color: var(--color-text-muted); font-family: var(--font-mono); max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
     .h-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
     .h-dot.ok { background: var(--color-success); }
     .h-dot.fail { background: var(--color-error); }
+    .h-toolbar { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+    .h-toolbar select { height: 28px; padding: 0 8px; font-size: 11px; border: 1px solid rgba(99,102,241,0.12); border-radius: 6px; background: rgba(255,255,255,0.6); outline: none; cursor: pointer; }
+    .h-toolbar .h-stat { font-size: 11px; color: var(--color-text-muted); }
 </style>
 </head>
 <body>
@@ -164,7 +170,16 @@
                 <div class="response-body" id="responseBody"></div>
             </div>
             <div class="history-section">
-                <div class="history-title">📜 下发历史</div>
+                <div class="history-title">
+                    📜 下发历史
+                    <div class="h-toolbar">
+                        <select id="historyDateSel" onchange="loadHistoryByDate(this.value)">
+                            <option value="today">今天</option>
+                        </select>
+                        <span class="h-stat" id="historyStats"></span>
+                        <button class="btn-sm" onclick="downloadHistory()" style="height:26px;padding:0 10px;font-size:11px;">⬇ 下载</button>
+                    </div>
+                </div>
                 <div class="history-list" id="historyList"></div>
             </div>
         </div>
@@ -176,7 +191,6 @@
 let currentServer = 'http://10.15.58.250:18088';
 let queue = []; // [{id, type, tplName, data}]
 let taskSeq = 1;
-let history = JSON.parse(localStorage.getItem('quickTaskHistory') || '[]');
 
 // ============ 托盘/货物模板 ============
 const PALLET_MOTHER = { containerCode: "C_1224", containerType: "PALLET", size: { length: "1160", width: "1160", height: "1600", unit: "mm" }, weight: { value: "500", unit: "kg" }, innerSize: { length: "1100", width: "1100", height: "1500", unit: "mm" }, loadHeightOffset: { length: "50", unit: "mm" } };
@@ -184,19 +198,19 @@ const PALLET_CHILD = { containerCode: "C_1225", containerType: "PALLET", size: {
 const DEFAULT_GOODS = { goodsCode: "GS_1223", goodsType: "GOODS", size: { length: "800", width: "900", height: "1000", unit: "mm" }, weight: { value: "200", unit: "kg" } };
 
 const FUNC_OPTIONS = [
-    { key: 'SHAPE_DETECTION', label: '📐 外检' },
-    { key: 'SCANNER_NODE', label: '🔍 扫码' },
-    { key: 'WEIGHING_NODE', label: '⚖️ 称重' },
-    { key: 'FILM_WRAPPING_BAGGING_NODE', label: '🎞️ 缠膜' },
-    { key: 'DISASSEMBLE_SUB_PALLET_NODE', label: '🔧 拆子托' },
-    { key: 'WHOLE_DISASSEMBLE_PALLET_NODE', label: '🔨 整拆托' },
-    { key: 'WHOLE_PLACE_NODE', label: '📦 整放托' },
+    { key: 'SHAPE_DETECTION', label: '📐 SHAPE_DETECTION' },
+    { key: 'SCANNER_NODE', label: '🔍 SCANNER_NODE' },
+    { key: 'WEIGHING_NODE', label: '⚖️ WEIGHING_NODE' },
+    { key: 'FILM_WRAPPING_BAGGING_NODE', label: '🎞️ FILM_WRAPPING' },
+    { key: 'DISASSEMBLE_SUB_PALLET_NODE', label: '🔧 DISASSEMBLE_SUB' },
+    { key: 'WHOLE_DISASSEMBLE_PALLET_NODE', label: '🔨 WHOLE_DISASSEMBLE' },
+    { key: 'WHOLE_PLACE_NODE', label: '📦 WHOLE_PLACE' },
 ];
 
 // ============ 工具函数 ============
 function genId() { return 'q_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); }
-function genTaskNo() { const d = new Date(); return `ZDYNDTASK_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(taskSeq++).padStart(2,'0')}`; }
-function genGroupCode() { const d = new Date(); return `GROUP_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(taskSeq++).padStart(2,'0')}`; }
+function genTaskNo() { const d = new Date(); const ts = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`; const rand = Math.random().toString(36).slice(2, 8).toUpperCase(); return `QT_${ts}_${rand}`; }
+function genGroupCode() { const d = new Date(); const ts = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`; const rand = Math.random().toString(36).slice(2, 8).toUpperCase(); return `QTG_${ts}_${rand}`; }
 function nowStr() { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`; }
 
 // ============ 服务器选择 ============
@@ -303,31 +317,31 @@ function renderGroupCard(item, idx) {
         <div class="q-card-body" style="grid-template-columns:1fr 1fr;">
             <div style="grid-column:1/-1;margin-bottom:4px;">
                 <div class="q-field"><label>组类型</label><select onchange="updateQField('${item.id}','groupType',this.value)">
-                    <option ${d.groupType==='HALF_REMOVE_ADD_CONTAINER'?'selected':''} value="HALF_REMOVE_ADD_CONTAINER">拆合托无输送</option>
-                    <option ${d.groupType==='REMOVE_ADD_CONTAINER'?'selected':''} value="REMOVE_ADD_CONTAINER">拆合托</option>
-                    <option ${d.groupType==='HALF_ADD_CONTAINER'?'selected':''} value="HALF_ADD_CONTAINER">合托无输送</option>
-                    <option ${d.groupType==='ADD_CONTAINER'?'selected':''} value="ADD_CONTAINER">整体合托</option>
-                    <option ${d.groupType==='REMOVE_CONTAINER'?'selected':''} value="REMOVE_CONTAINER">整体拆托</option>
-                    <option ${d.groupType==='REMOVE_ADD_GOODS'?'selected':''} value="REMOVE_ADD_GOODS">按件拆合</option>
-                    <option ${d.groupType==='HALF_REMOVE_ADD_GOODS'?'selected':''} value="HALF_REMOVE_ADD_GOODS">按件拆合无终点</option>
+                    <option ${d.groupType==='HALF_REMOVE_ADD_CONTAINER'?'selected':''} value="HALF_REMOVE_ADD_CONTAINER">HALF_REMOVE_ADD_CONTAINER (拆合托无输送)</option>
+                    <option ${d.groupType==='REMOVE_ADD_CONTAINER'?'selected':''} value="REMOVE_ADD_CONTAINER">REMOVE_ADD_CONTAINER (拆合托)</option>
+                    <option ${d.groupType==='HALF_ADD_CONTAINER'?'selected':''} value="HALF_ADD_CONTAINER">HALF_ADD_CONTAINER (合托无输送)</option>
+                    <option ${d.groupType==='ADD_CONTAINER'?'selected':''} value="ADD_CONTAINER">ADD_CONTAINER (整体合托)</option>
+                    <option ${d.groupType==='REMOVE_CONTAINER'?'selected':''} value="REMOVE_CONTAINER">REMOVE_CONTAINER (整体拆托)</option>
+                    <option ${d.groupType==='REMOVE_ADD_GOODS'?'selected':''} value="REMOVE_ADD_GOODS">REMOVE_ADD_GOODS (按件拆合)</option>
+                    <option ${d.groupType==='HALF_REMOVE_ADD_GOODS'?'selected':''} value="HALF_REMOVE_ADD_GOODS">HALF_REMOVE_ADD_GOODS (按件拆合无终点)</option>
                 </select></div>
             </div>
             <div style="padding:8px;background:rgba(99,102,241,0.03);border-radius:8px;border:1px solid rgba(99,102,241,0.08);">
-                <div style="font-size:11px;font-weight:700;color:var(--color-primary);margin-bottom:6px;">🔵 主任务</div>
-                <div class="q-field" style="margin-bottom:4px;"><label>起点</label><input value="${d.mainStart}" onchange="updateQField('${item.id}','mainStart',this.value)"></div>
+                <div style="font-size:11px;font-weight:700;color:var(--color-primary);margin-bottom:6px;">🔵 主任务 <span style="font-weight:400;color:var(--color-text-muted);">— 先去拆</span></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(货物从哪里出发去拆)</span></label><input value="${d.mainStart}" onchange="updateQField('${item.id}','mainStart',this.value)"></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>终点</label><input value="${d.mainEnd}" onchange="updateQField('${item.id}','mainEnd',this.value)" placeholder="可为空"></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','mainTaskType',this.value)"><option ${d.mainTaskType==='N2N'?'selected':''}>N2N</option><option ${d.mainTaskType==='N2S'?'selected':''}>N2S</option><option ${d.mainTaskType==='S2N'?'selected':''}>S2N</option></select></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','mainIndependent',this.value)"><option value="NO" ${d.mainIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.mainIndependent==='YES'?'selected':''}>YES</option></select></div>
                 <div class="q-field"><label>功能</label><select onchange="updateQField('${item.id}','mainFunc',this.value)"><option ${d.mainFunc==='WHOLE_DISASSEMBLE_PALLET_NODE'?'selected':''} value="WHOLE_DISASSEMBLE_PALLET_NODE">WHOLE_DISASSEMBLE_PALLET_NODE (整体拆垛)</option><option ${d.mainFunc==='WHOLE_PLACE_NODE'?'selected':''} value="WHOLE_PLACE_NODE">WHOLE_PLACE_NODE (整体合垛)</option><option ${d.mainFunc==='DISASSEMBLE_BY_PIECE_NODE'?'selected':''} value="DISASSEMBLE_BY_PIECE_NODE">DISASSEMBLE_BY_PIECE_NODE (按件拆垛)</option><option ${d.mainFunc==='ASSEMBLE_BY_PIECE_NODE'?'selected':''} value="ASSEMBLE_BY_PIECE_NODE">ASSEMBLE_BY_PIECE_NODE (按件码垛)</option><option ${d.mainFunc==='SCANNER_NODE'?'selected':''} value="SCANNER_NODE">SCANNER_NODE (扫码)</option></select></div>
             </div>
             <div style="padding:8px;background:rgba(16,185,129,0.03);border-radius:8px;border:1px solid rgba(16,185,129,0.08);">
-                <div style="font-size:11px;font-weight:700;color:var(--color-success);margin-bottom:6px;">🟢 子任务</div>
-                <div class="q-field" style="margin-bottom:4px;"><label>起点</label><input value="${d.subStart}" onchange="updateQField('${item.id}','subStart',this.value)"></div>
+                <div style="font-size:11px;font-weight:700;color:var(--color-success);margin-bottom:6px;">🟢 子任务 <span style="font-weight:400;color:var(--color-text-muted);">— 后面去合</span></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>起点 <span style="font-size:10px;color:#059669;font-weight:400;">(货物从哪里出发去合)</span></label><input value="${d.subStart}" onchange="updateQField('${item.id}','subStart',this.value)"></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>终点</label><input value="${d.subEnd}" onchange="updateQField('${item.id}','subEnd',this.value)" placeholder="可为空"></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','subTaskType',this.value)"><option ${d.subTaskType==='N2N'?'selected':''}>N2N</option><option ${d.subTaskType==='N2S'?'selected':''}>N2S</option><option ${d.subTaskType==='S2N'?'selected':''}>S2N</option></select></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','subIndependent',this.value)"><option value="NO" ${d.subIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.subIndependent==='YES'?'selected':''}>YES</option></select></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>功能</label><select onchange="updateQField('${item.id}','subFunc',this.value)"><option ${d.subFunc==='WHOLE_PLACE_NODE'?'selected':''} value="WHOLE_PLACE_NODE">WHOLE_PLACE_NODE (整体合垛)</option><option ${d.subFunc==='WHOLE_DISASSEMBLE_PALLET_NODE'?'selected':''} value="WHOLE_DISASSEMBLE_PALLET_NODE">WHOLE_DISASSEMBLE_PALLET_NODE (整体拆垛)</option><option ${d.subFunc==='ASSEMBLE_BY_PIECE_NODE'?'selected':''} value="ASSEMBLE_BY_PIECE_NODE">ASSEMBLE_BY_PIECE_NODE (按件码垛)</option><option ${d.subFunc==='NONE'?'selected':''} value="NONE">NONE (无)</option></select></div>
-                <div class="q-field"><label>合垛目标</label><input value="${d.subTargetEnd||''}" onchange="updateQField('${item.id}','subTargetEnd',this.value)" placeholder="TARGET_END_NODE"></div>
+                <div class="q-field" style="margin-top:6px;padding:6px 8px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.3);border-radius:8px;"><label style="color:#d97706;font-weight:700;">⚠️ TARGET_END_NODE <span style="font-weight:400;font-size:10px;color:#92400e;">(决定去哪台拆合托机)</span></label><input value="${d.subTargetEnd||''}" onchange="updateQField('${item.id}','subTargetEnd',this.value)" placeholder="如 ND_12080" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
             </div>
         </div>
     </div>`;
@@ -438,12 +452,44 @@ async function sendOne(id) {
         let body; try { body = JSON.parse(text); } catch(e) { body = text; }
         showResponse(resp.ok, body, elapsed);
         if (cardEl) cardEl.className = 'q-card ' + (resp.ok ? 'sent' : 'error');
-        addHistory(isGroup ? 'GROUP' : item.data.taskType, item.data.startNode || item.data.mainStart || '-', item.data.endNode || item.data.mainEnd || '-', resp.ok);
+        const respStr = typeof body === 'string' ? body : JSON.stringify(body);
+        addHistory(
+            isGroup ? 'GROUP' : item.data.taskType,
+            item.data.startNode || item.data.mainStart || '-',
+            item.data.endNode || item.data.mainEnd || '-',
+            resp.ok,
+            {
+                templateName: item.data.tplName || '',
+                taskNo: isGroup ? '' : (payload.taskNo || ''),
+                groupCode: isGroup ? (payload.groupCode || '') : '',
+                groupType: isGroup ? (item.data.groupType || '') : '',
+                functions: isGroup ? [] : (item.data.funcs || []),
+                httpStatus: resp.status,
+                elapsedMs: elapsed,
+                responseBody: respStr.substring(0, 2000),
+                requestPayload: payload
+            }
+        );
     } catch(e) {
         const elapsed = Date.now() - startTime;
         showResponse(false, { error: e.message }, elapsed);
         if (cardEl) cardEl.className = 'q-card error';
-        addHistory(isGroup ? 'GROUP' : item.data.taskType, '-', '-', false);
+        addHistory(
+            isGroup ? 'GROUP' : item.data.taskType,
+            item.data.startNode || item.data.mainStart || '-',
+            item.data.endNode || item.data.mainEnd || '-',
+            false,
+            {
+                templateName: item.data.tplName || '',
+                taskNo: isGroup ? '' : (payload.taskNo || ''),
+                groupCode: isGroup ? (payload.groupCode || '') : '',
+                groupType: isGroup ? (item.data.groupType || '') : '',
+                functions: isGroup ? [] : (item.data.funcs || []),
+                elapsedMs: elapsed,
+                errorMessage: e.message,
+                requestPayload: payload
+            }
+        );
     }
 }
 
@@ -469,21 +515,133 @@ function showResponse(ok, body, elapsed) {
     document.getElementById('responseBody').textContent = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
 }
 
-// ============ 历史记录 ============
-function addHistory(type, from, to, ok) {
-    history.unshift({ time: nowStr(), type, from, to, ok });
-    if (history.length > 50) history.pop();
-    localStorage.setItem('quickTaskHistory', JSON.stringify(history));
-    renderHistory();
+// ============ 历史记录 (持久化到后端, 按天存储) ============
+let history = []; // 当前展示的历史列表
+let historyDates = []; // 可用日期列表
+
+function fullTimestamp() {
+    const d = new Date();
+    const pad = (n, w=2) => String(n).padStart(w, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(),3)}`;
 }
+
+function addHistory(type, from, to, ok, extra = {}) {
+    const record = {
+        timestamp: fullTimestamp(),
+        server: currentServer,
+        taskType: type,
+        templateName: extra.templateName || '',
+        startNode: from,
+        endNode: to,
+        taskNo: extra.taskNo || '',
+        groupCode: extra.groupCode || '',
+        groupType: extra.groupType || '',
+        functions: extra.functions || [],
+        success: ok,
+        httpStatus: extra.httpStatus || null,
+        elapsedMs: extra.elapsedMs || null,
+        responseBody: extra.responseBody || '',
+        errorMessage: extra.errorMessage || '',
+        requestPayload: extra.requestPayload || null
+    };
+    // 前端列表头部插入
+    history.unshift(record);
+    renderHistory();
+    // 异步持久化到后端
+    persistRecord(record);
+}
+
+async function persistRecord(record) {
+    try {
+        await fetch('/api/v1/quick-task-history/record', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(record)
+        });
+    } catch (e) {
+        console.warn('持久化历史失败:', e);
+    }
+}
+
+async function loadHistoryByDate(date) {
+    try {
+        const url = date === 'today' ? '/api/v1/quick-task-history/today' : `/api/v1/quick-task-history/day/${date}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        if (json && json.success && json.data) {
+            history = json.data.reverse(); // 最新的在前
+            renderHistory();
+            updateHistoryStats();
+        }
+    } catch (e) {
+        console.warn('加载历史失败:', e);
+    }
+}
+
+async function loadHistoryDates() {
+    try {
+        const res = await fetch('/api/v1/quick-task-history/dates');
+        const json = await res.json();
+        if (json && json.success && json.data) {
+            historyDates = json.data;
+            const sel = document.getElementById('historyDateSel');
+            sel.innerHTML = '<option value="today">今天</option>';
+            for (const d of historyDates) {
+                sel.innerHTML += `<option value="${d}">${d}</option>`;
+            }
+        }
+    } catch (e) {
+        console.warn('加载日期列表失败:', e);
+    }
+}
+
+function updateHistoryStats() {
+    const total = history.length;
+    const ok = history.filter(h => h.success).length;
+    const fail = total - ok;
+    document.getElementById('historyStats').textContent = `共 ${total} 条 · ✅${ok} ❌${fail}`;
+}
+
+function downloadHistory() {
+    const sel = document.getElementById('historyDateSel');
+    const date = sel.value === 'today'
+        ? new Date().toISOString().slice(0, 10)
+        : sel.value;
+    window.open(`/api/v1/quick-task-history/download/${date}`, '_blank');
+}
+
 function renderHistory() {
     const list = document.getElementById('historyList');
-    if (history.length === 0) { list.innerHTML = '<div style="text-align:center;color:var(--color-text-muted);font-size:12px;padding:16px;">暂无记录</div>'; return; }
-    list.innerHTML = history.slice(0, 15).map(h => `<div class="h-item"><span class="h-time">${h.time}</span><span class="h-type">${h.type}</span><span class="h-route">${h.from} → ${h.to}</span><span class="h-dot ${h.ok?'ok':'fail'}"></span></div>`).join('');
+    if (history.length === 0) {
+        list.innerHTML = '<div style="text-align:center;color:var(--color-text-muted);font-size:12px;padding:16px;">暂无记录</div>';
+        updateHistoryStats();
+        return;
+    }
+    list.innerHTML = history.slice(0, 50).map(h => {
+        const time = h.timestamp ? h.timestamp.substring(11, 19) : (h.time || '');
+        const type = h.taskType || h.type || '';
+        const from = h.startNode || h.from || '-';
+        const to = h.endNode || h.to || '-';
+        const ok = h.success !== undefined ? h.success : h.ok;
+        const elapsed = h.elapsedMs ? `${h.elapsedMs}ms` : '';
+        const taskNo = h.taskNo || h.groupCode || '';
+        const server = h.server ? h.server.replace(/^https?:\/\//, '') : '';
+        return `<div class="h-item">
+            <span class="h-time">${time}</span>
+            <span class="h-type">${type}</span>
+            <span class="h-route">${from} → ${to}</span>
+            <span class="h-taskno" title="${taskNo}">${taskNo}</span>
+            <span class="h-server" title="${h.server || ''}">${server}</span>
+            <span class="h-elapsed">${elapsed}</span>
+            <span class="h-dot ${ok?'ok':'fail'}"></span>
+        </div>`;
+    }).join('');
+    updateHistoryStats();
 }
 
 // ============ 初始化 ============
-renderHistory();
+loadHistoryByDate('today');
+loadHistoryDates();
 renderQueue();
 </script>
 
@@ -507,14 +665,16 @@ let _lastPreviewJson = '';
 
 function previewAllJson() {
     if (queue.length === 0) { alert('队列为空，请先添加任务'); return; }
-    const payloads = queue.map(item => {
+    // 每个任务独立展示, 用分隔线隔开
+    let parts = [];
+    queue.forEach((item, idx) => {
         const isGroup = item.data.type === 'group';
         const url = currentServer + (isGroup ? '/task/addTaskGroup' : '/task/addTask');
         const payload = isGroup ? buildGroupPayload(item.data) : buildSinglePayload(item.data);
-        return { url, method: 'POST', body: payload };
+        const label = `// ─── [${idx + 1}] ${item.data.tplName || item.data.taskType || 'Task'} ── ${url}`;
+        parts.push(label + '\n' + JSON.stringify(payload, null, 2));
     });
-    const display = payloads.length === 1 ? payloads[0] : payloads;
-    _lastPreviewJson = JSON.stringify(display, null, 2);
+    _lastPreviewJson = parts.join('\n\n');
     document.getElementById('jsonPreviewContent').textContent = _lastPreviewJson;
     document.getElementById('jsonModal').classList.add('show');
 }
@@ -525,9 +685,9 @@ function previewOneJson(id) {
     const isGroup = item.data.type === 'group';
     const url = currentServer + (isGroup ? '/task/addTaskGroup' : '/task/addTask');
     const payload = isGroup ? buildGroupPayload(item.data) : buildSinglePayload(item.data);
-    const display = { url, method: 'POST', body: payload };
-    _lastPreviewJson = JSON.stringify(display, null, 2);
-    document.getElementById('jsonPreviewContent').textContent = _lastPreviewJson;
+    const header = `// POST ${url}\n`;
+    _lastPreviewJson = JSON.stringify(payload, null, 2);
+    document.getElementById('jsonPreviewContent').textContent = header + _lastPreviewJson;
     document.getElementById('jsonModal').classList.add('show');
 }
 

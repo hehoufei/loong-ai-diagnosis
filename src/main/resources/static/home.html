@@ -236,7 +236,7 @@ body {
 
 <div class="cards-container">
     <!-- AI 诊断 -->
-    <a href="index.html" class="feature-card card-ai">
+    <div class="feature-card card-ai" onclick="showAiGate()">
         <div class="card-icon">🧠</div>
         <div class="card-title">AI 智能诊断</div>
         <div class="card-desc">
@@ -249,7 +249,7 @@ body {
             <span class="card-tag">知识库</span>
         </div>
         <div class="card-arrow">→</div>
-    </a>
+    </div>
 
     <!-- 立库循环测试 -->
     <a href="storage-task.html" class="feature-card card-storage">
@@ -287,6 +287,46 @@ body {
 <div class="home-footer">
     WCS 智能诊断平台 · Loong AI Diagnosis v1.0
 </div>
+
+<!-- AI 诊断访问门禁弹窗 -->
+<div id="aiGateOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);backdrop-filter:blur(6px);z-index:1000;align-items:center;justify-content:center;" onclick="if(event.target===this)closeAiGate()">
+    <div style="background:rgba(255,255,255,0.96);backdrop-filter:blur(20px);border:1px solid rgba(99,102,241,0.12);border-radius:20px;padding:36px 32px;width:380px;max-width:calc(100vw - 40px);box-shadow:0 24px 64px rgba(15,23,42,0.18);text-align:center;">
+        <div style="font-size:40px;margin-bottom:16px;">🔒</div>
+        <div style="font-size:18px;font-weight:700;color:#1e293b;margin-bottom:24px;">暂未开放</div>
+        <input id="aiGateInput" type="password" placeholder="" style="width:100%;height:42px;padding:0 16px;font-size:14px;border:1.5px solid rgba(99,102,241,0.2);border-radius:10px;outline:none;background:rgba(255,255,255,0.8);transition:border-color .2s;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='rgba(99,102,241,0.2)'" onkeydown="if(event.key==='Enter')verifyAiGate()">
+        <div id="aiGateError" style="font-size:12px;color:#ef4444;margin-top:8px;min-height:18px;"></div>
+        <button onclick="verifyAiGate()" style="margin-top:12px;width:100%;height:40px;border:none;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:box-shadow .2s;" onmouseover="this.style.boxShadow='0 4px 16px rgba(99,102,241,0.35)'" onmouseout="this.style.boxShadow='none'">确认进入</button>
+        <div style="margin-top:12px;"><button onclick="closeAiGate()" style="background:none;border:none;color:#94a3b8;font-size:13px;cursor:pointer;">取消</button></div>
+    </div>
+</div>
+
+<script>
+function showAiGate() {
+    const overlay = document.getElementById('aiGateOverlay');
+    overlay.style.display = 'flex';
+    document.getElementById('aiGateInput').value = '';
+    document.getElementById('aiGateError').textContent = '';
+    setTimeout(() => document.getElementById('aiGateInput').focus(), 100);
+}
+function closeAiGate() {
+    document.getElementById('aiGateOverlay').style.display = 'none';
+}
+function verifyAiGate() {
+    const val = document.getElementById('aiGateInput').value;
+    if (val === 'yyds') {
+        window.location.href = 'index.html';
+    } else {
+        document.getElementById('aiGateError').textContent = '密码错误，请重试';
+        document.getElementById('aiGateInput').style.borderColor = '#ef4444';
+        setTimeout(() => {
+            document.getElementById('aiGateInput').style.borderColor = 'rgba(99,102,241,0.2)';
+        }, 1500);
+    }
+}
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeAiGate();
+});
+</script>
 
 </body>
 </html>
