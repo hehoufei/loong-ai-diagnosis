@@ -289,11 +289,10 @@ public class StorageTaskRunner {
             throw new IllegalStateException("工作线程仍在运行, 请稍后再试");
         }
 
-        // 同步重新下发一次
+        // 同步重新下发 (入库任务自动重试3次)
         StorageAcsClient acs = new StorageAcsClient(config, mapper);
         try {
-            acs.addTask(rec.getTaskNo(), rec.getTaskType(),
-                    rec.getStartNode(), rec.getEndNode(), rec.getRemark());
+            addTaskWithRetry(acs, rec);
         } catch (Exception e) {
             rec.setState("ADD_FAILED");
             rec.setRemark(e.getMessage());
@@ -317,6 +316,39 @@ public class StorageTaskRunner {
         workerThread = new Thread(this::runLoop, "storage-task-runner-aisle" + aisle);
         workerThread.setDaemon(true);
         workerThread.start();
+    }
+
+    /**
+     * 下发任务, 入库任务(N2S)失败时自动重试3次(间隔1s, 2s, 3s), 其他类型直接抛出.
+     */
+    private void addTaskWithRetry(StorageAcsClient acs, StorageTaskRecord rec) {
+        boolean isInbound = "N2S".equals(rec.getTaskType());
+        int maxRetries = isInbound ? 3 : 0;
+        int[] retryDelaysMs = {1000, 2000, 3000};
+
+        Exception lastEx = null;
+        for (int attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                acs.addTask(rec.getTaskNo(), rec.getTaskType(),
+                        rec.getStartNode(), rec.getEndNode(), rec.getRemark());
+                return; // 成功
+            } catch (Exception e) {
+                lastEx = e;
+                if (attempt < maxRetries) {
+                    log.warn("入库任务 {} 下发失败(第{}次), {}s 后重试: {}",
+                            rec.getTaskNo(), attempt + 1, retryDelaysMs[attempt] / 1000, e.getMessage());
+                    try {
+                        Thread.sleep(retryDelaysMs[attempt]);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("重试被中断: " + e.getMessage(), e);
+                    }
+                }
+            }
+        }
+        // 所有重试都失败
+        throw new RuntimeException(
+                (isInbound ? "入库任务重试3次仍失败: " : "") + lastEx.getMessage(), lastEx);
     }
 
     /**
@@ -472,8 +504,7 @@ public class StorageTaskRunner {
                     state.setTotalIssued(state.getTotalIssued() + 1);
                     saveState();
                     try {
-                        acs.addTask(rec.getTaskNo(), rec.getTaskType(),
-                                rec.getStartNode(), rec.getEndNode(), rec.getRemark());
+                        addTaskWithRetry(acs, rec);
                     } catch (Exception e) {
                         // 下发失败: 保留 currentTask, 进入 PAUSED, 用户可点 重试当前 / 跳过当前
                         rec.setState("ADD_FAILED");
