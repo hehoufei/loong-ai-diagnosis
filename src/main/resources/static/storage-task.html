@@ -773,6 +773,21 @@ function toast(msg, kind = 'info', ttl = 2400) {
     }, ttl);
 }
 
+// --------- 复制文本 ---------
+function copyText(text) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+        toast('已复制: ' + text, 'success', 1500);
+    }).catch(() => {
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta);
+        toast('已复制: ' + text, 'success', 1500);
+    });
+}
+
 // --------- HTML escape ---------
 function esc(v) {
     if (v === null || v === undefined) return '';
@@ -1174,10 +1189,10 @@ function renderCurrentTask(t, status) {
                 ${stateTag}
                 ${stuckBadge}
             </div>
-            <div class="ct-task-no">${esc(t.taskNo)}</div>
+            <div class="ct-task-no" style="cursor:pointer;" onclick="copyText('${esc(t.taskNo)}')" title="点击复制任务号">${esc(t.taskNo)} <span style="font-size:11px;color:var(--color-text-muted);font-weight:400;">📋</span></div>
             <div class="ct-row ct-nodes">
-                <span><span class="k">起点</span>${esc(t.startNode)}</span>
-                <span><span class="k">终点</span>${esc(t.endNode)}</span>
+                <span style="cursor:pointer;" onclick="copyText('${esc(t.startNode)}')" title="点击复制"><span class="k">起点</span>${esc(t.startNode)}</span>
+                <span style="cursor:pointer;" onclick="copyText('${esc(t.endNode)}')" title="点击复制"><span class="k">终点</span>${esc(t.endNode)}</span>
             </div>
             ${(startDesc || endDesc) ? `
             <div class="ct-row ct-desc">
