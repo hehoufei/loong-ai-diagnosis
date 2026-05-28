@@ -138,7 +138,7 @@
                 <div class="template-group-title">📦 输送任务</div>
                 <div class="template-card" onclick="addToQueue('n2n')"><span class="t-icon">🚚</span><span class="t-name">点到点输送</span><span class="t-tag">N2N</span></div>
                 <div class="template-card" onclick="addToQueue('n2n_shape')"><span class="t-icon">📐</span><span class="t-name">输送+外形检测</span><span class="t-tag">N2N</span></div>
-                <div class="template-card" onclick="addToQueue('n2n_disassemble_single')"><span class="t-icon">🪜</span><span class="t-name">叠单个 子(母)托盘</span><span class="t-tag">N2N</span></div>
+                <div class="template-card" onclick="addToQueue('n2n_disassemble_single')"><span class="t-icon">🪜</span><span class="t-name">叠单个(多个) 子(母)托盘</span><span class="t-tag">N2N</span></div>
                 <div class="template-card" onclick="addToQueue('n2n_disassemble_from_mother')"><span class="t-icon">🪓</span><span class="t-name">拆单个(多个)子托盘到母托</span><span class="t-tag">N2N</span></div>
             </div>
             <div class="template-group">
@@ -239,7 +239,7 @@ function getTemplateData(tpl) {
         case 'n2n': return { ...base, type: 'single', tplName: '点到点输送', taskType: 'N2N', startNode: 'ND_22062', endNode: 'ND_22048', funcs: [] };
         case 'n2n_shape': return { ...base, type: 'single', tplName: '输送+外检', taskType: 'N2N', startNode: 'ND_22062', endNode: 'ND_22029', funcs: ['SHAPE_DETECTION'] };
         case 'n2n_disassemble': return { ...base, type: 'single', tplName: '输送+拆子托', taskType: 'N2N', startNode: 'ND_22067', endNode: 'ND_22037', funcs: ['DISASSEMBLE_SUB_PALLET_NODE'], containerNum: '7', deviceLocationCode: 'ND_22069' };
-        case 'n2n_disassemble_single': return { ...base, type: 'single', tplName: '叠单个 子(母)托盘', taskType: 'N2N', startNode: 'ND_22037', endNode: 'ND_21071', funcs: [] };
+        case 'n2n_disassemble_single': return { ...base, type: 'single', tplName: '叠单个(多个) 子(母)托盘', taskType: 'N2N', startNode: 'ND_22037', endNode: 'ND_21071', funcs: [], goodsList: [{ goodsCode: 'GS_1223' }] };
         case 'n2n_disassemble_from_mother': return { ...base, type: 'single', tplName: '拆单个(多个)子托盘到母托', taskType: 'N2N', startNode: 'ND_21069', endNode: 'ND_22037', funcs: ['DISASSEMBLE_SUB_PALLET_NODE'], containerNum: '1', deviceLocationCode: 'ND_21071' };
         case 'n2s': return { ...base, type: 'single', tplName: '入库任务', taskType: 'N2S', startNode: 'ND_11025', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', funcs: [], remark: '入库' };
         case 's2n': return { ...base, type: 'single', tplName: '出库任务', taskType: 'S2N', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', endNode: 'ND_11025', funcs: [], remark: '出库' };
@@ -288,6 +288,7 @@ function renderSingleCard(item, idx) {
     const d = item.data;
     const funcTags = FUNC_OPTIONS.map(f => `<span class="qf-tag ${d.funcs.includes(f.key)?'active':''}" onclick="toggleQFunc('${item.id}','${f.key}')">${f.label}</span>`).join('');
     const isDisassembleTpl = (item.tpl === 'n2n_disassemble_from_mother');
+    const isStackTpl = (item.tpl === 'n2n_disassemble_single');
     const startLabel = item.tpl === 'n2n_disassemble_from_mother' ? '起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(拆叠盘机母托盘高位)</span>' : item.tpl === 'n2n_disassemble_single' ? '起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(某个输送线起点)</span>' : '起点';
     const endLabel = item.tpl === 'n2n_disassemble_from_mother' ? '终点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(目的点)</span>' : item.tpl === 'n2n_disassemble_single' ? '终点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(拆叠盘机 子/母托 高位)</span>' : '终点';
     let extraFields = '';
@@ -295,6 +296,19 @@ function renderSingleCard(item, idx) {
         extraFields = `
             <div class="q-field"><label>CONTAINER_NUM <span style="font-size:10px;color:#d97706;font-weight:400;">(拆子托数量)</span></label><input value="${d.containerNum||'1'}" onchange="updateQField('${item.id}','containerNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
             <div class="q-field"><label>DEVICE_LOCATION_CODE <span style="font-size:10px;color:#d97706;font-weight:400;">(拆叠盘机子托盘高位)</span></label><input value="${d.deviceLocationCode||''}" onchange="updateQField('${item.id}','deviceLocationCode',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>`;
+    }
+    let goodsSection = '';
+    if (isStackTpl) {
+        const goodsList = d.goodsList || [{ goodsCode: 'GS_1223' }];
+        const goodsItems = goodsList.map((g, gi) => `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);font-size:11px;font-weight:600;color:#059669;">📦 ${g.goodsCode}<button onclick="removeGoods('${item.id}',${gi})" style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0 2px;">✕</button></span>`).join('');
+        goodsSection = `
+            <div style="grid-column:1/-1;margin-top:6px;padding:8px 10px;background:rgba(16,185,129,0.03);border:1px solid rgba(16,185,129,0.12);border-radius:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <label style="font-size:11px;font-weight:700;color:#059669;">📦 货物列表 <span style="font-weight:400;color:var(--color-text-muted);">(goodsInfoList: ${goodsList.length} 个)</span></label>
+                    <button onclick="addGoods('${item.id}')" style="height:22px;padding:0 8px;font-size:11px;font-weight:600;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.06);color:#059669;border-radius:6px;cursor:pointer;">+ 添加货物</button>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:4px;">${goodsItems}</div>
+            </div>`;
     }
     return `<div class="q-card" id="card_${item.id}">
         <div class="q-card-head">
@@ -309,7 +323,7 @@ function renderSingleCard(item, idx) {
             <div class="q-field"><label>${startLabel}</label><input value="${d.startNode}" onchange="updateQField('${item.id}','startNode',this.value)"></div>
             <div class="q-field"><label>${endLabel}</label><input value="${d.endNode}" onchange="updateQField('${item.id}','endNode',this.value)"></div>
             <div class="q-field"><label>类型</label><select onchange="updateQField('${item.id}','taskType',this.value)"><option ${d.taskType==='N2N'?'selected':''}>N2N</option><option ${d.taskType==='N2S'?'selected':''}>N2S</option><option ${d.taskType==='S2N'?'selected':''}>S2N</option><option ${d.taskType==='S2S'?'selected':''}>S2S</option></select></div>
-            <div class="q-field"><label>独立运行</label><select onchange="updateQField('${item.id}','independentRun',this.value)"><option value="" ${d.independentRun===''?'selected':''}>空</option><option value="YES" ${d.independentRun==='YES'?'selected':''}>YES</option><option value="NO" ${d.independentRun==='NO'?'selected':''}>NO</option></select></div>${extraFields}
+            <div class="q-field"><label>独立运行</label><select onchange="updateQField('${item.id}','independentRun',this.value)"><option value="" ${d.independentRun===''?'selected':''}>空</option><option value="YES" ${d.independentRun==='YES'?'selected':''}>YES</option><option value="NO" ${d.independentRun==='NO'?'selected':''}>NO</option></select></div>${extraFields}${goodsSection}
             <div class="q-card-funcs">${funcTags}</div>
         </div>
     </div>`;
@@ -372,11 +386,30 @@ function toggleQFunc(id, funcKey) {
     else item.data.funcs.push(funcKey);
     renderQueue();
 }
+
+function addGoods(id) {
+    const item = queue.find(q => q.id === id);
+    if (!item) return;
+    if (!item.data.goodsList) item.data.goodsList = [];
+    item.data.goodsList.push({ goodsCode: 'GS_' + (1223 + item.data.goodsList.length) });
+    renderQueue();
+}
+
+function removeGoods(id, idx) {
+    const item = queue.find(q => q.id === id);
+    if (!item || !item.data.goodsList) return;
+    if (item.data.goodsList.length <= 1) return; // 至少保留一个
+    item.data.goodsList.splice(idx, 1);
+    renderQueue();
+}
 </script>
 
 <script>
 // ============ 构建 Payload ============
 function buildSinglePayload(data) {
+    const goodsInfoList = (data.goodsList && data.goodsList.length > 0)
+        ? data.goodsList.map(g => ({ ...DEFAULT_GOODS, goodsCode: g.goodsCode }))
+        : [{ ...DEFAULT_GOODS }];
     return {
         taskNo: genTaskNo(),
         taskSource: data.taskSource || 'WMS',
@@ -389,7 +422,7 @@ function buildSinglePayload(data) {
         endNode: data.endNode,
         requiredFunctionList: buildFuncList(data),
         containerList: [{ ...PALLET_MOTHER }],
-        goodsInfoList: [{ ...DEFAULT_GOODS }],
+        goodsInfoList: goodsInfoList,
         expectedStartTime: '', expectedFinishTime: '',
         remark: data.remark || '输送'
     };
