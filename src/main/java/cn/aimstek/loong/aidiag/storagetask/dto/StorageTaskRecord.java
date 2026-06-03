@@ -31,7 +31,7 @@ public class StorageTaskRecord {
     private String remark;
     /** 是否需要人工处理 (轮询超过阈值) */
     private boolean stuck;
-    /** 任务执行期间堆垛机报警次数 (按 报警类型+编码+首次报警时间 去重计数) */
+    /** 任务执行期间堆垛机报警次数 (连续相同报警只计一次, 中间穿插不同报警后重新出现再计) */
     private int alarmCount;
     /**
      * 任务执行期间堆垛机报警明细 (取 alarmMessage, 去重保留出现顺序).

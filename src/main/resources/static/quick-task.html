@@ -1424,16 +1424,25 @@ function mpParseMapData(data) {
     });
     (data.linkDataList || []).forEach(function(l) {
         if (l.from && l.to && l.activate !== 'OFF') {
-            MP.links.push({ from: l.from, to: l.to, direction: l.direction || 'oneWay' });
+            // 使用每个方向独立的 activate 状态来构建有向图
+            var fromToActive = (l.fromToActivate || l.activate) !== 'OFF';
+            var toFromActive = (l.toFromActivate || l.activate) !== 'OFF';
+            MP.links.push({ from: l.from, to: l.to, direction: l.direction || 'oneWay', fromToActive: fromToActive, toFromActive: toFromActive });
         }
     });
 
-    // Build directed adjacency graph from links
+    // Build directed adjacency graph from links (仅保留两端都在当前楼层的边用于路径分析)
     MP.adjacency = {};
     MP.links.forEach(function(l) {
-        if (!MP.adjacency[l.from]) MP.adjacency[l.from] = [];
-        MP.adjacency[l.from].push(l.to);
-        if (l.direction === 'twoWay') {
+        var fromInFloor = !!MP.nodeMap[l.from];
+        var toInFloor = !!MP.nodeMap[l.to];
+        // from→to 方向
+        if (l.fromToActive && fromInFloor && toInFloor) {
+            if (!MP.adjacency[l.from]) MP.adjacency[l.from] = [];
+            MP.adjacency[l.from].push(l.to);
+        }
+        // to→from 方向：双向链接且 toFromActive 才加入
+        if (l.direction === 'twoWay' && l.toFromActive && fromInFloor && toInFloor) {
             if (!MP.adjacency[l.to]) MP.adjacency[l.to] = [];
             MP.adjacency[l.to].push(l.from);
         }
@@ -2025,11 +2034,52 @@ function mpComputeRoutes() {
     var paths = [];
     var visited = {};
 
+    // 诊断：输出起终点的直接邻居
+    console.log('[RouteAnalysis] start:', start, 'neighbors:', MP.adjacency[start] || []);
+    console.log('[RouteAnalysis] end:', end, 'neighbors (incoming):', Object.keys(MP.adjacency).filter(function(k) { return (MP.adjacency[k] || []).indexOf(end) >= 0; }));
+
+    // 使用改进的 K 短路径算法（BFS 优先级 + 受限 DFS）
+    // 先用 BFS 找到最短路径长度，然后用 DFS 只搜索不超过 最短长度+偏移 的路径
+    var bfsQueue = [start], bfsVisited = {}, bfsPrev = {};
+    bfsVisited[start] = true;
+    var bfsFound = false;
+    while (bfsQueue.length > 0 && !bfsFound) {
+        var cur = bfsQueue.shift();
+        var nbs = MP.adjacency[cur] || [];
+        for (var bi = 0; bi < nbs.length; bi++) {
+            if (!bfsVisited[nbs[bi]]) {
+                bfsVisited[nbs[bi]] = true;
+                bfsPrev[nbs[bi]] = cur;
+                if (nbs[bi] === end) { bfsFound = true; break; }
+                bfsQueue.push(nbs[bi]);
+            }
+        }
+    }
+    var shortestLen = MAX_DEPTH;
+    if (bfsFound) {
+        var bfsPath = [end]; var bt = end;
+        while (bt !== start) { bt = bfsPrev[bt]; bfsPath.unshift(bt); }
+        shortestLen = bfsPath.length;
+        paths.push(bfsPath);
+        console.log('[RouteAnalysis] BFS shortest path (' + bfsPath.length + ' nodes):', bfsPath.join(' → '));
+    } else {
+        console.log('[RouteAnalysis] BFS: NO path found from', start, 'to', end);
+    }
+
+    // DFS 搜索更多路径，但限制深度为最短路径长度 + 10（避免搜索过长的绕路）
+    var dfsMaxDepth = Math.min(shortestLen + 10, MAX_DEPTH);
+
     function dfs(node, path) {
         if (paths.length >= MAX_PATHS) return;
-        if (path.length > MAX_DEPTH) return;
+        if (path.length > dfsMaxDepth) return;
         if (node === end) {
-            paths.push(path.slice());
+            // 避免与 BFS 路径重复
+            var pathStr = path.join(',');
+            var dup = false;
+            for (var pi = 0; pi < paths.length; pi++) {
+                if (paths[pi].join(',') === pathStr) { dup = true; break; }
+            }
+            if (!dup) paths.push(path.slice());
             return;
         }
         var neighbors = MP.adjacency[node] || [];

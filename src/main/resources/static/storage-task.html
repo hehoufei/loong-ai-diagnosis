@@ -343,6 +343,7 @@
     <div class="topbar-right">
         <a href="home.html"         class="topbar-link">🏠 首页</a>
         <a href="storage-task.html" class="topbar-link active">🏗️ 立库测试</a>
+        <a href="daily-report.html" class="topbar-link">📊 每日报告</a>
     </div>
 </nav>
 
@@ -421,6 +422,17 @@
             <div class="glass-card stat-card"><div class="stat-value" id="statManual">-</div><div class="stat-label">MANUAL_SUCCESS</div></div>
             <div class="glass-card stat-card"><div class="stat-value" id="statCancel">-</div><div class="stat-label">CANCEL</div></div>
             <div class="glass-card stat-card"><div class="stat-value" id="statFailed">-</div><div class="stat-label">FAIL</div></div>
+        </div>
+    </div>
+
+    <!-- ========== 今日跑库统计 ========== -->
+    <div class="glass-card section-card" id="dailyReportSection">
+        <div class="section-header">
+            <div class="section-title">📊 今日跑库统计</div>
+            <span class="cfg-hint" id="dailyReportHint">自动加载当天数据</span>
+        </div>
+        <div id="dailyReportBody">
+            <div class="empty-hint">加载中...</div>
         </div>
     </div>
 
@@ -748,6 +760,10 @@ function switchAisle(aisle) {
     loadConfig();
     fetchState(true);
     loadOverview();
+    // 刷新今日报告
+    dailyReportCache = null;
+    dailyReportLastFetch = 0;
+    fetchDailyReport();
 }
 
 $('btnAddAisle').addEventListener('click', () => {
@@ -1973,6 +1989,131 @@ function startPolling() {
     pollTimer = setInterval(fetchState, 1500);
 }
 
+// --------- 今日跑库统计 ---------
+let dailyReportCache = null;
+let dailyReportLastFetch = 0;
+
+async function fetchDailyReport() {
+    const now = Date.now();
+    // 最多每 30 秒刷一次
+    if (dailyReportCache && (now - dailyReportLastFetch) < 30000) {
+        renderDailyReport(dailyReportCache);
+        return;
+    }
+    try {
+        const today = new Date().toISOString().slice(0, 10);
+        const res = await fetch('/api/v1/storage-task/daily-report/' + currentAisle + '?date=' + today);
+        const json = await res.json();
+        if (json && json.success && json.data) {
+            dailyReportCache = json.data;
+            dailyReportLastFetch = now;
+            renderDailyReport(json.data);
+        }
+    } catch (e) {
+        console.warn('fetchDailyReport failed', e);
+    }
+}
+
+function renderDailyReport(r) {
+    const box = $('dailyReportBody');
+    if (!r || (!r.totalIssued && !r.newVisitedToday)) {
+        box.innerHTML = '<div class="empty-hint">今日暂无数据 (切换巷道或等待任务完成后刷新)</div>';
+        $('dailyReportHint').textContent = '';
+        return;
+    }
+
+    const rate = r.totalIssued > 0 ? ((r.totalSuccess + (r.totalManualSuccess||0)) * 100 / r.totalIssued).toFixed(1) : '0';
+    const remaining = Math.max(0, (r.totalCodes||0) - (r.visitedCodes||0));
+    const progressPct = r.totalCodes > 0 ? Math.round(r.visitedCodes * 100 / r.totalCodes) : 0;
+
+    // 耗时对比
+    const maxDurVal = Math.max(r.avgInboundDuration||0, r.avgShuffleDuration||0, r.avgOutboundDuration||0, 1);
+    function durBar(label, val, color) {
+        const pct = val ? Math.round(val * 100 / maxDurVal) : 0;
+        return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">' +
+            '<span style="width:40px;font-size:12px;text-align:right;color:var(--color-text-muted);">' + label + '</span>' +
+            '<div style="flex:1;height:18px;background:rgba(99,102,241,0.06);border-radius:9px;overflow:hidden;">' +
+            '<div style="width:' + Math.max(pct,3) + '%;height:100%;background:' + color + ';border-radius:9px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;">' +
+            '<span style="font-size:11px;color:#fff;font-weight:600;">' + (val ? Math.round(val)+'s' : '-') + '</span></div></div></div>';
+    }
+
+    // 类型分布
+    const typeTotal = (r.inboundCount||0) + (r.shuffleCount||0) + (r.outboundCount||0) + (r.conveyorCount||0);
+    function typePct(v) { return typeTotal > 0 ? (v*100/typeTotal).toFixed(1) : 0; }
+
+    const rateCls = parseFloat(rate) >= 99 ? 'tag-success' : (parseFloat(rate) < 95 ? 'tag-fail' : 'tag-skip');
+
+    box.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <span style="font-size:15px;font-weight:700;">${currentAisle} 巷道 · 今日统计</span>
+            <span class="tag ${rateCls}" style="font-size:13px;padding:4px 14px;">${rate}% 成功率</span>
+        </div>
+
+        <!-- 覆盖进度 -->
+        <div style="margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--color-text-secondary);margin-bottom:4px;">
+                <span>库位覆盖: <b>${r.visitedCodes||0}</b> / ${r.totalCodes||0}</span>
+                <span>今日 <b style="color:var(--color-success);">+${r.newVisitedToday||0}</b> 个 · 剩余 ${remaining}</span>
+            </div>
+            <div style="height:10px;background:rgba(99,102,241,0.08);border-radius:5px;overflow:hidden;">
+                <div style="width:${progressPct}%;height:100%;background:linear-gradient(90deg,#10b981,#059669);border-radius:5px;transition:width 0.4s;"></div>
+            </div>
+            <div style="text-align:right;font-size:11px;color:var(--color-text-muted);margin-top:2px;">${r.coveragePct||0}%</div>
+        </div>
+
+        <!-- 核心数据 -->
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;text-align:center;">
+            <div>
+                <div style="font-size:20px;font-weight:800;color:var(--color-primary);">${r.totalIssued||0}</div>
+                <div style="font-size:11px;color:var(--color-text-muted);">下发</div>
+            </div>
+            <div>
+                <div style="font-size:20px;font-weight:800;color:var(--color-success);">${r.totalSuccess||0}</div>
+                <div style="font-size:11px;color:var(--color-text-muted);">成功</div>
+            </div>
+            <div>
+                <div style="font-size:20px;font-weight:800;">${r.completedRounds||0}</div>
+                <div style="font-size:11px;color:var(--color-text-muted);">轮次</div>
+            </div>
+            <div>
+                <div style="font-size:20px;font-weight:800;color:${(r.totalFail||0)>0?'var(--color-error)':'var(--color-text)'};">${r.totalFail||0}</div>
+                <div style="font-size:11px;color:var(--color-text-muted);">失败</div>
+            </div>
+            <div>
+                <div style="font-size:20px;font-weight:800;color:${(r.totalAlarms||0)>0?'var(--color-warning)':'var(--color-text)'};">${r.totalAlarms||0}</div>
+                <div style="font-size:11px;color:var(--color-text-muted);">报警</div>
+            </div>
+        </div>
+
+        <!-- 耗时对比 -->
+        <div style="margin-bottom:10px;">
+            ${durBar('入库', r.avgInboundDuration, 'linear-gradient(90deg,#6366f1,#818cf8)')}
+            ${durBar('移库', r.avgShuffleDuration, 'linear-gradient(90deg,#8b5cf6,#a78bfa)')}
+            ${durBar('出库', r.avgOutboundDuration, 'linear-gradient(90deg,#06b6d4,#22d3ee)')}
+        </div>
+
+        <!-- 类型分布 -->
+        <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;margin-bottom:4px;">
+            ${(r.inboundCount||0) ? '<div style="width:'+typePct(r.inboundCount)+'%;background:#6366f1;"></div>' : ''}
+            ${(r.shuffleCount||0) ? '<div style="width:'+typePct(r.shuffleCount)+'%;background:#8b5cf6;"></div>' : ''}
+            ${(r.outboundCount||0) ? '<div style="width:'+typePct(r.outboundCount)+'%;background:#06b6d4;"></div>' : ''}
+            ${(r.conveyorCount||0) ? '<div style="width:'+typePct(r.conveyorCount)+'%;background:#f59e0b;"></div>' : ''}
+        </div>
+        <div style="font-size:11px;color:var(--color-text-muted);">
+            入${r.inboundCount||0} · 移${r.shuffleCount||0} · 出${r.outboundCount||0} · 送${r.conveyorCount||0}
+            ${r.runStartTime ? ' · ' + (r.runStartTime||'').slice(11) + ' ~ ' + (r.runEndTime||'').slice(11) : ''}
+        </div>
+    `;
+    $('dailyReportHint').textContent = r.runStartTime ? '运行 ' + (r.effectiveMinutes ? fmtClock2(r.effectiveMinutes) : '') : '';
+}
+
+function fmtClock2(min) {
+    if (!min) return '';
+    if (min < 60) return min + ' 分钟';
+    const h = Math.floor(min/60), m = min%60;
+    return h + ' 时 ' + (m ? m + ' 分' : '');
+}
+
 // --------- Boot ---------
 (async function init() {
     bindActions();
@@ -1983,6 +2124,9 @@ function startPolling() {
     startPolling();
     // 每 5 秒刷新总览
     setInterval(loadOverview, 5000);
+    // 加载今日报告, 每 30 秒刷新
+    fetchDailyReport();
+    setInterval(fetchDailyReport, 30000);
 })();
 </script>
 

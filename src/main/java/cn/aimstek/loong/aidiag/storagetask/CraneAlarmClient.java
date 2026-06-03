@@ -139,11 +139,12 @@ public class CraneAlarmClient {
         private String alarmMessage;
         private String firstAlarmTime;
 
-        /** 去重键: 同一条报警(类型+编码+首次报警时间)在持续期间只计一次 */
-        public String dedupKey() {
+        /**
+         * 报警标识键: 类型+编码, 用于判断连续报警是否相同.
+         */
+        public String identityKey() {
             return (alarmType == null ? "" : alarmType) + "|"
-                    + (alarmCode == null ? "" : alarmCode) + "|"
-                    + (firstAlarmTime == null ? "" : firstAlarmTime);
+                    + (alarmCode == null ? "" : alarmCode);
         }
     }
 }

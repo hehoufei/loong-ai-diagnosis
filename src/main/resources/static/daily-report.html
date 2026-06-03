@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WCS 智能诊断 - 每日跑库报告</title>
+<link rel="stylesheet" href="common.css">
+<style>
+    .container { max-width: 1280px; margin: 0 auto; padding: 20px; }
+
+    .topbar-logo { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--color-primary); white-space: nowrap; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
+    .topbar-link { text-decoration: none; display: inline-flex; align-items: center; gap: 4px; padding: 5px 14px; border-radius: var(--radius-tag); font-size: 13px; font-weight: 500; color: var(--color-primary); border: 1.5px solid rgba(99,102,241,0.25); transition: var(--transition); white-space: nowrap; }
+    .topbar-link:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); }
+    .topbar-link.active { background: rgba(99,102,241,0.1); border-color: var(--color-primary); font-weight: 700; }
+
+    .section-card { padding: 22px 24px; margin-bottom: 20px; }
+    .section-card:hover { transform: none; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+    .section-title { font-size: 16px; font-weight: 700; color: var(--color-text); display: flex; align-items: center; gap: 8px; }
+
+    /* 日期选择 */
+    .date-picker-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .date-input { height: 36px; padding: 0 12px; border: 1.5px solid rgba(99,102,241,0.18); border-radius: var(--radius-input); font-size: 13px; background: rgba(255,255,255,0.7); color: var(--color-text); outline: none; }
+    .date-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+
+    /* 概览大数字卡片 */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .kpi-card { padding: 16px 18px; text-align: center; }
+    .kpi-card:hover { transform: translateY(-2px); }
+    .kpi-value { font-size: 26px; font-weight: 800; background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .kpi-value.green { background: linear-gradient(135deg, #059669, #10b981); -webkit-background-clip: text; background-clip: text; }
+    .kpi-value.orange { background: linear-gradient(135deg, #d97706, #f59e0b); -webkit-background-clip: text; background-clip: text; }
+    .kpi-value.red { background: linear-gradient(135deg, #dc2626, #ef4444); -webkit-background-clip: text; background-clip: text; }
+    .kpi-label { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+    .kpi-delta { font-size: 11px; margin-top: 2px; }
+    .kpi-delta.up { color: var(--color-success); }
+    .kpi-delta.down { color: var(--color-error); }
+
+    /* 巷道统计表 */
+    .aisle-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+    .aisle-table th { background: rgba(99,102,241,0.06); color: var(--color-text-secondary); font-weight: 600; padding: 10px 14px; text-align: center; border-bottom: 1px solid rgba(99,102,241,0.10); font-size: 12px; text-transform: uppercase; }
+    .aisle-table td { padding: 10px 14px; border-bottom: 1px solid rgba(99,102,241,0.06); text-align: center; }
+    .aisle-table tr:hover td { background: rgba(99,102,241,0.04); }
+
+    /* 趋势图 */
+    .chart-container { position: relative; width: 100%; height: 240px; margin-top: 12px; }
+    .chart-canvas { width: 100%; height: 100%; }
+
+    /* 分布条 */
+    .dist-bar { display: flex; height: 28px; border-radius: 14px; overflow: hidden; margin: 8px 0; }
+    .dist-seg { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #fff; transition: width 0.3s; min-width: 0; }
+    .dist-seg.inbound { background: #6366f1; }
+    .dist-seg.shuffle { background: #8b5cf6; }
+    .dist-seg.outbound { background: #06b6d4; }
+    .dist-seg.conveyor { background: #f59e0b; }
+
+    .dist-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--color-text-secondary); margin-top: 6px; }
+    .dist-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+    .dist-legend .l-inbound::before { background: #6366f1; }
+    .dist-legend .l-shuffle::before { background: #8b5cf6; }
+    .dist-legend .l-outbound::before { background: #06b6d4; }
+    .dist-legend .l-conveyor::before { background: #f59e0b; }
+
+    /* 异常清单 */
+    .abnormal-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+    .abnormal-table th { background: rgba(239,68,68,0.06); color: var(--color-text-secondary); font-weight: 600; padding: 8px 12px; text-align: left; border-bottom: 1px solid rgba(239,68,68,0.10); font-size: 11.5px; }
+    .abnormal-table td { padding: 8px 12px; border-bottom: 1px solid rgba(99,102,241,0.05); }
+    .abnormal-table tr:hover td { background: rgba(239,68,68,0.04); }
+
+    .tag { display: inline-block; padding: 2px 10px; border-radius: var(--radius-tag); font-size: 11.5px; font-weight: 700; }
+    .tag-success { background: rgba(16,185,129,0.12); color: var(--color-success); }
+    .tag-fail { background: rgba(239,68,68,0.12); color: var(--color-error); }
+    .tag-warn { background: rgba(245,158,11,0.12); color: var(--color-warning); }
+
+    .empty-hint { padding: 24px; text-align: center; color: var(--color-text-muted); font-size: 13px; }
+
+    /* toast */
+    .toast-stack { position: fixed; top: 64px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; backdrop-filter: blur(16px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); animation: fadeIn .2s ease-out; }
+    .toast.success { background: rgba(16,185,129,0.15); color: var(--color-success); border: 1px solid rgba(16,185,129,0.3); }
+    .toast.error { background: rgba(239,68,68,0.15); color: var(--color-error); border: 1px solid rgba(239,68,68,0.3); }
+    .toast.info { background: rgba(99,102,241,0.12); color: var(--color-primary); border: 1px solid rgba(99,102,241,0.25); }
+
+    /* 耗时对比条 */
+    .duration-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+    .dur-row { display: flex; align-items: center; gap: 10px; }
+    .dur-label { width: 60px; font-size: 12px; color: var(--color-text-secondary); text-align: right; }
+    .dur-bar-wrap { flex: 1; height: 22px; background: rgba(99,102,241,0.06); border-radius: 11px; overflow: hidden; }
+    .dur-bar { height: 100%; border-radius: 11px; transition: width 0.4s ease; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 11px; font-weight: 600; color: #fff; }
+    .dur-bar.inbound { background: linear-gradient(90deg, #6366f1, #818cf8); }
+    .dur-bar.shuffle { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+    .dur-bar.outbound { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<nav class="glass-topbar">
+    <div class="topbar-logo"><span>📊</span><span>每日跑库报告</span></div>
+    <div class="topbar-right">
+        <a href="home.html" class="topbar-link">🏠 首页</a>
+        <a href="storage-task.html" class="topbar-link">🏗️ 立库测试</a>
+        <a href="daily-report.html" class="topbar-link active">📊 每日报告</a>
+    </div>
+</nav>
+
+<div class="toast-stack" id="toastStack"></div>
+
+<div class="container">
+
+    <!-- 日期选择 + 操作 -->
+    <div class="glass-card section-card">
+        <div class="section-header">
+            <div class="section-title">📅 每日跑库报告</div>
+            <div class="date-picker-row">
+                <input type="date" id="dateInput" class="date-input">
+                <button class="glass-btn-outline" id="btnPrevDay" style="padding:6px 12px;font-size:13px;">‹ 前一天</button>
+                <button class="glass-btn-outline" id="btnToday" style="padding:6px 12px;font-size:13px;">今天</button>
+                <button class="glass-btn-outline" id="btnNextDay" style="padding:6px 12px;font-size:13px;">后一天 ›</button>
+                <button class="glass-btn" id="btnRefresh" style="padding:6px 14px;font-size:13px;">↻ 刷新</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPI 概览 -->
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- 各巷道统计表 -->
+    <div class="glass-card section-card">
+        <div class="section-header">
+            <div class="section-title">🏭 各巷道统计</div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="aisle-table" id="aisleTable">
+                <thead>
+                    <tr>
+                        <th>巷道</th>
+                        <th>下发</th>
+                        <th>成功</th>
+                        <th>手动</th>
+                        <th>失败</th>
+                        <th>成功率</th>
+                        <th>平均耗时</th>
+                        <th>最大耗时</th>
+                        <th>完成轮次</th>
+                        <th>今日覆盖</th>
+                        <th>累计覆盖</th>
+                        <th>报警</th>
+                        <th>运行时长</th>
+                    </tr>
+                </thead>
+                <tbody id="aisleTbody">
+                    <tr><td colspan="13" class="empty-hint">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 各巷道详情卡片 -->
+    <div id="aisleDetailGrid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(360px, 1fr));gap:16px;margin-bottom:20px;"></div>
+
+    <!-- 耗时对比 + 任务类型分布 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div class="glass-card section-card">
+            <div class="section-title">⏱ 平均耗时对比</div>
+            <div class="duration-bars" id="durationBars"></div>
+        </div>
+        <div class="glass-card section-card">
+            <div class="section-title">📦 任务类型分布</div>
+            <div class="dist-bar" id="distBar"></div>
+            <div class="dist-legend">
+                <span class="l-inbound">入库 N2S</span>
+                <span class="l-shuffle">移库 S2S</span>
+                <span class="l-outbound">出库 S2N</span>
+                <span class="l-conveyor">输送 N2N</span>
+            </div>
+            <div id="distDetail" style="margin-top:8px;font-size:12px;color:var(--color-text-secondary);"></div>
+        </div>
+    </div>
+
+    <!-- 趋势图 (最近7天) -->
+    <div class="glass-card section-card">
+        <div class="section-header">
+            <div class="section-title">📈 最近 7 天趋势</div>
+        </div>
+        <div class="chart-container">
+            <canvas id="trendCanvas" class="chart-canvas"></canvas>
+        </div>
+    </div>
+
+    <!-- 异常清单 -->
+    <div class="glass-card section-card">
+        <div class="section-header">
+            <div class="section-title">⚠️ 异常清单</div>
+            <span id="abnormalCount" style="font-size:12px;color:var(--color-text-muted);"></span>
+        </div>
+        <div style="overflow-x:auto;max-height:360px;overflow-y:auto;">
+            <table class="abnormal-table">
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>巷道</th>
+                        <th>任务号</th>
+                        <th>类型</th>
+                        <th>问题</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody id="abnormalTbody">
+                    <tr><td colspan="6" class="empty-hint">无异常</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+
+<script>
+'use strict';
+const API = '/api/v1/storage-task/daily-report';
+const $ = id => document.getElementById(id);
+
+// ===== 工具函数 =====
+function esc(v) { return v == null ? '' : String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(msg, kind='info', ttl=2200) {
+    const el = document.createElement('div');
+    el.className = 'toast ' + kind;
+    el.textContent = msg;
+    $('toastStack').appendChild(el);
+    setTimeout(() => { el.style.opacity='0'; setTimeout(()=>el.remove(),250); }, ttl);
+}
+function fmtDur(sec) {
+    if (sec == null) return '-';
+    sec = Math.round(sec);
+    if (sec < 60) return sec + 's';
+    const m = Math.floor(sec/60), s = sec%60;
+    if (m < 60) return m + 'm' + (s?(' '+s+'s'):'');
+    const h = Math.floor(m/60), rm = m%60;
+    return h + 'h ' + rm + 'm';
+}
+function fmtMin(min) {
+    if (min == null) return '-';
+    if (min < 60) return min + ' 分';
+    const h = Math.floor(min/60), m = min%60;
+    return h + ' 时 ' + (m ? m + ' 分' : '');
+}
+function today() { return new Date().toISOString().slice(0,10); }
+
+// ===== 日期控制 =====
+let currentDate = today();
+$('dateInput').value = currentDate;
+
+$('dateInput').addEventListener('change', () => { currentDate = $('dateInput').value; loadReport(); });
+$('btnPrevDay').addEventListener('click', () => { changeDay(-1); });
+$('btnNextDay').addEventListener('click', () => { changeDay(1); });
+$('btnToday').addEventListener('click', () => { currentDate = today(); $('dateInput').value = currentDate; loadReport(); });
+$('btnRefresh').addEventListener('click', () => { loadReport(true); });
+
+function changeDay(delta) {
+    const d = new Date(currentDate);
+    d.setDate(d.getDate() + delta);
+    currentDate = d.toISOString().slice(0,10);
+    $('dateInput').value = currentDate;
+    loadReport();
+}
+
+// ===== 数据加载 =====
+let reportData = [];    // 当天各巷道
+let trendData = [];     // 最近7天汇总
+
+async function loadReport(forceGenerate) {
+    try {
+        if (forceGenerate) {
+            await fetch(API + '/generate?date=' + currentDate, { method: 'POST' });
+        }
+        const res = await fetch(API + '?date=' + currentDate);
+        const json = await res.json();
+        if (!json.success) throw new Error(json.message);
+        reportData = json.data || [];
+        renderAll();
+    } catch (e) {
+        toast('加载报告失败: ' + e.message, 'error');
+    }
+    // 加载趋势
+    loadTrend();
+}
+
+async function loadTrend() {
+    try {
+        const end = currentDate;
+        const d = new Date(currentDate);
+        d.setDate(d.getDate() - 6);
+        const start = d.toISOString().slice(0,10);
+        const res = await fetch(API + '?from=' + start + '&to=' + end);
+        const json = await res.json();
+        if (json.success) {
+            trendData = json.data || [];
+            renderTrend();
+        }
+    } catch (e) { console.warn('trend load failed', e); }
+}
+
+// ===== 渲染 =====
+function renderAll() {
+    renderKpi();
+    renderAisleTable();
+    renderDuration();
+    renderDist();
+    renderAbnormal();
+}
+
+function sumField(list, field) { return list.reduce((s, r) => s + (r[field] || 0), 0); }
+
+function renderKpi() {
+    const total = sumField(reportData, 'totalIssued');
+    const success = sumField(reportData, 'totalSuccess') + sumField(reportData, 'totalManualSuccess');
+    const fail = sumField(reportData, 'totalFail');
+    const stuck = sumField(reportData, 'totalStuck');
+    const alarms = sumField(reportData, 'totalAlarms');
+    const rounds = sumField(reportData, 'completedRounds');
+    const rate = total > 0 ? (success * 100 / total).toFixed(1) : '-';
+
+    // 计算平均耗时 (加权)
+    let totalDur = 0, durCnt = 0;
+    for (const r of reportData) {
+        if (r.totalDuration && r.totalDuration > 0) {
+            totalDur += r.totalDuration;
+            durCnt += (r.totalSuccess || 0) + (r.totalManualSuccess || 0) + (r.totalCancel || 0);
+        }
+    }
+    const avgDur = durCnt > 0 ? Math.round(totalDur / durCnt) : null;
+
+    // 覆盖度
+    const totalCodes = sumField(reportData, 'totalCodes');
+    const visited = sumField(reportData, 'visitedCodes');
+    const coverage = totalCodes > 0 ? (visited * 100 / totalCodes).toFixed(1) : '-';
+
+    const kpis = [
+        { label: '今日下发', value: total, cls: '' },
+        { label: '成功率', value: rate + '%', cls: parseFloat(rate) >= 99 ? 'green' : (parseFloat(rate) < 95 ? 'red' : 'orange') },
+        { label: '平均耗时', value: fmtDur(avgDur), cls: '' },
+        { label: '库位覆盖(累计)', value: coverage + '%', cls: '' },
+        { label: '今日新覆盖', value: sumField(reportData, 'newVisitedToday') + ' 个', cls: 'green' },
+        { label: '完成轮次', value: rounds, cls: '' },
+        { label: '失败', value: fail, cls: fail > 0 ? 'red' : '' },
+        { label: '卡住', value: stuck, cls: stuck > 0 ? 'orange' : '' },
+        { label: '堆垛机报警', value: alarms, cls: alarms > 0 ? 'orange' : '' },
+    ];
+
+    $('kpiGrid').innerHTML = kpis.map(k => `
+        <div class="glass-card kpi-card">
+            <div class="kpi-value ${k.cls}">${k.value}</div>
+            <div class="kpi-label">${k.label}</div>
+        </div>
+    `).join('');
+}
+
+function renderAisleTable() {
+    const tbody = $('aisleTbody');
+    if (!reportData.length) {
+        tbody.innerHTML = '<tr><td colspan="13" class="empty-hint">当天无数据</td></tr>';
+        return;
+    }
+    tbody.innerHTML = reportData.filter(r => r.totalIssued > 0 || r.newVisitedToday > 0).map(r => {
+        const rate = r.totalIssued > 0 ? ((r.totalSuccess + r.totalManualSuccess) * 100 / r.totalIssued).toFixed(1) : '-';
+        const rateCls = parseFloat(rate) >= 99 ? 'tag-success' : (parseFloat(rate) < 95 ? 'tag-fail' : 'tag-warn');
+        const coverTxt = r.totalCodes > 0
+            ? `${r.visitedCodes}/${r.totalCodes} (${r.coveragePct}%)`
+            : '-';
+        return `<tr>
+            <td><b>${r.aisle} 巷道</b></td>
+            <td>${r.totalIssued}</td>
+            <td>${r.totalSuccess}</td>
+            <td>${r.totalManualSuccess || 0}</td>
+            <td>${r.totalFail || 0}</td>
+            <td><span class="tag ${rateCls}">${rate}%</span></td>
+            <td>${fmtDur(r.avgDuration)}</td>
+            <td>${fmtDur(r.maxDuration)}</td>
+            <td>${r.completedRounds}</td>
+            <td><b>${r.newVisitedToday || 0}</b> 个</td>
+            <td>${coverTxt}</td>
+            <td>${r.totalAlarms || 0}</td>
+            <td>${fmtMin(r.effectiveMinutes)}</td>
+        </tr>`;
+    }).join('');
+
+    // 各巷道详情卡片
+    renderAisleDetail();
+}
+
+function renderAisleDetail() {
+    const grid = $('aisleDetailGrid');
+    const list = reportData.filter(r => r.totalIssued > 0 || r.newVisitedToday > 0);
+    if (!list.length) { grid.innerHTML = ''; return; }
+
+    grid.innerHTML = list.map(r => {
+        const rate = r.totalIssued > 0 ? ((r.totalSuccess + r.totalManualSuccess) * 100 / r.totalIssued).toFixed(1) : '0';
+        const remaining = Math.max(0, r.totalCodes - r.visitedCodes);
+        const progressPct = r.totalCodes > 0 ? Math.round(r.visitedCodes * 100 / r.totalCodes) : 0;
+
+        // 任务类型分布迷你条
+        const typeTotal = (r.inboundCount||0) + (r.shuffleCount||0) + (r.outboundCount||0) + (r.conveyorCount||0);
+        const typePct = v => typeTotal > 0 ? (v*100/typeTotal).toFixed(0) : 0;
+
+        // 耗时对比迷你
+        const maxDurVal = Math.max(r.avgInboundDuration||0, r.avgShuffleDuration||0, r.avgOutboundDuration||0, 1);
+        const durBar = (label, val, color) => {
+            const pct = val ? Math.round(val * 100 / maxDurVal) : 0;
+            return `<div style="display:flex;align-items:center;gap:6px;margin:3px 0;">
+                <span style="width:36px;font-size:11px;text-align:right;color:var(--color-text-muted);">${label}</span>
+                <div style="flex:1;height:14px;background:rgba(99,102,241,0.06);border-radius:7px;overflow:hidden;">
+                    <div style="width:${Math.max(pct,2)}%;height:100%;background:${color};border-radius:7px;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;">
+                        <span style="font-size:10px;color:#fff;font-weight:600;">${val ? Math.round(val)+'s' : '-'}</span>
+                    </div>
+                </div>
+            </div>`;
+        };
+
+        return `<div class="glass-card" style="padding:16px 18px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-size:15px;font-weight:700;">${r.aisle} 巷道</span>
+                <span class="tag ${parseFloat(rate)>=99?'tag-success':parseFloat(rate)<95?'tag-fail':'tag-warn'}">${rate}% 成功率</span>
+            </div>
+
+            <!-- 覆盖进度条 -->
+            <div style="margin-bottom:12px;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--color-text-secondary);margin-bottom:4px;">
+                    <span>库位覆盖: ${r.visitedCodes} / ${r.totalCodes}</span>
+                    <span>今日 +${r.newVisitedToday || 0} 个 · 剩余 ${remaining}</span>
+                </div>
+                <div style="height:8px;background:rgba(99,102,241,0.08);border-radius:4px;overflow:hidden;">
+                    <div style="width:${progressPct}%;height:100%;background:linear-gradient(90deg,#10b981,#059669);border-radius:4px;transition:width 0.4s;"></div>
+                </div>
+                <div style="text-align:right;font-size:11px;color:var(--color-text-muted);margin-top:2px;">${r.coveragePct}%</div>
+            </div>
+
+            <!-- 数据摘要 -->
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;text-align:center;">
+                <div><div style="font-size:16px;font-weight:700;color:var(--color-primary);">${r.totalIssued}</div><div style="font-size:11px;color:var(--color-text-muted);">下发</div></div>
+                <div><div style="font-size:16px;font-weight:700;color:var(--color-success);">${r.totalSuccess}</div><div style="font-size:11px;color:var(--color-text-muted);">成功</div></div>
+                <div><div style="font-size:16px;font-weight:700;">${r.completedRounds}</div><div style="font-size:11px;color:var(--color-text-muted);">轮次</div></div>
+                <div><div style="font-size:16px;font-weight:700;color:${r.totalAlarms>0?'var(--color-warning)':'var(--color-text)'};">${r.totalAlarms||0}</div><div style="font-size:11px;color:var(--color-text-muted);">报警</div></div>
+            </div>
+
+            <!-- 耗时对比 -->
+            <div style="margin-bottom:8px;">
+                ${durBar('入库', r.avgInboundDuration, '#6366f1')}
+                ${durBar('移库', r.avgShuffleDuration, '#8b5cf6')}
+                ${durBar('出库', r.avgOutboundDuration, '#06b6d4')}
+            </div>
+
+            <!-- 类型分布迷你条 -->
+            <div style="display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:8px;">
+                ${r.inboundCount ? `<div style="width:${typePct(r.inboundCount)}%;background:#6366f1;"></div>` : ''}
+                ${r.shuffleCount ? `<div style="width:${typePct(r.shuffleCount)}%;background:#8b5cf6;"></div>` : ''}
+                ${r.outboundCount ? `<div style="width:${typePct(r.outboundCount)}%;background:#06b6d4;"></div>` : ''}
+                ${r.conveyorCount ? `<div style="width:${typePct(r.conveyorCount)}%;background:#f59e0b;"></div>` : ''}
+            </div>
+            <div style="font-size:11px;color:var(--color-text-muted);margin-top:4px;">
+                入${r.inboundCount||0} · 移${r.shuffleCount||0} · 出${r.outboundCount||0} · 送${r.conveyorCount||0}
+                ${r.runStartTime ? ` · ${r.runStartTime.slice(11)} ~ ${(r.runEndTime||'').slice(11)}` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderDuration() {
+    // 聚合各类型平均耗时
+    let inDur = 0, inCnt = 0, shDur = 0, shCnt = 0, outDur = 0, outCnt = 0;
+    for (const r of reportData) {
+        if (r.avgInboundDuration && r.inboundCount) { inDur += r.avgInboundDuration * r.inboundCount; inCnt += r.inboundCount; }
+        if (r.avgShuffleDuration && r.shuffleCount) { shDur += r.avgShuffleDuration * r.shuffleCount; shCnt += r.shuffleCount; }
+        if (r.avgOutboundDuration && r.outboundCount) { outDur += r.avgOutboundDuration * r.outboundCount; outCnt += r.outboundCount; }
+    }
+    const avgIn = inCnt > 0 ? Math.round(inDur / inCnt) : 0;
+    const avgSh = shCnt > 0 ? Math.round(shDur / shCnt) : 0;
+    const avgOut = outCnt > 0 ? Math.round(outDur / outCnt) : 0;
+    const maxVal = Math.max(avgIn, avgSh, avgOut, 1);
+
+    const bars = [
+        { label: '入库', value: avgIn, cls: 'inbound' },
+        { label: '移库', value: avgSh, cls: 'shuffle' },
+        { label: '出库', value: avgOut, cls: 'outbound' },
+    ];
+
+    $('durationBars').innerHTML = bars.map(b => {
+        const pct = Math.round(b.value * 100 / maxVal);
+        return `<div class="dur-row">
+            <div class="dur-label">${b.label}</div>
+            <div class="dur-bar-wrap">
+                <div class="dur-bar ${b.cls}" style="width:${Math.max(pct, 2)}%;">${b.value}s</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function renderDist() {
+    const inb = sumField(reportData, 'inboundCount');
+    const shf = sumField(reportData, 'shuffleCount');
+    const out = sumField(reportData, 'outboundCount');
+    const con = sumField(reportData, 'conveyorCount');
+    const total = inb + shf + out + con;
+
+    if (total === 0) {
+        $('distBar').innerHTML = '<div class="empty-hint" style="width:100%;">无数据</div>';
+        $('distDetail').textContent = '';
+        return;
+    }
+
+    const pct = v => (v * 100 / total).toFixed(1);
+    $('distBar').innerHTML = [
+        { cls: 'inbound', v: inb },
+        { cls: 'shuffle', v: shf },
+        { cls: 'outbound', v: out },
+        { cls: 'conveyor', v: con },
+    ].filter(s => s.v > 0).map(s =>
+        `<div class="dist-seg ${s.cls}" style="width:${pct(s.v)}%;">${pct(s.v)}%</div>`
+    ).join('');
+
+    $('distDetail').textContent = `入库 ${inb} · 移库 ${shf} · 出库 ${out} · 输送 ${con} · 合计 ${total}`;
+}
+
+function renderAbnormal() {
+    let all = [];
+    for (const r of reportData) {
+        if (r.abnormalTasks) all = all.concat(r.abnormalTasks);
+    }
+    $('abnormalCount').textContent = all.length ? all.length + ' 条' : '';
+    if (!all.length) {
+        $('abnormalTbody').innerHTML = '<tr><td colspan="6" class="empty-hint">🎉 当天无异常</td></tr>';
+        return;
+    }
+    $('abnormalTbody').innerHTML = all.map(a => `<tr>
+        <td>${esc(a.time || '-')}</td>
+        <td>${a.aisle} 巷道</td>
+        <td style="font-family:var(--font-mono);font-size:11px;">${esc(a.taskNo || '-')}</td>
+        <td>${esc(a.taskType || '-')}</td>
+        <td><span class="tag tag-fail">${esc(a.issue)}</span></td>
+        <td>${esc(a.state || '-')}</td>
+    </tr>`).join('');
+}
+
+// ===== 趋势图 (纯 Canvas 绘制，无第三方依赖) =====
+function renderTrend() {
+    const canvas = $('trendCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    const W = rect.width, H = rect.height;
+    ctx.clearRect(0, 0, W, H);
+
+    if (!trendData.length) {
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('暂无趋势数据', W/2, H/2);
+        return;
+    }
+
+    const pad = { top: 30, right: 60, bottom: 40, left: 50 };
+    const cw = W - pad.left - pad.right;
+    const ch = H - pad.top - pad.bottom;
+
+    // 数据
+    const dates = trendData.map(d => d.date);
+    const issued = trendData.map(d => d.totalIssued || 0);
+    const avgDur = trendData.map(d => d.avgDuration || 0);
+
+    const maxIssued = Math.max(...issued, 1);
+    const maxDur = Math.max(...avgDur, 1);
+
+    // 网格
+    ctx.strokeStyle = 'rgba(99,102,241,0.08)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+        const y = pad.top + ch * i / 4;
+        ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    }
+
+    // X 轴标签
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    const step = Math.max(1, Math.floor(dates.length / 7));
+    for (let i = 0; i < dates.length; i += step) {
+        const x = pad.left + cw * i / (dates.length - 1 || 1);
+        ctx.fillText(dates[i].slice(5), x, H - pad.bottom + 18);
+    }
+
+    // Y 轴左 (下发数)
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#6366f1';
+    for (let i = 0; i <= 4; i++) {
+        const y = pad.top + ch - ch * i / 4;
+        const v = Math.round(maxIssued * i / 4);
+        ctx.fillText(v, pad.left - 8, y + 4);
+    }
+    ctx.fillText('下发', pad.left - 8, pad.top - 8);
+
+    // Y 轴右 (耗时)
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#f59e0b';
+    for (let i = 0; i <= 4; i++) {
+        const y = pad.top + ch - ch * i / 4;
+        const v = Math.round(maxDur * i / 4);
+        ctx.fillText(v + 's', W - pad.right + 8, y + 4);
+    }
+    ctx.fillText('耗时', W - pad.right + 8, pad.top - 8);
+
+    function xOf(i) { return pad.left + cw * i / (dates.length - 1 || 1); }
+    function yOfIssued(v) { return pad.top + ch - ch * v / maxIssued; }
+    function yOfDur(v) { return pad.top + ch - ch * v / maxDur; }
+
+    // 下发数折线 (紫色)
+    ctx.strokeStyle = '#6366f1';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    issued.forEach((v, i) => { const x = xOf(i), y = yOfIssued(v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+    // 点
+    ctx.fillStyle = '#6366f1';
+    issued.forEach((v, i) => { ctx.beginPath(); ctx.arc(xOf(i), yOfIssued(v), 4, 0, Math.PI*2); ctx.fill(); });
+
+    // 平均耗时折线 (橙色)
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5,3]);
+    ctx.beginPath();
+    avgDur.forEach((v, i) => { const x = xOf(i), y = yOfDur(v); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#f59e0b';
+    avgDur.forEach((v, i) => { ctx.beginPath(); ctx.arc(xOf(i), yOfDur(v), 3, 0, Math.PI*2); ctx.fill(); });
+
+    // 图例
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#6366f1'; ctx.fillRect(pad.left + 10, 8, 16, 3); ctx.fillText('下发数', pad.left + 32, 14);
+    ctx.fillStyle = '#f59e0b'; ctx.fillRect(pad.left + 100, 8, 16, 3); ctx.fillText('平均耗时(s)', pad.left + 122, 14);
+}
+
+// ===== 初始化 =====
+(async function init() {
+    await loadReport();
+    // 每60秒自动刷新 (如果看的是今天)
+    setInterval(() => { if (currentDate === today()) loadReport(); }, 60000);
+})();
+</script>
+
+</body>
+</html>

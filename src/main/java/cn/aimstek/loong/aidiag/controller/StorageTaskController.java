@@ -153,6 +153,16 @@ public class StorageTaskController {
         }
     }
 
+    @PostMapping("/{aisle}/fix-alarm-dedup")
+    public Response<Integer> fixAlarmDedup(@PathVariable int aisle) {
+        try {
+            int fixed = runner(aisle).fixAlarmDedup();
+            return BaseResponse.success(fixed);
+        } catch (Exception e) {
+            return BaseResponse.failure("FIX_ALARM_ERROR", e.getMessage());
+        }
+    }
+
     @PostMapping("/{aisle}/retry")
     public Response<Void> retryCurrent(@PathVariable int aisle) {
         try {

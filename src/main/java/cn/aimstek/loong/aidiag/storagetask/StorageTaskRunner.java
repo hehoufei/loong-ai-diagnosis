@@ -272,6 +272,46 @@ public class StorageTaskRunner {
     }
 
     /**
+     * 修复报警数据: 对 recentTasks 和 currentTask 中的报警进行去重.
+     * 相同的 alarmMessage 只保留一条, alarmCount 修正为去重后的条数.
+     * 用于修复旧逻辑导致的重复报警记录.
+     */
+    public synchronized int fixAlarmDedup() {
+        int fixed = 0;
+        // 修复 recentTasks
+        if (state.getRecentTasks() != null) {
+            for (StorageTaskRecord rec : state.getRecentTasks()) {
+                if (dedupAlarmRecord(rec)) fixed++;
+            }
+        }
+        // 修复 currentTask
+        if (state.getCurrentTask() != null) {
+            if (dedupAlarmRecord(state.getCurrentTask())) fixed++;
+        }
+        if (fixed > 0) {
+            saveState();
+        }
+        return fixed;
+    }
+
+    private boolean dedupAlarmRecord(StorageTaskRecord rec) {
+        List<String> msgs = rec.getAlarmMessages();
+        if (msgs == null || msgs.size() <= 1) return false;
+        // 按出现顺序去重
+        List<String> deduped = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        for (String m : msgs) {
+            if (seen.add(m)) {
+                deduped.add(m);
+            }
+        }
+        if (deduped.size() == msgs.size()) return false; // 没变化
+        rec.setAlarmMessages(deduped);
+        rec.setAlarmCount(deduped.size());
+        return true;
+    }
+
+    /**
      * 重试当前未完成的任务 (用户在 ACS 处理掉冲突后调用).
      *  - 仅当 status=PAUSED 且 currentTask 存在
      *  - 不变更 taskNo, 直接调 addTask 重新下发; 成功则启动 worker 继续轮询
@@ -591,10 +631,10 @@ public class StorageTaskRunner {
         long startMs = System.currentTimeMillis();
         long thresholdMs = config.getTaskStuckThresholdSeconds() * 1000L;
 
-        // 堆垛机报警监控: 本任务期间已计入的报警去重键
+        // 堆垛机报警监控: 记录上一次轮询周期中活跃的报警集合, 用于连续去重
         boolean monitorAlarm = config.isEnableCraneAlarmMonitor();
         String craneCode = monitorAlarm ? crane.deviceCodeOfAisle(aisle) : null;
-        java.util.Set<String> seenAlarmKeys = new java.util.HashSet<>();
+        java.util.Set<String> lastAlarmKeys = new java.util.HashSet<>();
 
         while (true) {
             if (stopRequested) return "__PAUSE__";
@@ -611,7 +651,7 @@ public class StorageTaskRunner {
 
             // 堆垛机报警采集 (与任务状态轮询同频)
             if (monitorAlarm) {
-                collectCraneAlarms(crane, craneCode, rec, seenAlarmKeys);
+                lastAlarmKeys = collectCraneAlarms(crane, craneCode, rec, lastAlarmKeys);
             }
 
             if (dbState != null) {
@@ -646,28 +686,41 @@ public class StorageTaskRunner {
 
     /**
      * 采集一次堆垛机报警, 把新出现的报警累计到任务记录上.
-     * 去重规则: 同一条报警(类型+编码+首次报警时间)在任务执行期间只计一次,
-     * 报警消失后再次触发 (firstAlarmTime 变化) 会再计一次.
+     * <p>
+     * 去重规则: 连续相同的报警只记一次. 即如果上一次轮询已经存在报警A,
+     * 本次仍然是A, 则不重复记录 (设备报警未解除). 但如果中间变成了B,
+     * 后面又出现A, 那么这个A是新的一次, 会再记录.
+     *
+     * @return 本次轮询中活跃的报警 key 集合, 供下一轮比对
      */
-    private void collectCraneAlarms(CraneAlarmClient crane, String craneCode,
-                                    StorageTaskRecord rec, java.util.Set<String> seenKeys) {
+    private java.util.Set<String> collectCraneAlarms(CraneAlarmClient crane, String craneCode,
+                                                     StorageTaskRecord rec,
+                                                     java.util.Set<String> previousKeys) {
         try {
             CraneAlarmClient.Snapshot snap = crane.fetch(craneCode);
             if (snap == null || snap.getAlarms() == null || snap.getAlarms().isEmpty()) {
-                return;
+                // 本轮无报警, 返回空集合 (下一轮如果出现任何报警都算新的)
+                return new java.util.HashSet<>();
             }
+
+            java.util.Set<String> currentKeys = new java.util.HashSet<>();
             boolean changed = false;
             List<String> msgs = rec.getAlarmMessages();
             if (msgs == null) {
                 msgs = new ArrayList<>();
                 rec.setAlarmMessages(msgs);
             }
+
             for (CraneAlarmClient.Alarm a : snap.getAlarms()) {
                 String msg = a.getAlarmMessage();
                 if (msg == null || msg.isBlank()) {
                     continue;
                 }
-                if (seenKeys.add(a.dedupKey())) {
+                String key = a.identityKey();
+                currentKeys.add(key);
+
+                // 只有上一轮不存在这个报警时, 才算新报警需要记录
+                if (!previousKeys.contains(key)) {
                     rec.setAlarmCount(rec.getAlarmCount() + 1);
                     msgs.add(msg);
                     changed = true;
@@ -678,8 +731,10 @@ public class StorageTaskRunner {
             if (changed) {
                 saveState();
             }
+            return currentKeys;
         } catch (Exception e) {
             log.debug("采集堆垛机报警异常 craneCode={}: {}", craneCode, e.getMessage());
+            return previousKeys; // 异常时保持上一轮状态, 避免误判
         }
     }
 
