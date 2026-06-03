@@ -90,6 +90,26 @@ public class StorageTaskConfig {
     /** 单任务轮询超时 (秒). 超时不会中止, 仅在 UI 标记为"卡住", 等待手动处理 */
     private long taskStuckThresholdSeconds = 30L * 60L;
 
+    // ========== 堆垛机报警监控 ==========
+    /**
+     * 是否在任务执行期间轮询堆垛机设备缓存, 统计报警次数.
+     * 与任务状态轮询同频 (pollIntervalSeconds).
+     */
+    private boolean enableCraneAlarmMonitor = true;
+
+    /**
+     * 设备缓存接口基地址 (不含路径).
+     * 完整 URL = deviceCacheBaseUrl + /iot/deviceCache/client/get/{deviceCode}
+     * 示例: http://10.15.81.15:8088
+     */
+    private String deviceCacheBaseUrl = "http://10.15.81.15:8088";
+
+    /**
+     * 巷道号 -> 堆垛机设备编码 的格式化模板, %d 处填巷道号.
+     * 默认 DV_NO.A040%02d: 1 巷道 -> DV_NO.A04001 ... 8 巷道 -> DV_NO.A04008.
+     */
+    private String craneDeviceCodePattern = "DV_NO.A040%02d";
+
     /** 任务号前缀, 实际任务号 = prefix + yyyyMMddHHmmssSSS_序号 */
     private String taskNoPrefix = "ZDYNDTASK_";
 

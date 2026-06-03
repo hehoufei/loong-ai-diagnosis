@@ -466,6 +466,7 @@ public class StorageTaskRunner {
         try {
             StorageDb db = new StorageDb(config);
             StorageAcsClient acs = new StorageAcsClient(config, mapper);
+            CraneAlarmClient crane = new CraneAlarmClient(config, mapper);
 
             while (!stopRequested) {
                 // 检查暂停
@@ -521,7 +522,7 @@ public class StorageTaskRunner {
                 }
 
                 // 轮询直到终态 / 暂停 / 跳过
-                String finalState = pollUntilTerminal(db);
+                String finalState = pollUntilTerminal(db, crane);
                 StorageTaskRecord rec = state.getCurrentTask();
                 if (rec == null) {
                     continue;
@@ -585,10 +586,15 @@ public class StorageTaskRunner {
      *   返回 "SUCCESS" / "MANUAL_SUCCESS" / "CANCEL" / "FAIL" / ...
      *   或特殊标记 "__PAUSE__" / "__SKIP__"
      */
-    private String pollUntilTerminal(StorageDb db) {
+    private String pollUntilTerminal(StorageDb db, CraneAlarmClient crane) {
         StorageTaskRecord rec = state.getCurrentTask();
         long startMs = System.currentTimeMillis();
         long thresholdMs = config.getTaskStuckThresholdSeconds() * 1000L;
+
+        // 堆垛机报警监控: 本任务期间已计入的报警去重键
+        boolean monitorAlarm = config.isEnableCraneAlarmMonitor();
+        String craneCode = monitorAlarm ? crane.deviceCodeOfAisle(aisle) : null;
+        java.util.Set<String> seenAlarmKeys = new java.util.HashSet<>();
 
         while (true) {
             if (stopRequested) return "__PAUSE__";
@@ -602,6 +608,12 @@ public class StorageTaskRunner {
 
             String dbState = db.queryTaskState(rec.getTaskNo());
             rec.setDbTaskState(dbState);
+
+            // 堆垛机报警采集 (与任务状态轮询同频)
+            if (monitorAlarm) {
+                collectCraneAlarms(crane, craneCode, rec, seenAlarmKeys);
+            }
+
             if (dbState != null) {
                 String upper = dbState.toUpperCase();
                 if (ADVANCING_STATES.contains(upper)) {
@@ -629,6 +641,45 @@ public class StorageTaskRunner {
                     return "__PAUSE__";
                 }
             }
+        }
+    }
+
+    /**
+     * 采集一次堆垛机报警, 把新出现的报警累计到任务记录上.
+     * 去重规则: 同一条报警(类型+编码+首次报警时间)在任务执行期间只计一次,
+     * 报警消失后再次触发 (firstAlarmTime 变化) 会再计一次.
+     */
+    private void collectCraneAlarms(CraneAlarmClient crane, String craneCode,
+                                    StorageTaskRecord rec, java.util.Set<String> seenKeys) {
+        try {
+            CraneAlarmClient.Snapshot snap = crane.fetch(craneCode);
+            if (snap == null || snap.getAlarms() == null || snap.getAlarms().isEmpty()) {
+                return;
+            }
+            boolean changed = false;
+            List<String> msgs = rec.getAlarmMessages();
+            if (msgs == null) {
+                msgs = new ArrayList<>();
+                rec.setAlarmMessages(msgs);
+            }
+            for (CraneAlarmClient.Alarm a : snap.getAlarms()) {
+                String msg = a.getAlarmMessage();
+                if (msg == null || msg.isBlank()) {
+                    continue;
+                }
+                if (seenKeys.add(a.dedupKey())) {
+                    rec.setAlarmCount(rec.getAlarmCount() + 1);
+                    msgs.add(msg);
+                    changed = true;
+                    log.info("巷道{} 堆垛机[{}] 任务{} 报警: {} (累计{}次)",
+                            aisle, craneCode, rec.getTaskNo(), msg, rec.getAlarmCount());
+                }
+            }
+            if (changed) {
+                saveState();
+            }
+        } catch (Exception e) {
+            log.debug("采集堆垛机报警异常 craneCode={}: {}", craneCode, e.getMessage());
         }
     }
 

@@ -550,13 +550,14 @@
                         <th style="width:60px;">类型</th>
                         <th style="min-width:240px;">起 → 终</th>
                         <th style="width:120px;">状态</th>
+                        <th style="width:70px;">报警</th>
                         <th style="width:140px;">提交</th>
                         <th style="width:140px;">完成</th>
                         <th style="min-width:140px;">备注</th>
                     </tr>
                 </thead>
                 <tbody id="historyTbody">
-                    <tr><td colspan="10" class="empty-row">暂无历史任务</td></tr>
+                    <tr><td colspan="11" class="empty-row">暂无历史任务</td></tr>
                 </tbody>
             </table>
         </div>
@@ -870,6 +871,12 @@ const CFG_FIELDS = [
       hint: '同巷道+同层+同列+同侧 (如左远→左近) 直接跳过' },
     { key: 'pollIntervalSeconds',       label: '轮询间隔(秒)',         type: 'number' },
     { key: 'taskStuckThresholdSeconds', label: '卡住阈值(秒)',         type: 'number' },
+    { key: 'enableCraneAlarmMonitor',   label: '堆垛机报警监控',       type: 'bool',
+      hint: '任务执行期间轮询堆垛机设备缓存, 统计报警次数' },
+    { key: 'deviceCacheBaseUrl',        label: '设备缓存地址',         type: 'text',
+      hint: '基地址, 例 http://10.15.81.15:8088' },
+    { key: 'craneDeviceCodePattern',    label: '堆垛机编码模板',       type: 'text',
+      hint: '%d 填巷道号, 默认 DV_NO.A040%02d -> 8 巷道 DV_NO.A04008' },
     { key: 'taskNoPrefix',              label: '任务号前缀',           type: 'text' },
     { key: 'validateLocationSql',       label: '库位校验 SQL',         type: 'sql',
       hint: '必须 SELECT, 必须含占位符 {CODES}, 第一列返回库位编码' },
@@ -1203,6 +1210,9 @@ function renderCurrentTask(t, status) {
                 <span><span class="k">db_state</span>${esc(t.dbTaskState || '-')}</span>
                 <span><span class="k">提交时间</span>${esc(t.submittedAt || '-')}</span>
                 ${elapsed ? `<span><span class="k">已耗时</span>${elapsed}</span>` : ''}
+                ${(t.alarmCount || 0) > 0
+                    ? `<span><span class="k">堆垛机报警</span><span class="tag tag-fail" title="${esc((t.alarmMessages||[]).join('\n')).replace(/"/g,'&quot;')}" style="cursor:help;">⚠ ${t.alarmCount} 次</span></span>`
+                    : `<span><span class="k">堆垛机报警</span>0 次</span>`}
             </div>
             ${t.remark ? `<div class="ct-row"><span><span class="k">备注</span>${esc(t.remark)}</span></div>` : ''}
             ${actionsHtml}
@@ -1267,7 +1277,7 @@ function renderHistory(list) {
 
     const tbody = $('historyTbody');
     if (!pageRows.length) {
-        tbody.innerHTML = '<tr><td colspan="10" class="empty-row">'
+        tbody.innerHTML = '<tr><td colspan="11" class="empty-row">'
             + (list.length ? '没有匹配的任务' : '暂无历史任务')
             + '</td></tr>';
         return;
@@ -1277,6 +1287,7 @@ function renderHistory(list) {
         const stuckCls = t.stuck ? ' stuck-row' : '';
         const sd = describeCode(t.startNode);
         const ed = describeCode(t.endNode);
+        const alarmCell = alarmCellHtml(t);
         return `<tr class="${stuckCls}">
             <td>${t.seq}</td>
             <td>${t.round}</td>
@@ -1288,11 +1299,23 @@ function renderHistory(list) {
                 <div style="margin-top:2px;">→ ${esc(t.endNode || '')}${ed ? `<div class="cfg-hint">${esc(ed)}</div>` : ''}</div>
             </td>
             <td>${tag}</td>
+            <td>${alarmCell}</td>
             <td>${esc(t.submittedAt || '')}</td>
             <td>${esc(t.finishedAt || '')}</td>
             <td>${esc(t.remark || '')}</td>
         </tr>`;
     }).join('');
+}
+
+// 报警单元格: 0 次显示灰色 0, >0 显示红色徽标, 悬浮显示具体报警信息
+function alarmCellHtml(t) {
+    const n = t.alarmCount || 0;
+    if (!n) {
+        return '<span style="color:var(--color-text-muted);">0</span>';
+    }
+    const msgs = (t.alarmMessages || []).join('\n');
+    const title = esc(msgs).replace(/"/g, '&quot;');
+    return `<span class="tag tag-fail" title="${title}" style="cursor:help;">⚠ ${n}</span>`;
 }
 
 function applyHistoryFilter(list) {

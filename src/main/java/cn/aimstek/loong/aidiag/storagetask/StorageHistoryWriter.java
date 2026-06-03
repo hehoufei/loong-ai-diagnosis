@@ -23,7 +23,7 @@ public final class StorageHistoryWriter {
 
     private static final String CSV_HEADER =
             "writtenAt,seq,round,step,taskNo,taskType,startNode,endNode,"
-            + "submittedAt,finishedAt,durationSec,state,dbTaskState,stuck,remark,"
+            + "submittedAt,finishedAt,durationSec,state,dbTaskState,stuck,alarmCount,alarmMessages,remark,"
             + "cellCode,cellAisle,cellSide,cellDepth,cellRow,cellCol,cellLayer";
 
     /**
@@ -83,6 +83,8 @@ public final class StorageHistoryWriter {
                 csv(r.getState()),
                 csv(r.getDbTaskState()),
                 String.valueOf(r.isStuck()),
+                String.valueOf(r.getAlarmCount()),
+                csv(joinAlarms(r.getAlarmMessages())),
                 csv(r.getRemark()),
                 csv(parsed[0]),         // cellCode (取自端点的库位编码)
                 csv(parsed[1]),         // cellAisle
@@ -122,6 +124,12 @@ public final class StorageHistoryWriter {
         } catch (Exception ex) {
             return -1;
         }
+    }
+
+    /** 多条报警明细拼成一段, 用 " | " 分隔 */
+    private static String joinAlarms(java.util.List<String> msgs) {
+        if (msgs == null || msgs.isEmpty()) return "";
+        return String.join(" | ", msgs);
     }
 
     /** CSV 字段转义: 含逗号 / 引号 / 换行的用双引号包裹, 内部双引号转义为两个 */

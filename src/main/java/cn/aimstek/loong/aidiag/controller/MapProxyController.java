@@ -19,6 +19,13 @@ public class MapProxyController {
     private final EnvConfig envConfig;
     private final RestTemplate restTemplate;
 
+    @GetMapping("/viewList")
+    public ResponseEntity<String> getViewList() {
+        String url = envConfig.getWcsUrl() + "/api/map/config/queryViewList";
+        ResponseEntity<String> resp = restTemplate.getForEntity(url, String.class);
+        return ResponseEntity.ok(resp.getBody());
+    }
+
     @PostMapping("/viewDetail")
     public ResponseEntity<String> getViewDetail(@RequestBody(required = false) Map<String, Object> body) {
         String url = envConfig.getWcsUrl() + "/api/map/config/queryViewDetail";

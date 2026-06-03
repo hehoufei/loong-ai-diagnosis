@@ -19,9 +19,14 @@
     .server-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
     .server-chip.active { background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.1)); border-color: var(--color-primary); color: var(--color-primary); box-shadow: 0 2px 8px rgba(99,102,241,0.15); }
     .server-custom { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-    .server-custom input { height: 32px; padding: 0 10px; width: 220px; font-size: 13px; border: 1.5px solid rgba(99,102,241,0.12); border-radius: 8px; background: rgba(255,255,255,0.6); outline: none; transition: var(--transition); }
+    .server-custom input { height: 32px; padding: 0 10px; font-size: 13px; border: 1.5px solid rgba(99,102,241,0.12); border-radius: 8px; background: rgba(255,255,255,0.6); outline: none; transition: var(--transition); }
     .server-custom input:focus { border-color: var(--color-primary); }
+    .server-custom .input-name { width: 90px; }
+    .server-custom .input-url { width: 200px; }
     .server-custom button { height: 32px; font-size: 12px; padding: 0 12px; }
+    .server-chip .chip-del { display: none; margin-left: 4px; font-size: 11px; color: rgba(239,68,68,0.6); cursor: pointer; }
+    .server-chip:hover .chip-del { display: inline; }
+    .server-chip .chip-del:hover { color: rgba(239,68,68,1); }
 
     .main-layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
     @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr; } }
@@ -113,6 +118,116 @@
     .h-toolbar { display: flex; align-items: center; gap: 8px; font-size: 12px; }
     .h-toolbar select { height: 28px; padding: 0 8px; font-size: 11px; border: 1px solid rgba(99,102,241,0.12); border-radius: 6px; background: rgba(255,255,255,0.6); outline: none; cursor: pointer; }
     .h-toolbar .h-stat { font-size: 11px; color: var(--color-text-muted); }
+
+    /* History Modal */
+    .history-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); backdrop-filter: blur(6px); z-index: 2000; align-items: center; justify-content: center; }
+    .history-modal-overlay.show { display: flex; animation: fadeIn .2s ease; }
+    .history-modal { background: #fff; border-radius: 16px; width: 960px; max-width: calc(100vw - 40px); max-height: calc(100vh - 60px); display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,0.2); }
+    .history-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid rgba(99,102,241,0.1); }
+    .history-modal-title { font-size: 15px; font-weight: 700; color: var(--color-text); display: flex; align-items: center; gap: 8px; }
+    .history-modal-actions { display: flex; gap: 8px; align-items: center; }
+    .history-modal-actions select { height: 30px; padding: 0 10px; font-size: 12px; border: 1px solid rgba(99,102,241,0.15); border-radius: 8px; background: rgba(255,255,255,0.8); outline: none; cursor: pointer; }
+    .history-modal-actions input { height: 30px; padding: 0 10px; width: 160px; font-size: 12px; border: 1px solid rgba(99,102,241,0.15); border-radius: 8px; background: rgba(255,255,255,0.8); outline: none; }
+    .history-modal-actions input:focus { border-color: var(--color-primary); }
+    .history-modal-btn { height: 30px; padding: 0 12px; font-size: 12px; font-weight: 600; border: 1px solid rgba(99,102,241,0.2); background: transparent; color: var(--color-text-secondary); border-radius: 8px; cursor: pointer; transition: all .15s; }
+    .history-modal-btn:hover { background: rgba(99,102,241,0.08); border-color: var(--color-primary); color: var(--color-primary); }
+    .history-modal-btn.close { border-color: rgba(239,68,68,0.3); color: rgba(239,68,68,0.7); }
+    .history-modal-btn.close:hover { background: rgba(239,68,68,0.06); }
+    .history-modal-body { flex: 1; overflow: auto; padding: 0; }
+    .history-modal-stats { display: flex; gap: 16px; padding: 12px 20px; background: rgba(99,102,241,0.03); border-bottom: 1px solid rgba(99,102,241,0.06); font-size: 12px; color: var(--color-text-muted); }
+    .history-modal-stats .stat-item { display: flex; align-items: center; gap: 4px; }
+    .history-modal-stats .stat-val { font-weight: 700; color: var(--color-text); }
+    .hm-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .hm-table th { position: sticky; top: 0; background: rgba(248,250,252,0.95); backdrop-filter: blur(4px); padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid rgba(99,102,241,0.08); }
+    .hm-table td { padding: 9px 12px; border-bottom: 1px solid rgba(99,102,241,0.04); color: var(--color-text); vertical-align: middle; }
+    .hm-table tr:hover td { background: rgba(99,102,241,0.03); }
+    .hm-table .hm-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+    .hm-table .hm-status.ok { background: var(--color-success); }
+    .hm-table .hm-status.fail { background: var(--color-error); }
+    .hm-table .hm-type { font-weight: 700; color: var(--color-primary); font-size: 11px; }
+    .hm-table .hm-taskno { font-family: var(--font-mono); font-size: 10px; color: var(--color-text-muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hm-table .hm-server { font-size: 10px; color: var(--color-text-muted); }
+    .hm-table .hm-elapsed { font-size: 11px; color: var(--color-text-muted); text-align: right; }
+    .hm-table .hm-detail-btn { border: none; background: rgba(99,102,241,0.08); color: var(--color-primary); font-size: 11px; padding: 3px 8px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .hm-table .hm-detail-btn:hover { background: rgba(99,102,241,0.15); }
+    .hm-pagination { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border-top: 1px solid rgba(99,102,241,0.08); }
+    .hm-pagination button { height: 28px; padding: 0 12px; font-size: 12px; font-weight: 600; border: 1px solid rgba(99,102,241,0.15); background: transparent; color: var(--color-text-secondary); border-radius: 6px; cursor: pointer; transition: all .15s; }
+    .hm-pagination button:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-primary); }
+    .hm-pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .hm-pagination .hm-page-info { font-size: 12px; color: var(--color-text-muted); }
+
+    /* Detail sub-modal */
+    .hm-detail-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.4); z-index: 2100; align-items: center; justify-content: center; }
+    .hm-detail-overlay.show { display: flex; }
+    .hm-detail-modal { background: #1a1b2e; border-radius: 14px; width: 640px; max-width: calc(100vw - 60px); max-height: calc(100vh - 100px); display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,0.4); }
+    .hm-detail-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .hm-detail-title { font-size: 13px; font-weight: 700; color: #e2e8f0; }
+    .hm-detail-close { border: none; background: rgba(239,68,68,0.15); color: rgba(239,68,68,0.8); font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+    .hm-detail-close:hover { background: rgba(239,68,68,0.25); }
+    .hm-detail-body { flex: 1; overflow: auto; padding: 14px 16px; }
+    .hm-detail-body pre { margin: 0; color: #e2e8f0; font-family: var(--font-mono); font-size: 11px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+
+    /* Map Picker Modal - Tech / Digital-Twin theme */
+    .map-picker-overlay { display: none; position: fixed; inset: 0; background: rgba(5,8,18,0.7); backdrop-filter: blur(6px); z-index: 3000; align-items: stretch; justify-content: stretch; }
+    .map-picker-overlay.show { display: flex; animation: fadeIn .2s ease; }
+    .map-picker { display: flex; flex-direction: column; width: 100%; height: 100%; background: #0a0f1e; }
+    .map-picker-header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: linear-gradient(180deg, rgba(15,23,42,0.98), rgba(13,19,38,0.92)); border-bottom: 1px solid rgba(56,189,248,0.15); flex-shrink: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .map-picker-title { font-size: 15px; font-weight: 700; color: #e0f2fe; display: flex; align-items: center; gap: 8px; letter-spacing: 0.02em; text-shadow: 0 0 12px rgba(56,189,248,0.4); }
+    .map-picker-floor-tabs { display: flex; gap: 6px; margin-left: 20px; }
+    .map-picker-floor-tab { padding: 6px 16px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid rgba(56,189,248,0.25); background: rgba(56,189,248,0.04); color: rgba(186,230,253,0.7); cursor: pointer; transition: all .2s; }
+    .map-picker-floor-tab:hover { border-color: rgba(56,189,248,0.5); color: #e0f2fe; background: rgba(56,189,248,0.1); }
+    .map-picker-floor-tab.active { background: linear-gradient(135deg, #0891b2, #4f46e5); border-color: transparent; color: #fff; box-shadow: 0 2px 12px rgba(56,189,248,0.4); }
+    .map-picker-search { margin-left: 18px; position: relative; }
+    .map-picker-search input { height: 34px; width: 240px; padding: 0 12px 0 34px; font-size: 12px; border: 1px solid rgba(56,189,248,0.25); border-radius: 9px; background: rgba(15,23,42,0.6); color: #e0f2fe; outline: none; transition: all .2s; }
+    .map-picker-search input:focus { border-color: rgba(56,189,248,0.6); background: rgba(15,23,42,0.9); box-shadow: 0 0 0 3px rgba(56,189,248,0.12); }
+    .map-picker-search input::placeholder { color: rgba(148,163,184,0.5); }
+    .map-picker-search::before { content: '🔍'; position: absolute; left: 11px; top: 50%; transform: translateY(-50%); font-size: 12px; opacity: 0.6; }
+    .map-picker-hint { margin-left: auto; font-size: 11px; color: rgba(148,163,184,0.55); }
+    .map-picker-close { margin-left: 14px; height: 32px; padding: 0 16px; font-size: 12px; font-weight: 600; border: 1px solid rgba(239,68,68,0.35); background: rgba(239,68,68,0.08); color: rgba(252,165,165,0.95); border-radius: 9px; cursor: pointer; transition: all .2s; }
+    .map-picker-close:hover { background: rgba(239,68,68,0.18); border-color: rgba(239,68,68,0.6); }
+    .map-picker-body { flex: 1; position: relative; overflow: hidden; }
+    .map-picker-body canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+    .map-picker-body canvas:active { cursor: grabbing; }
+    .map-picker-tooltip { position: absolute; pointer-events: none; background: linear-gradient(135deg, rgba(8,145,178,0.95), rgba(79,70,229,0.95)); color: #fff; padding: 5px 11px; border-radius: 7px; font-size: 11px; font-weight: 600; display: none; z-index: 10; white-space: nowrap; box-shadow: 0 4px 16px rgba(34,211,238,0.3); border: 1px solid rgba(125,211,252,0.3); }
+    .map-picker-selected { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #059669, #10b981); color: #fff; padding: 10px 24px; border-radius: 12px; font-size: 14px; font-weight: 700; display: none; z-index: 10; box-shadow: 0 8px 28px rgba(16,185,129,0.45); animation: fadeIn .2s ease; border: 1px solid rgba(110,231,183,0.4); }
+    .map-picker-search-results { position: absolute; top: 56px; left: 200px; background: rgba(13,19,38,0.98); border: 1px solid rgba(56,189,248,0.2); border-radius: 11px; max-height: 280px; overflow-y: auto; z-index: 20; display: none; min-width: 220px; box-shadow: 0 12px 36px rgba(0,0,0,0.5); backdrop-filter: blur(12px); }
+    .map-picker-search-results.show { display: block; }
+    .map-picker-search-item { padding: 9px 15px; font-size: 12px; color: #cbd5e1; cursor: pointer; border-bottom: 1px solid rgba(56,189,248,0.06); transition: background .12s; }
+    .map-picker-search-item:hover { background: rgba(56,189,248,0.12); }
+    .map-picker-search-item:last-child { border-bottom: none; }
+    .map-picker-search-item .sp-code { font-weight: 700; color: #67e8f9; }
+    .map-picker-search-item .sp-num { font-size: 10px; color: rgba(148,163,184,0.6); margin-left: 8px; }
+
+    /* Map pick button inline */
+    .q-field-with-map { display: flex; align-items: flex-end; gap: 4px; }
+    .q-field-with-map .q-field { flex: 1; }
+    .map-pick-btn { width: 28px; height: 28px; border: 1.5px solid rgba(99,102,241,0.2); background: rgba(99,102,241,0.06); border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; transition: all .15s; flex-shrink: 0; }
+    .map-pick-btn:hover { background: rgba(99,102,241,0.15); border-color: var(--color-primary); }
+
+    /* Route analysis panel */
+    .route-panel { position: absolute; top: 16px; left: 16px; width: 300px; max-height: calc(100% - 32px); background: rgba(13,19,38,0.96); border: 1px solid rgba(56,189,248,0.2); border-radius: 14px; z-index: 15; display: none; flex-direction: column; box-shadow: 0 12px 40px rgba(0,0,0,0.5); backdrop-filter: blur(14px); overflow: hidden; }
+    .route-panel.show { display: flex; }
+    .route-panel-head { padding: 13px 16px; border-bottom: 1px solid rgba(56,189,248,0.12); }
+    .route-panel-title { font-size: 13px; font-weight: 700; color: #e0f2fe; display: flex; align-items: center; gap: 6px; }
+    .route-panel-se { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .route-se-row { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+    .route-se-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .route-se-dot.start { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.6); }
+    .route-se-dot.end { background: #f43f5e; box-shadow: 0 0 8px rgba(244,63,94,0.6); }
+    .route-se-label { color: rgba(148,163,184,0.7); width: 28px; flex-shrink: 0; }
+    .route-se-val { color: #e0f2fe; font-weight: 600; font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .route-panel-stat { padding: 8px 16px; font-size: 11px; color: rgba(148,163,184,0.75); border-bottom: 1px solid rgba(56,189,248,0.08); }
+    .route-panel-stat b { color: #67e8f9; }
+    .route-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .route-item { padding: 9px 11px; margin-bottom: 6px; border-radius: 9px; background: rgba(56,189,248,0.04); border: 1px solid rgba(56,189,248,0.12); cursor: pointer; transition: all .15s; }
+    .route-item:hover { background: rgba(56,189,248,0.1); border-color: rgba(56,189,248,0.3); }
+    .route-item.active { background: linear-gradient(135deg, rgba(8,145,178,0.25), rgba(79,70,229,0.2)); border-color: rgba(34,211,238,0.6); box-shadow: 0 0 0 1px rgba(34,211,238,0.3); }
+    .route-item-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .route-item-name { font-size: 12px; font-weight: 700; color: #e0f2fe; }
+    .route-item-hops { font-size: 10px; font-weight: 600; color: #67e8f9; background: rgba(34,211,238,0.12); padding: 1px 7px; border-radius: 999px; }
+    .route-item-path { font-size: 10px; color: rgba(148,163,184,0.7); font-family: var(--font-mono); line-height: 1.5; word-break: break-all; }
+    .route-empty { padding: 24px 16px; text-align: center; font-size: 12px; color: rgba(148,163,184,0.6); }
+    .route-loading { padding: 24px 16px; text-align: center; font-size: 12px; color: #67e8f9; }
 </style>
 </head>
 <body>
@@ -126,9 +241,11 @@
         <span class="server-chip active" data-url="http://10.15.58.250:18088" onclick="selectServer(this)">输送线 250:18088</span>
         <span class="server-chip" data-url="http://10.15.58.249:8088" onclick="selectServer(this)">立库 249:8088</span>
         <span class="server-chip" data-url="http://localhost:8088" onclick="selectServer(this)">本地 localhost</span>
+        <span id="customChipsContainer"></span>
         <div class="server-custom">
-            <input type="text" id="customServer" placeholder="自定义 如 http://10.0.0.1:8088">
-            <button class="server-chip" onclick="applyCustomServer()" style="border-color:var(--color-success);color:var(--color-success);">✓ 使用</button>
+            <input type="text" id="customServerName" class="input-name" placeholder="名称">
+            <input type="text" id="customServer" class="input-url" placeholder="如 http://10.0.0.1:8088">
+            <button class="server-chip" onclick="applyCustomServer()" style="border-color:var(--color-success);color:var(--color-success);">✓ 添加</button>
         </div>
     </div>
     <div class="main-layout">
@@ -158,6 +275,7 @@
             <div class="queue-header">
                 <div class="queue-title">📋 发送队列 <span class="queue-count" id="queueCount">0</span></div>
                 <div class="queue-actions">
+                    <button class="btn-sm" onclick="openCoverageGen()" title="根据当前楼层连线和最短路规则，用最少的点到点任务覆盖所有线路">🛣️ 最少覆盖</button>
                     <button class="btn-sm" onclick="previewAllJson()" title="查看完整 JSON">{ } 查看 JSON</button>
                     <button class="btn-sm" onclick="clearQueue()">🗑️ 清空</button>
                     <button class="btn-send-all" onclick="sendAll()" id="btnSendAll">🚀 全部下发</button>
@@ -178,6 +296,7 @@
                             <option value="today">今天</option>
                         </select>
                         <span class="h-stat" id="historyStats"></span>
+                        <button class="btn-sm" onclick="openHistoryModal()" style="height:26px;padding:0 10px;font-size:11px;">📋 查看全部</button>
                         <button class="btn-sm" onclick="downloadHistory()" style="height:26px;padding:0 10px;font-size:11px;">⬇ 下载</button>
                     </div>
                 </div>
@@ -215,20 +334,127 @@ function genGroupCode() { const d = new Date(); const ts = `${d.getFullYear()}${
 function nowStr() { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`; }
 
 // ============ 服务器选择 ============
+const CUSTOM_SERVERS_KEY = 'qt_custom_servers';
+const ACTIVE_SERVER_KEY = 'qt_active_server';
+
+function getCustomServers() {
+    try { return JSON.parse(localStorage.getItem(CUSTOM_SERVERS_KEY)) || []; }
+    catch(e) { return []; }
+}
+
+function saveCustomServers(list) {
+    localStorage.setItem(CUSTOM_SERVERS_KEY, JSON.stringify(list));
+}
+
+function saveActiveServer(url) {
+    localStorage.setItem(ACTIVE_SERVER_KEY, url);
+}
+
 function selectServer(el) {
     document.querySelectorAll('.server-chip').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
     currentServer = el.dataset.url;
+    saveActiveServer(currentServer);
     document.getElementById('customServer').value = '';
-    document.getElementById('customServer').style.borderColor = '';
+    document.getElementById('customServerName').value = '';
+    // 切换服务器后地图缓存失效
+    MP.loaded = false;
 }
+
 function applyCustomServer() {
-    const val = document.getElementById('customServer').value.trim();
-    if (!val) return;
-    document.querySelectorAll('.server-chip').forEach(c => c.classList.remove('active'));
-    currentServer = val;
-    document.getElementById('customServer').style.borderColor = 'var(--color-success)';
+    const urlVal = document.getElementById('customServer').value.trim();
+    if (!urlVal) return;
+    const nameVal = document.getElementById('customServerName').value.trim();
+
+    // 生成显示名称
+    let displayName = nameVal;
+    if (!displayName) {
+        try {
+            const u = new URL(urlVal);
+            displayName = u.hostname + (u.port ? ':' + u.port : '');
+        } catch(e) {
+            displayName = urlVal.replace(/^https?:\/\//, '');
+        }
+    }
+
+    // 检查是否已存在
+    const servers = getCustomServers();
+    const existing = servers.find(s => s.url === urlVal);
+    if (existing) {
+        existing.name = displayName;
+    } else {
+        servers.push({ name: displayName, url: urlVal });
+    }
+    saveCustomServers(servers);
+
+    // 重新渲染自定义 chips 并选中新添加的
+    renderCustomChips(urlVal);
+
+    // 清空输入
+    document.getElementById('customServer').value = '';
+    document.getElementById('customServerName').value = '';
 }
+
+function removeCustomServer(url, event) {
+    event.stopPropagation();
+    const servers = getCustomServers().filter(s => s.url !== url);
+    saveCustomServers(servers);
+    // 如果删除的是当前选中的，切回第一个预设
+    if (currentServer === url) {
+        const firstChip = document.querySelector('.server-bar .server-chip[data-url]');
+        if (firstChip) selectServer(firstChip);
+    }
+    renderCustomChips();
+}
+
+function renderCustomChips(activeUrl) {
+    const container = document.getElementById('customChipsContainer');
+    const servers = getCustomServers();
+    container.innerHTML = '';
+    servers.forEach(s => {
+        // 提取 host:port 用于显示
+        let hostPort = '';
+        try {
+            const u = new URL(s.url);
+            hostPort = u.hostname + (u.port ? ':' + u.port : '');
+        } catch(e) {
+            hostPort = s.url.replace(/^https?:\/\//, '');
+        }
+        // 显示格式：名称 + host:port（如果名称和 hostPort 不同才同时显示）
+        const label = (s.name && s.name !== hostPort) ? `${s.name} ${hostPort}` : hostPort;
+
+        const chip = document.createElement('span');
+        chip.className = 'server-chip';
+        chip.dataset.url = s.url;
+        chip.title = s.url;
+        chip.innerHTML = `${label} <span class="chip-del" onclick="removeCustomServer('${s.url}', event)" title="删除">✕</span>`;
+        chip.onclick = function() { selectServer(this); };
+        container.appendChild(chip);
+    });
+    // 设置 active 状态
+    const targetUrl = activeUrl || currentServer;
+    document.querySelectorAll('.server-chip').forEach(c => c.classList.remove('active'));
+    const activeChip = document.querySelector(`.server-chip[data-url="${targetUrl}"]`);
+    if (activeChip) {
+        activeChip.classList.add('active');
+        currentServer = targetUrl;
+    }
+    saveActiveServer(currentServer);
+}
+
+// 页面加载时恢复自定义服务器
+function initCustomServers() {
+    const savedActive = localStorage.getItem(ACTIVE_SERVER_KEY);
+    renderCustomChips();
+    // 恢复上次选中的服务器
+    if (savedActive) {
+        const chip = document.querySelector(`.server-chip[data-url="${savedActive}"]`);
+        if (chip) {
+            selectServer(chip);
+        }
+    }
+}
+initCustomServers();
 </script>
 
 <script>
@@ -314,14 +540,15 @@ function renderSingleCard(item, idx) {
         <div class="q-card-head">
             <div class="q-card-info"><span class="q-card-type">${d.taskType}</span><span class="q-card-name">${d.tplName}</span></div>
             <div class="q-card-btns">
+                <button class="q-btn" onclick="openRouteAnalysis('${item.id}','startNode','endNode')" title="路线分析">🔀</button>
                 <button class="q-btn" onclick="previewOneJson('${item.id}')" title="查看 JSON">{ }</button>
                 <button class="q-btn go" onclick="sendOne('${item.id}')" title="单独下发">▶</button>
                 <button class="q-btn del" onclick="removeFromQueue('${item.id}')" title="删除">✕</button>
             </div>
         </div>
         <div class="q-card-body">
-            <div class="q-field"><label>${startLabel}</label><input value="${d.startNode}" onchange="updateQField('${item.id}','startNode',this.value)"></div>
-            <div class="q-field"><label>${endLabel}</label><input value="${d.endNode}" onchange="updateQField('${item.id}','endNode',this.value)"></div>
+            <div class="q-field-with-map"><div class="q-field"><label>${startLabel}</label><input value="${d.startNode}" onchange="updateQField('${item.id}','startNode',this.value)"></div><button class="map-pick-btn" onclick="openMapPicker('${item.id}','startNode')" title="地图选点">🗺️</button></div>
+            <div class="q-field-with-map"><div class="q-field"><label>${endLabel}</label><input value="${d.endNode}" onchange="updateQField('${item.id}','endNode',this.value)"></div><button class="map-pick-btn" onclick="openMapPicker('${item.id}','endNode')" title="地图选点">🗺️</button></div>
             <div class="q-field"><label>类型</label><select onchange="updateQField('${item.id}','taskType',this.value)"><option ${d.taskType==='N2N'?'selected':''}>N2N</option><option ${d.taskType==='N2S'?'selected':''}>N2S</option><option ${d.taskType==='S2N'?'selected':''}>S2N</option><option ${d.taskType==='S2S'?'selected':''}>S2S</option></select></div>
             <div class="q-field"><label>独立运行</label><select onchange="updateQField('${item.id}','independentRun',this.value)"><option value="" ${d.independentRun===''?'selected':''}>空</option><option value="YES" ${d.independentRun==='YES'?'selected':''}>YES</option><option value="NO" ${d.independentRun==='NO'?'selected':''}>NO</option></select></div>${extraFields}${goodsSection}
             <div class="q-card-funcs">${funcTags}</div>
@@ -354,16 +581,16 @@ function renderGroupCard(item, idx) {
             </div>
             <div style="padding:8px;background:rgba(99,102,241,0.03);border-radius:8px;border:1px solid rgba(99,102,241,0.08);">
                 <div style="font-size:11px;font-weight:700;color:var(--color-primary);margin-bottom:6px;">🔵 主任务 <span style="font-weight:400;color:var(--color-text-muted);">— 先去拆</span></div>
-                <div class="q-field" style="margin-bottom:4px;"><label>起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(货物从哪里出发去拆)</span></label><input value="${d.mainStart}" onchange="updateQField('${item.id}','mainStart',this.value)"></div>
-                <div class="q-field" style="margin-bottom:4px;"><label>终点</label><input value="${d.mainEnd}" onchange="updateQField('${item.id}','mainEnd',this.value)" placeholder="可为空"></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(货物从哪里出发去拆)</span></label><div style="display:flex;gap:4px;"><input value="${d.mainStart}" onchange="updateQField('${item.id}','mainStart',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','mainStart')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>终点</label><div style="display:flex;gap:4px;"><input value="${d.mainEnd}" onchange="updateQField('${item.id}','mainEnd',this.value)" placeholder="可为空" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','mainEnd')" title="地图选点">🗺️</button></div></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','mainTaskType',this.value)"><option ${d.mainTaskType==='N2N'?'selected':''}>N2N</option><option ${d.mainTaskType==='N2S'?'selected':''}>N2S</option><option ${d.mainTaskType==='S2N'?'selected':''}>S2N</option></select></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','mainIndependent',this.value)"><option value="NO" ${d.mainIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.mainIndependent==='YES'?'selected':''}>YES</option></select></div>
                 <div class="q-field"><label>功能</label><select onchange="updateQField('${item.id}','mainFunc',this.value)"><option ${d.mainFunc==='WHOLE_DISASSEMBLE_PALLET_NODE'?'selected':''} value="WHOLE_DISASSEMBLE_PALLET_NODE">WHOLE_DISASSEMBLE_PALLET_NODE (整体拆垛)</option><option ${d.mainFunc==='WHOLE_PLACE_NODE'?'selected':''} value="WHOLE_PLACE_NODE">WHOLE_PLACE_NODE (整体合垛)</option><option ${d.mainFunc==='DISASSEMBLE_BY_PIECE_NODE'?'selected':''} value="DISASSEMBLE_BY_PIECE_NODE">DISASSEMBLE_BY_PIECE_NODE (按件拆垛)</option><option ${d.mainFunc==='ASSEMBLE_BY_PIECE_NODE'?'selected':''} value="ASSEMBLE_BY_PIECE_NODE">ASSEMBLE_BY_PIECE_NODE (按件码垛)</option><option ${d.mainFunc==='SCANNER_NODE'?'selected':''} value="SCANNER_NODE">SCANNER_NODE (扫码)</option></select></div>
             </div>
             <div style="padding:8px;background:rgba(16,185,129,0.03);border-radius:8px;border:1px solid rgba(16,185,129,0.08);">
                 <div style="font-size:11px;font-weight:700;color:var(--color-success);margin-bottom:6px;">🟢 子任务 <span style="font-weight:400;color:var(--color-text-muted);">— 后面去合</span></div>
-                <div class="q-field" style="margin-bottom:4px;"><label>起点 <span style="font-size:10px;color:#059669;font-weight:400;">(货物从哪里出发去合)</span></label><input value="${d.subStart}" onchange="updateQField('${item.id}','subStart',this.value)"></div>
-                <div class="q-field" style="margin-bottom:4px;"><label>终点</label><input value="${d.subEnd}" onchange="updateQField('${item.id}','subEnd',this.value)" placeholder="可为空"></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>起点 <span style="font-size:10px;color:#059669;font-weight:400;">(货物从哪里出发去合)</span></label><div style="display:flex;gap:4px;"><input value="${d.subStart}" onchange="updateQField('${item.id}','subStart',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','subStart')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>终点</label><div style="display:flex;gap:4px;"><input value="${d.subEnd}" onchange="updateQField('${item.id}','subEnd',this.value)" placeholder="可为空" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','subEnd')" title="地图选点">🗺️</button></div></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','subTaskType',this.value)"><option ${d.subTaskType==='N2N'?'selected':''}>N2N</option><option ${d.subTaskType==='N2S'?'selected':''}>N2S</option><option ${d.subTaskType==='S2N'?'selected':''}>S2N</option></select></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','subIndependent',this.value)"><option value="NO" ${d.subIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.subIndependent==='YES'?'selected':''}>YES</option></select></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>功能</label><select onchange="updateQField('${item.id}','subFunc',this.value)"><option ${d.subFunc==='WHOLE_PLACE_NODE'?'selected':''} value="WHOLE_PLACE_NODE">WHOLE_PLACE_NODE (整体合垛)</option><option ${d.subFunc==='WHOLE_DISASSEMBLE_PALLET_NODE'?'selected':''} value="WHOLE_DISASSEMBLE_PALLET_NODE">WHOLE_DISASSEMBLE_PALLET_NODE (整体拆垛)</option><option ${d.subFunc==='ASSEMBLE_BY_PIECE_NODE'?'selected':''} value="ASSEMBLE_BY_PIECE_NODE">ASSEMBLE_BY_PIECE_NODE (按件码垛)</option><option ${d.subFunc==='NONE'?'selected':''} value="NONE">NONE (无)</option></select></div>
@@ -749,8 +976,1425 @@ function copyJson() {
 }
 
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeJsonModal();
+    if (e.key === 'Escape') { closeMapPicker(); closeJsonModal(); closeHistoryModal(); closeHistoryDetail(); closeCoverageModal(); }
 });
+</script>
+
+<!-- History Full Modal -->
+<div class="history-modal-overlay" id="historyModal" onclick="if(event.target===this)closeHistoryModal()">
+    <div class="history-modal">
+        <div class="history-modal-head">
+            <div class="history-modal-title">📋 全部历史任务数据</div>
+            <div class="history-modal-actions">
+                <select id="hmDateSel" onchange="hmLoadDate(this.value)">
+                    <option value="today">今天</option>
+                </select>
+                <input type="text" id="hmSearch" placeholder="搜索 节点/任务号..." oninput="hmFilter()">
+                <select id="hmStatusFilter" onchange="hmFilter()">
+                    <option value="all">全部状态</option>
+                    <option value="ok">✅ 成功</option>
+                    <option value="fail">❌ 失败</option>
+                </select>
+                <button class="history-modal-btn" onclick="hmExport()">⬇ 导出</button>
+                <button class="history-modal-btn close" onclick="closeHistoryModal()">✕ 关闭</button>
+            </div>
+        </div>
+        <div class="history-modal-stats" id="hmStats"></div>
+        <div class="history-modal-body">
+            <table class="hm-table">
+                <thead>
+                    <tr>
+                        <th style="width:30px;"></th>
+                        <th>时间</th>
+                        <th>类型</th>
+                        <th>模板</th>
+                        <th>路由</th>
+                        <th>任务号</th>
+                        <th>服务器</th>
+                        <th>耗时</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="hmTableBody"></tbody>
+            </table>
+        </div>
+        <div class="hm-pagination">
+            <button onclick="hmPrevPage()" id="hmPrevBtn">← 上一页</button>
+            <span class="hm-page-info" id="hmPageInfo">第 1 页</span>
+            <button onclick="hmNextPage()" id="hmNextBtn">下一页 →</button>
+        </div>
+    </div>
+</div>
+
+<!-- History Detail Sub-Modal -->
+<div class="hm-detail-overlay" id="hmDetailOverlay" onclick="if(event.target===this)closeHistoryDetail()">
+    <div class="hm-detail-modal">
+        <div class="hm-detail-head">
+            <span class="hm-detail-title">📄 任务详情</span>
+            <button class="hm-detail-close" onclick="closeHistoryDetail()">✕ 关闭</button>
+        </div>
+        <div class="hm-detail-body"><pre id="hmDetailContent"></pre></div>
+    </div>
+</div>
+
+<script>
+// ============ History Modal Logic ============
+let hmAllData = [];
+let hmFiltered = [];
+let hmPage = 1;
+const hmPageSize = 30;
+
+function openHistoryModal() {
+    document.getElementById('historyModal').classList.add('show');
+    // 同步日期选项
+    const mainSel = document.getElementById('historyDateSel');
+    const hmSel = document.getElementById('hmDateSel');
+    hmSel.innerHTML = mainSel.innerHTML;
+    hmSel.value = mainSel.value;
+    // 加载数据
+    hmLoadDate(hmSel.value);
+}
+
+function closeHistoryModal() {
+    document.getElementById('historyModal').classList.remove('show');
+}
+
+async function hmLoadDate(date) {
+    try {
+        const url = date === 'today' ? '/api/v1/quick-task-history/today' : `/api/v1/quick-task-history/day/${date}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        if (json && json.success && json.data) {
+            hmAllData = json.data.reverse();
+        } else {
+            hmAllData = [];
+        }
+    } catch (e) {
+        console.warn('加载历史失败:', e);
+        hmAllData = [];
+    }
+    hmPage = 1;
+    hmFilter();
+}
+
+function hmFilter() {
+    const search = (document.getElementById('hmSearch').value || '').trim().toLowerCase();
+    const status = document.getElementById('hmStatusFilter').value;
+
+    hmFiltered = hmAllData.filter(h => {
+        // 状态过滤
+        if (status === 'ok' && !h.success) return false;
+        if (status === 'fail' && h.success) return false;
+        // 搜索过滤
+        if (search) {
+            const haystack = [
+                h.startNode, h.endNode, h.taskNo, h.groupCode,
+                h.templateName, h.server, h.taskType
+            ].filter(Boolean).join(' ').toLowerCase();
+            if (!haystack.includes(search)) return false;
+        }
+        return true;
+    });
+
+    hmPage = 1;
+    hmRender();
+}
+
+function hmRender() {
+    const total = hmFiltered.length;
+    const totalPages = Math.max(1, Math.ceil(total / hmPageSize));
+    if (hmPage > totalPages) hmPage = totalPages;
+
+    const start = (hmPage - 1) * hmPageSize;
+    const pageData = hmFiltered.slice(start, start + hmPageSize);
+
+    // Stats
+    const okCount = hmFiltered.filter(h => h.success).length;
+    const failCount = hmFiltered.length - okCount;
+    document.getElementById('hmStats').innerHTML = `
+        <span class="stat-item">📊 总计: <span class="stat-val">${hmFiltered.length}</span> 条</span>
+        <span class="stat-item">✅ 成功: <span class="stat-val" style="color:var(--color-success);">${okCount}</span></span>
+        <span class="stat-item">❌ 失败: <span class="stat-val" style="color:var(--color-error);">${failCount}</span></span>
+        <span class="stat-item">📅 数据源共: <span class="stat-val">${hmAllData.length}</span> 条</span>
+    `;
+
+    // Table
+    const tbody = document.getElementById('hmTableBody');
+    if (pageData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--color-text-muted);">暂无数据</td></tr>';
+    } else {
+        tbody.innerHTML = pageData.map((h, idx) => {
+            const time = h.timestamp ? h.timestamp.substring(11, 19) : '';
+            const type = h.taskType || '';
+            const tplName = h.templateName || '-';
+            const from = h.startNode || '-';
+            const to = h.endNode || '-';
+            const taskNo = h.taskNo || h.groupCode || '-';
+            const server = h.server ? h.server.replace(/^https?:\/\//, '') : '-';
+            const elapsed = h.elapsedMs ? h.elapsedMs + 'ms' : '-';
+            const ok = h.success;
+            const globalIdx = start + idx;
+            return `<tr>
+                <td><span class="hm-status ${ok?'ok':'fail'}"></span></td>
+                <td>${time}</td>
+                <td><span class="hm-type">${type}</span></td>
+                <td>${tplName}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${from} → ${to}">${from} → ${to}</td>
+                <td class="hm-taskno" title="${taskNo}">${taskNo}</td>
+                <td class="hm-server">${server}</td>
+                <td class="hm-elapsed">${elapsed}</td>
+                <td><button class="hm-detail-btn" onclick="showHistoryDetail(${globalIdx})">详情</button></td>
+            </tr>`;
+        }).join('');
+    }
+
+    // Pagination
+    document.getElementById('hmPageInfo').textContent = `第 ${hmPage} / ${totalPages} 页`;
+    document.getElementById('hmPrevBtn').disabled = hmPage <= 1;
+    document.getElementById('hmNextBtn').disabled = hmPage >= totalPages;
+}
+
+function hmPrevPage() { if (hmPage > 1) { hmPage--; hmRender(); } }
+function hmNextPage() { const totalPages = Math.ceil(hmFiltered.length / hmPageSize); if (hmPage < totalPages) { hmPage++; hmRender(); } }
+
+function showHistoryDetail(idx) {
+    const h = hmFiltered[idx];
+    if (!h) return;
+    const detail = {
+        timestamp: h.timestamp,
+        server: h.server,
+        taskType: h.taskType,
+        templateName: h.templateName,
+        startNode: h.startNode,
+        endNode: h.endNode,
+        taskNo: h.taskNo,
+        groupCode: h.groupCode,
+        groupType: h.groupType,
+        functions: h.functions,
+        success: h.success,
+        httpStatus: h.httpStatus,
+        elapsedMs: h.elapsedMs,
+        errorMessage: h.errorMessage || undefined,
+        responseBody: h.responseBody ? (function(){ try { return JSON.parse(h.responseBody); } catch(e) { return h.responseBody; } })() : undefined,
+        requestPayload: h.requestPayload || undefined
+    };
+    document.getElementById('hmDetailContent').textContent = JSON.stringify(detail, null, 2);
+    document.getElementById('hmDetailOverlay').classList.add('show');
+}
+
+function closeHistoryDetail() {
+    document.getElementById('hmDetailOverlay').classList.remove('show');
+}
+
+function hmExport() {
+    const sel = document.getElementById('hmDateSel');
+    const date = sel.value === 'today' ? new Date().toISOString().slice(0, 10) : sel.value;
+    window.open(`/api/v1/quick-task-history/download/${date}`, '_blank');
+}
+</script>
+
+<!-- Map Picker Modal -->
+<div class="map-picker-overlay" id="mapPickerOverlay" onclick="if(event.target===this)closeMapPicker()">
+    <div class="map-picker">
+        <div class="map-picker-header">
+            <div class="map-picker-title">🗺️ 地图选点</div>
+            <div class="map-picker-floor-tabs" id="mpFloorTabs"></div>
+            <div class="map-picker-search">
+                <input type="text" id="mpSearchInput" placeholder="搜索点位编号..." autocomplete="off" oninput="mpOnSearch(this.value)" onfocus="mpOnSearch(this.value)">
+            </div>
+            <div class="map-picker-hint">点击点位选择 · 滚轮缩放 · 拖拽平移 · ESC关闭</div>
+            <button class="map-picker-close" onclick="closeMapPicker()">✕ 关闭</button>
+        </div>
+        <div class="map-picker-body">
+            <canvas id="mpCanvas"></canvas>
+            <div class="map-picker-tooltip" id="mpTooltip"></div>
+            <div class="map-picker-selected" id="mpSelected"></div>
+            <div class="map-picker-search-results" id="mpSearchResults"></div>
+            <div class="route-panel" id="mpRoutePanel">
+                <div class="route-panel-head">
+                    <div class="route-panel-title">🔀 路线分析</div>
+                    <div class="route-panel-se">
+                        <div class="route-se-row"><span class="route-se-dot start"></span><span class="route-se-label">起点</span><span class="route-se-val" id="mpRouteStart">-</span></div>
+                        <div class="route-se-row"><span class="route-se-dot end"></span><span class="route-se-label">终点</span><span class="route-se-val" id="mpRouteEnd">-</span></div>
+                    </div>
+                </div>
+                <div class="route-panel-stat" id="mpRouteStat"></div>
+                <div class="route-list" id="mpRouteList"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============ Map Picker ============
+const MP = {
+    canvas: null, ctx: null, W: 0, H: 0,
+    offsetX: 0, offsetY: 0, scale: 1,
+    dragging: false, dragSX: 0, dragSY: 0,
+    nodes: [], devices: [], aisles: [], links: [],
+    nodeMap: {},
+    allNodeCodes: [], // for search
+    viewList: [], // [{viewCode, viewName, floor}]
+    currentView: null,
+    loaded: false,
+    // callback
+    targetItemId: null,
+    targetField: null,
+    hoveredNode: null,
+    // route analysis
+    adjacency: {}, // nodeCode -> [neighborCode]
+    aisleMap: {},  // aisleCode -> aisle entry node info
+    routeMode: false,
+    routeStart: null,
+    routeEnd: null,
+    routeStartResolved: null,
+    routeEndResolved: null,
+    routes: [], // array of paths, each path = [code, code, ...]
+    activeRouteIdx: -1,
+};
+
+function openMapPicker(itemId, field) {
+    MP.targetItemId = itemId;
+    MP.targetField = field;
+    MP.routeMode = false;
+    document.getElementById('mpRoutePanel').classList.remove('show');
+    document.getElementById('mapPickerOverlay').classList.add('show');
+    MP.canvas = document.getElementById('mpCanvas');
+    MP.ctx = MP.canvas.getContext('2d');
+    mpResize();
+    if (!MP.loaded) {
+        mpLoadViewList();
+    } else {
+        mpDraw();
+    }
+}
+
+// Open map in route-analysis mode for a queue item
+function openRouteAnalysis(itemId, startField, endField) {
+    const item = queue.find(q => q.id === itemId);
+    if (!item) return;
+    const start = (item.data[startField] || '').trim();
+    const end = (item.data[endField] || '').trim();
+    if (!start || !end) {
+        alert('请先填写起点和终点');
+        return;
+    }
+    MP.targetItemId = itemId;
+    MP.targetField = null;
+    MP.routeMode = true;
+    MP.routeStart = start;
+    MP.routeEnd = end;
+    MP.routes = [];
+    MP.activeRouteIdx = -1;
+    document.getElementById('mpRouteStart').textContent = start;
+    document.getElementById('mpRouteEnd').textContent = end;
+    document.getElementById('mpRoutePanel').classList.add('show');
+    document.getElementById('mpRouteList').innerHTML = '<div class="route-loading">⏳ 加载地图并分析路径...</div>';
+    document.getElementById('mpRouteStat').textContent = '';
+    document.getElementById('mapPickerOverlay').classList.add('show');
+    MP.canvas = document.getElementById('mpCanvas');
+    MP.ctx = MP.canvas.getContext('2d');
+    mpResize();
+    if (!MP.loaded) {
+        mpLoadViewList(); // will auto-compute routes since routeMode is true
+    } else {
+        mpComputeRoutes();
+    }
+}
+
+function closeMapPicker() {
+    document.getElementById('mapPickerOverlay').classList.remove('show');
+    document.getElementById('mpSearchResults').classList.remove('show');
+    MP.routeMode = false;
+}
+
+function mpResize() {
+    const body = MP.canvas.parentElement;
+    MP.W = body.offsetWidth || window.innerWidth;
+    MP.H = body.offsetHeight || (window.innerHeight - 52);
+    if (MP.W < 10) MP.W = window.innerWidth;
+    if (MP.H < 10) MP.H = window.innerHeight - 52;
+    MP.canvas.width = MP.W;
+    MP.canvas.height = MP.H;
+    if (MP.loaded) mpDraw();
+}
+
+async function mpLoadViewList() {
+    try {
+        const res = await fetch(currentServer + '/api/map/config/queryViewList');
+        const text = await res.text();
+        console.log('[MapPicker] viewList raw:', text.substring(0, 200));
+        let json = JSON.parse(text);
+        let data = json.data || json;
+        if (typeof data === 'string') data = JSON.parse(data);
+        if (data && data.data) data = data.data;
+        MP.viewList = Array.isArray(data) ? data : [];
+        console.log('[MapPicker] viewList parsed:', MP.viewList);
+    } catch(e) {
+        console.warn('[MapPicker] viewList failed:', e);
+        MP.viewList = [{ viewCode: '1', viewName: '1楼', floor: 1 }, { viewCode: '2', viewName: '2楼', floor: 2 }];
+    }
+    if (MP.viewList.length === 0) {
+        MP.viewList = [{ viewCode: '1', viewName: '1楼', floor: 1 }, { viewCode: '2', viewName: '2楼', floor: 2 }];
+    }
+    mpRenderFloorTabs();
+    // Load first view
+    await mpLoadView(MP.viewList[0].viewCode);
+}
+
+function mpRenderFloorTabs() {
+    const container = document.getElementById('mpFloorTabs');
+    container.innerHTML = MP.viewList.map(v =>
+        `<button class="map-picker-floor-tab ${v.viewCode === MP.currentView ? 'active' : ''}" onclick="mpLoadView('${v.viewCode}')">${v.viewName}</button>`
+    ).join('');
+}
+
+async function mpLoadView(viewCode) {
+    MP.currentView = viewCode;
+    mpRenderFloorTabs();
+    // Show loading
+    MP.ctx.clearRect(0, 0, MP.W, MP.H);
+    MP.ctx.fillStyle = '#e2e8f0';
+    MP.ctx.font = '14px sans-serif';
+    MP.ctx.textAlign = 'center';
+    MP.ctx.fillText('加载地图中...', MP.W / 2, MP.H / 2);
+
+    console.log('[MapPicker] loading view:', viewCode, 'canvas:', MP.W, 'x', MP.H);
+
+    try {
+        const res = await fetch(currentServer + '/api/map/config/queryViewDetail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ viewCode: viewCode })
+        });
+        const text = await res.text();
+        console.log('[MapPicker] viewDetail raw length:', text.length);
+        let json = JSON.parse(text);
+        let data = json.data || json;
+        if (typeof data === 'string') data = JSON.parse(data);
+        if (data && data.data) data = data.data;
+        console.log('[MapPicker] nodeList count:', (data.nodeList||[]).length, 'deviceList:', (data.deviceList||[]).length);
+        mpParseMapData(data);
+    } catch(e) {
+        console.error('[MapPicker] viewDetail failed:', e);
+        MP.ctx.clearRect(0, 0, MP.W, MP.H);
+        MP.ctx.fillStyle = '#ef4444';
+        MP.ctx.font = '14px sans-serif';
+        MP.ctx.textAlign = 'center';
+        MP.ctx.fillText('加载失败: ' + e.message, MP.W / 2, MP.H / 2);
+        return;
+    }
+    MP.loaded = true;
+    mpAutoFit();
+    mpDraw();
+    // If in route mode, recompute paths for the newly loaded floor
+    if (MP.routeMode) {
+        mpComputeRoutes();
+    }
+}
+
+function mpParseMapData(data) {
+    MP.nodes = []; MP.devices = []; MP.aisles = []; MP.links = [];
+    MP.nodeMap = {}; MP.allNodeCodes = [];
+
+    (data.nodeList || []).forEach(function(n) {
+        if (!n.nodeCode || n.layoutX == null) return;
+        var nd = { code: n.nodeCode, num: n.nodeNum, x: n.layoutX, y: n.layoutY, kind: n.kind || '', type: 'node' };
+        MP.nodes.push(nd);
+        MP.nodeMap[n.nodeCode] = nd;
+        MP.allNodeCodes.push({ code: n.nodeCode, num: n.nodeNum, x: n.layoutX, y: n.layoutY });
+    });
+    (data.deviceList || []).forEach(function(d) {
+        if (!d.deviceCode || d.layoutX == null) return;
+        var sub = (d.subDeviceType || '').toUpperCase();
+        var dt = (d.deviceType || '').toUpperCase();
+        var nd = { code: d.deviceCode, x: d.layoutX, y: d.layoutY, w: d.width || 56, h: d.height || 32, angle: d.angle || 0, sub: sub, dt: dt, name: d.deviceName || '', type: 'device', length: d.length || 0 };
+        MP.devices.push(nd);
+        MP.nodeMap[d.deviceCode] = nd;
+    });
+    (data.aisleList || []).forEach(function(a) {
+        if (a.layoutX == null) return;
+        MP.aisles.push({ x: a.layoutX, y: a.layoutY, w: a.width || 400, h: a.height || 40, angle: a.angle || 0, name: a.aisleName || '', aisleCode: a.aisleCode || '', nodeCode: a.nodeCode || '' });
+    });
+
+    // Map aisleCode (e.g. AL_L08) -> aisle entry node info, for storage-location resolution
+    MP.aisleMap = {};
+    MP.aisles.forEach(function(a) {
+        if (a.aisleCode) MP.aisleMap[a.aisleCode] = a;
+    });
+    (data.linkDataList || []).forEach(function(l) {
+        if (l.from && l.to && l.activate !== 'OFF') {
+            MP.links.push({ from: l.from, to: l.to, direction: l.direction || 'oneWay' });
+        }
+    });
+
+    // Build directed adjacency graph from links
+    MP.adjacency = {};
+    MP.links.forEach(function(l) {
+        if (!MP.adjacency[l.from]) MP.adjacency[l.from] = [];
+        MP.adjacency[l.from].push(l.to);
+        if (l.direction === 'twoWay') {
+            if (!MP.adjacency[l.to]) MP.adjacency[l.to] = [];
+            MP.adjacency[l.to].push(l.from);
+        }
+    });
+}
+
+function mpAutoFit() {
+    var all = MP.nodes.concat(MP.devices);
+    if (!all.length) return;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    all.forEach(function(n) { if (n.x < minX) minX = n.x; if (n.y < minY) minY = n.y; if (n.x > maxX) maxX = n.x; if (n.y > maxY) maxY = n.y; });
+    var mw = maxX - minX + 100, mh = maxY - minY + 100;
+    MP.scale = Math.min((MP.W - 40) / mw, (MP.H - 40) / mh, 3);
+    MP.offsetX = (MP.W - mw * MP.scale) / 2 - (minX - 50) * MP.scale;
+    MP.offsetY = (MP.H - mh * MP.scale) / 2 - (minY - 50) * MP.scale;
+}
+
+function mpDraw() {
+    var ctx = MP.ctx;
+    var W = MP.W, H = MP.H;
+
+    // ===== Background: deep tech gradient =====
+    var bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, '#0a0f1e');
+    bg.addColorStop(0.5, '#0d1326');
+    bg.addColorStop(1, '#0a0e1c');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // ===== Dot grid (world space, moves with pan/zoom) =====
+    mpDrawGrid(ctx);
+
+    ctx.save();
+    ctx.translate(MP.offsetX, MP.offsetY);
+    ctx.scale(MP.scale, MP.scale);
+
+    // ===== Aisle zones (subtle glowing regions) =====
+    MP.aisles.forEach(function(a) {
+        ctx.save(); ctx.translate(a.x, a.y);
+        if (a.angle) ctx.rotate(a.angle * Math.PI / 180);
+        mpRoundRect(ctx, -a.w / 2, -a.h / 2, a.w, a.h, 10);
+        ctx.fillStyle = 'rgba(56,189,248,0.035)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(56,189,248,0.18)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([8, 6]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (a.name && MP.scale > 0.25) {
+            ctx.font = '600 13px Inter, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = 'rgba(125,211,252,0.65)';
+            ctx.fillText(a.name, -a.w / 2 + 10, -a.h / 2 + 8);
+        }
+        ctx.restore();
+    });
+
+    // ===== Rails (sleek glowing tracks) =====
+    MP.devices.forEach(function(d) {
+        if (!/RAIL/.test(d.sub)) return;
+        ctx.save(); ctx.translate(d.x, d.y);
+        if (d.angle) ctx.rotate(d.angle * Math.PI / 180);
+        var len = d.length || d.w || 400;
+        ctx.strokeStyle = 'rgba(148,163,184,0.25)';
+        ctx.lineWidth = /MAGNETIC/.test(d.sub) ? 5 : 10;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke();
+        ctx.strokeStyle = 'rgba(148,163,184,0.5)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(-len / 2, 0); ctx.lineTo(len / 2, 0); ctx.stroke();
+        ctx.lineCap = 'butt';
+        ctx.restore();
+    });
+
+    // ===== Links (gradient flow lines with arrows) =====
+    MP.links.forEach(function(l) {
+        var fn = MP.nodeMap[l.from], tn = MP.nodeMap[l.to];
+        if (!fn || !tn) return;
+        var fx = fn.x, fy = fn.y, tx = tn.x, ty = tn.y;
+        var isActive = MP.hoveredNode && (MP.hoveredNode.code === l.from || MP.hoveredNode.code === l.to);
+
+        var grad = ctx.createLinearGradient(fx, fy, tx, ty);
+        if (isActive) {
+            grad.addColorStop(0, 'rgba(34,211,238,0.9)');
+            grad.addColorStop(1, 'rgba(129,140,248,0.9)');
+        } else {
+            grad.addColorStop(0, 'rgba(56,189,248,0.35)');
+            grad.addColorStop(1, 'rgba(99,102,241,0.35)');
+        }
+        ctx.beginPath();
+        ctx.moveTo(fx, fy);
+        ctx.lineTo(tx, ty);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = isActive ? 2.2 : 1.2;
+        ctx.stroke();
+
+        // forward arrow
+        mpDrawArrow(ctx, fx, fy, tx, ty, 0.58, isActive);
+        if (l.direction === 'twoWay') {
+            mpDrawArrow(ctx, tx, ty, fx, fy, 0.58, isActive);
+        }
+    });
+
+    // ===== Active route highlight (glowing path) =====
+    if (MP.routeMode && MP.activeRouteIdx >= 0 && MP.routes[MP.activeRouteIdx]) {
+        var path = MP.routes[MP.activeRouteIdx];
+        // glowing line through path
+        ctx.save();
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        // outer glow
+        ctx.beginPath();
+        var started = false;
+        for (var pi = 0; pi < path.length; pi++) {
+            var pn = MP.nodeMap[path[pi]];
+            if (!pn) continue;
+            if (!started) { ctx.moveTo(pn.x, pn.y); started = true; }
+            else ctx.lineTo(pn.x, pn.y);
+        }
+        ctx.strokeStyle = 'rgba(250,204,21,0.25)';
+        ctx.lineWidth = 9;
+        ctx.stroke();
+        // inner bright line
+        ctx.strokeStyle = 'rgba(250,204,21,0.95)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        // directional arrows along path
+        for (var pi = 0; pi < path.length - 1; pi++) {
+            var a = MP.nodeMap[path[pi]], b = MP.nodeMap[path[pi + 1]];
+            if (!a || !b) continue;
+            mpDrawArrow(ctx, a.x, a.y, b.x, b.y, 0.6, true, '#facc15');
+        }
+        ctx.restore();
+    }
+
+    // ===== Devices (glass cards with glow) =====
+    MP.devices.forEach(function(d) {
+        if (/RAIL/.test(d.sub)) return;
+        var isHovered = MP.hoveredNode && MP.hoveredNode.code === d.code;
+        var isConveyor = /CONVEYOR/.test(d.dt);
+        ctx.save(); ctx.translate(d.x, d.y);
+        if (d.angle) ctx.rotate(d.angle * Math.PI / 180);
+        var w = d.w || 56, h = d.h || 32;
+
+        // glow
+        if (isHovered) {
+            ctx.shadowColor = 'rgba(34,211,238,0.6)';
+            ctx.shadowBlur = 16;
+        }
+        // body gradient
+        var dg = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+        if (isHovered) {
+            dg.addColorStop(0, 'rgba(34,211,238,0.35)');
+            dg.addColorStop(1, 'rgba(14,165,233,0.2)');
+        } else if (isConveyor) {
+            dg.addColorStop(0, 'rgba(45,212,191,0.18)');
+            dg.addColorStop(1, 'rgba(20,184,166,0.1)');
+        } else {
+            dg.addColorStop(0, 'rgba(99,102,241,0.18)');
+            dg.addColorStop(1, 'rgba(79,70,229,0.1)');
+        }
+        mpRoundRect(ctx, -w / 2, -h / 2, w, h, 4);
+        ctx.fillStyle = dg;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = isHovered ? 'rgba(34,211,238,0.9)' : (isConveyor ? 'rgba(45,212,191,0.5)' : 'rgba(129,140,248,0.45)');
+        ctx.lineWidth = isHovered ? 1.8 : 1;
+        mpRoundRect(ctx, -w / 2, -h / 2, w, h, 4);
+        ctx.stroke();
+
+        // conveyor rollers
+        if (isConveyor && w > 30) {
+            ctx.strokeStyle = 'rgba(45,212,191,0.3)';
+            ctx.lineWidth = 0.7;
+            var step = Math.max(9, w / 6);
+            for (var lx = -w / 2 + step; lx < w / 2 - 2; lx += step) {
+                ctx.beginPath();
+                ctx.moveTo(lx, -h / 2 + 3);
+                ctx.lineTo(lx, h / 2 - 3);
+                ctx.stroke();
+            }
+        }
+
+        // device name label (inside the card)
+        if (MP.scale > 0.55) {
+            var dlabel = d.name || d.code || '';
+            // strip common prefixes for compactness
+            dlabel = dlabel.replace(/^(DV_|EQ_)/, '');
+            if (dlabel) {
+                ctx.font = '600 ' + (MP.scale > 1.2 ? 8 : 7) + 'px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = isHovered ? '#e0f2fe' : 'rgba(186,230,253,0.75)';
+                // truncate long names to fit width
+                var maxChars = Math.max(4, Math.floor(w / 5));
+                if (dlabel.length > maxChars) dlabel = dlabel.slice(0, maxChars - 1) + '…';
+                ctx.fillText(dlabel, 0, 0);
+            }
+        }
+        ctx.restore();
+    });
+
+    // ===== Nodes (glowing dots) =====
+    MP.nodes.forEach(function(n) {
+        if (MP.hoveredNode && MP.hoveredNode.code === n.code) return; // draw hovered last
+        var r = 4.5;
+        // outer halo
+        var halo = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, r * 2.6);
+        halo.addColorStop(0, 'rgba(56,189,248,0.5)');
+        halo.addColorStop(1, 'rgba(56,189,248,0)');
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(n.x, n.y, r * 2.6, 0, Math.PI * 2); ctx.fill();
+        // core
+        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#67e8f9';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // label
+        if (MP.scale > 0.7) {
+            ctx.font = '600 8px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = 'rgba(186,230,253,0.7)';
+            ctx.fillText(n.code.replace('ND_', ''), n.x, n.y + r + 3);
+        }
+    });
+
+    // ===== Hovered node (on top, with pulsing ring + label) =====
+    if (MP.hoveredNode && MP.hoveredNode.type !== 'device') {
+        var n = MP.hoveredNode;
+        var r = 6;
+        // big halo
+        var halo = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 22);
+        halo.addColorStop(0, 'rgba(34,211,238,0.55)');
+        halo.addColorStop(1, 'rgba(34,211,238,0)');
+        ctx.fillStyle = halo;
+        ctx.beginPath(); ctx.arc(n.x, n.y, 22, 0, Math.PI * 2); ctx.fill();
+        // ring
+        ctx.beginPath(); ctx.arc(n.x, n.y, 12, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(34,211,238,0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        // core
+        ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#22d3ee';
+        ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+        // label badge
+        ctx.font = '700 11px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        var tw = ctx.measureText(n.code).width;
+        var lx = n.x, ly = n.y - 22;
+        mpRoundRect(ctx, lx - tw / 2 - 7, ly - 9, tw + 14, 18, 5);
+        var lg = ctx.createLinearGradient(lx - tw / 2, ly, lx + tw / 2, ly);
+        lg.addColorStop(0, '#0891b2'); lg.addColorStop(1, '#4f46e5');
+        ctx.fillStyle = lg;
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(n.code, lx, ly);
+    }
+
+    // ===== Route start/end markers (drawn on top) =====
+    if (MP.routeMode) {
+        var startNode = MP.routeStartResolved ? MP.routeStartResolved.graphNode : MP.routeStart;
+        var endNode = MP.routeEndResolved ? MP.routeEndResolved.graphNode : MP.routeEnd;
+        var startIsStorage = MP.routeStartResolved && MP.routeStartResolved.isStorage;
+        var endIsStorage = MP.routeEndResolved && MP.routeEndResolved.isStorage;
+        if (startNode) mpDrawEndpoint(ctx, startNode, '#10b981', '起', startIsStorage ? ('库位@' + (MP.routeStartResolved.info ? MP.routeStartResolved.info.aisleCode : '')) : '起点 ' + startNode);
+        if (endNode) mpDrawEndpoint(ctx, endNode, '#f43f5e', '终', endIsStorage ? ('库位@' + (MP.routeEndResolved.info ? MP.routeEndResolved.info.aisleCode : '')) : '终点 ' + endNode);
+    }
+
+    ctx.restore();
+}
+
+// Draw a start/end endpoint marker
+function mpDrawEndpoint(ctx, code, color, badge, label) {
+    var n = MP.nodeMap[code];
+    if (!n) return;
+    ctx.save();
+    var rgba = (color === '#10b981') ? 'rgba(16,185,129,' : 'rgba(244,63,94,';
+    // pulse halo
+    var halo = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 26);
+    halo.addColorStop(0, rgba + '0.5)');
+    halo.addColorStop(1, rgba + '0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(n.x, n.y, 26, 0, Math.PI * 2); ctx.fill();
+    // pin circle
+    ctx.beginPath(); ctx.arc(n.x, n.y, 9, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    // badge text
+    ctx.font = '700 10px Inter, sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(badge, n.x, n.y);
+    // label below
+    ctx.font = '700 11px Inter, sans-serif';
+    var t = label;
+    var tw = ctx.measureText(t).width;
+    var ly = n.y + 20;
+    mpRoundRect(ctx, n.x - tw / 2 - 6, ly - 9, tw + 12, 18, 5);
+    ctx.fillStyle = rgba + '0.92)';
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(t, n.x, ly);
+    ctx.restore();
+}
+
+// Dotted grid in world space
+function mpDrawGrid(ctx) {
+    var gap = 32; // world units between dots
+    var s = MP.scale;
+    // adapt density when zoomed out
+    while (gap * s < 18) gap *= 2;
+    var startX = -MP.offsetX / s;
+    var startY = -MP.offsetY / s;
+    var endX = (MP.W - MP.offsetX) / s;
+    var endY = (MP.H - MP.offsetY) / s;
+    var x0 = Math.floor(startX / gap) * gap;
+    var y0 = Math.floor(startY / gap) * gap;
+    ctx.save();
+    ctx.translate(MP.offsetX, MP.offsetY);
+    ctx.scale(s, s);
+    ctx.fillStyle = 'rgba(99,102,241,0.10)';
+    var dot = 1 / s;
+    for (var x = x0; x < endX; x += gap) {
+        for (var y = y0; y < endY; y += gap) {
+            ctx.beginPath();
+            ctx.arc(x, y, dot, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
+// Helper: rounded rect path
+function mpRoundRect(ctx, x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
+// Helper: draw arrow along line at fraction t
+function mpDrawArrow(ctx, fx, fy, tx, ty, t, isActive, color) {
+    var ax = fx + (tx - fx) * t, ay = fy + (ty - fy) * t;
+    var ang = Math.atan2(ty - fy, tx - fx);
+    var sz = isActive ? 6 : 4.5;
+    ctx.save();
+    ctx.translate(ax, ay);
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.moveTo(sz, 0);
+    ctx.lineTo(-sz * 0.7, -sz * 0.6);
+    ctx.lineTo(-sz * 0.7, sz * 0.6);
+    ctx.closePath();
+    ctx.fillStyle = color || (isActive ? 'rgba(34,211,238,0.95)' : 'rgba(99,160,220,0.7)');
+    ctx.fill();
+    ctx.restore();
+}
+
+// Mouse interactions
+function mpInitEvents() {
+    var canvas = document.getElementById('mpCanvas');
+
+    canvas.addEventListener('mousedown', function(e) {
+        MP.dragging = true;
+        MP.dragSX = e.clientX - MP.offsetX;
+        MP.dragSY = e.clientY - MP.offsetY;
+        MP._mouseDownX = e.clientX;
+        MP._mouseDownY = e.clientY;
+        MP._didDrag = false;
+    });
+
+    canvas.addEventListener('mousemove', function(e) {
+        if (MP.dragging) {
+            var dx = e.clientX - MP._mouseDownX;
+            var dy = e.clientY - MP._mouseDownY;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) MP._didDrag = true;
+            MP.offsetX = e.clientX - MP.dragSX;
+            MP.offsetY = e.clientY - MP.dragSY;
+            mpDraw();
+            return;
+        }
+        // Hit test for hover
+        var rect = canvas.getBoundingClientRect();
+        var mx = e.clientX - rect.left;
+        var my = e.clientY - rect.top;
+        var wx = (mx - MP.offsetX) / MP.scale;
+        var wy = (my - MP.offsetY) / MP.scale;
+
+        var hit = null;
+        var hitDist = Infinity;
+        var nodeRadius = Math.max(6, Math.min(12, 8 / MP.scale * 1.5));
+        var threshold = (nodeRadius + 6) / MP.scale;
+
+        for (var i = 0; i < MP.nodes.length; i++) {
+            var n = MP.nodes[i];
+            var dx = wx - n.x, dy = wy - n.y;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < threshold && dist < hitDist) {
+                hit = n; hitDist = dist;
+            }
+        }
+
+        if (hit !== MP.hoveredNode) {
+            MP.hoveredNode = hit;
+            mpDraw();
+            var tooltip = document.getElementById('mpTooltip');
+            if (hit) {
+                tooltip.style.display = 'block';
+                tooltip.style.left = (mx + 14) + 'px';
+                tooltip.style.top = (my - 10) + 'px';
+                tooltip.textContent = hit.code + (hit.num ? ' (电气:' + hit.num + ')' : '');
+            } else {
+                tooltip.style.display = 'none';
+            }
+        } else if (hit) {
+            var tooltip = document.getElementById('mpTooltip');
+            tooltip.style.left = (mx + 14) + 'px';
+            tooltip.style.top = (my - 10) + 'px';
+        }
+    });
+
+    canvas.addEventListener('mouseup', function(e) {
+        MP.dragging = false;
+    });
+
+    canvas.addEventListener('click', function(e) {
+        if (MP._didDrag) return; // ignore click after drag
+        if (MP.hoveredNode) {
+            mpSelectNode(MP.hoveredNode.code);
+        }
+    });
+
+    canvas.addEventListener('mouseleave', function() {
+        MP.dragging = false;
+        MP.hoveredNode = null;
+        document.getElementById('mpTooltip').style.display = 'none';
+        mpDraw();
+    });
+
+    canvas.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        var rect = canvas.getBoundingClientRect();
+        var mx = e.clientX - rect.left;
+        var my = e.clientY - rect.top;
+        var wx = (mx - MP.offsetX) / MP.scale;
+        var wy = (my - MP.offsetY) / MP.scale;
+        MP.scale *= e.deltaY < 0 ? 1.15 : 0.87;
+        MP.scale = Math.max(0.02, Math.min(MP.scale, 30));
+        MP.offsetX = mx - wx * MP.scale;
+        MP.offsetY = my - wy * MP.scale;
+        mpDraw();
+    }, { passive: false });
+
+    // Resize observer
+    new ResizeObserver(function() { mpResize(); }).observe(canvas.parentElement);
+}
+
+function mpSelectNode(code) {
+    // In route mode, clicking a node doesn't fill fields
+    if (MP.routeMode) return;
+    // Update the queue item field
+    if (MP.targetItemId && MP.targetField) {
+        updateQField(MP.targetItemId, MP.targetField, code);
+        renderQueue();
+    }
+    // Show confirmation
+    var sel = document.getElementById('mpSelected');
+    sel.style.display = 'block';
+    sel.textContent = '✅ 已选择: ' + code;
+    setTimeout(function() {
+        sel.style.display = 'none';
+        closeMapPicker();
+    }, 800);
+}
+
+// ===== Storage location helpers =====
+// Parse a storage location code like:
+//   SL_-WH_001-SA_HSMD_1-AL_L08-L-02-01-0003-03
+// Returns { aisleCode, aisleNo, side, depth, row, col, layer } or null
+function mpParseStorageCode(code) {
+    if (!code || code.indexOf('SL_') !== 0) return null;
+    var m = code.match(/AL_L(\d+)-([LR])-(\d+)-(\d+)-(\d+)-(\d+)/);
+    if (!m) {
+        // still try to grab aisle
+        var am = code.match(/AL_L\d+/);
+        return am ? { aisleCode: am[0], aisleNo: null, side: '', depth: '', row: '', col: '', layer: '' } : null;
+    }
+    return {
+        aisleCode: 'AL_L' + m[1],
+        aisleNo: parseInt(m[1], 10),
+        side: m[2],
+        depth: m[3],
+        row: m[4],
+        col: m[5],
+        layer: m[6]
+    };
+}
+
+function mpIsStorage(code) {
+    return code && code.indexOf('SL_') === 0;
+}
+
+// Resolve any code to a graph node code usable for path search.
+// For storage codes, return the aisle entry node; for regular nodes, return as-is.
+// Returns { graphNode, isStorage, aisle } or null if cannot resolve.
+function mpResolveToGraphNode(code) {
+    if (mpIsStorage(code)) {
+        var info = mpParseStorageCode(code);
+        if (!info) return null;
+        var aisle = MP.aisleMap[info.aisleCode];
+        if (!aisle || !aisle.nodeCode) return { graphNode: null, isStorage: true, aisle: aisle || null, info: info };
+        return { graphNode: aisle.nodeCode, isStorage: true, aisle: aisle, info: info };
+    }
+    // regular node
+    if (MP.nodeMap[code] || MP.adjacency[code]) {
+        return { graphNode: code, isStorage: false };
+    }
+    return null;
+}
+
+// ===== Route analysis: find all paths from start to end =====
+function mpComputeRoutes() {
+    var rawStart = MP.routeStart, rawEnd = MP.routeEnd;
+    var listEl = document.getElementById('mpRouteList');
+    var statEl = document.getElementById('mpRouteStat');
+
+    // Resolve start/end (storage codes -> aisle entry node)
+    var rs = mpResolveToGraphNode(rawStart);
+    var re = mpResolveToGraphNode(rawEnd);
+
+    // Save resolution for rendering
+    MP.routeStartResolved = rs;
+    MP.routeEndResolved = re;
+
+    if (!rs) {
+        listEl.innerHTML = '<div class="route-empty">⚠️ 起点 ' + rawStart + ' 不在当前楼层地图中<br><span style="font-size:10px;">可切换楼层重试</span></div>';
+        statEl.textContent = '';
+        mpDraw();
+        return;
+    }
+    if (!re) {
+        listEl.innerHTML = '<div class="route-empty">⚠️ 终点 ' + rawEnd + ' 不在当前楼层地图中<br><span style="font-size:10px;">可切换楼层重试</span></div>';
+        statEl.textContent = '';
+        mpDraw();
+        return;
+    }
+    if (rs.isStorage && !rs.graphNode) {
+        listEl.innerHTML = '<div class="route-empty">⚠️ 起点库位所属巷道 ' + (rs.info ? rs.info.aisleCode : '') + ' 未找到入口节点</div>';
+        statEl.textContent = '';
+        mpDraw();
+        return;
+    }
+    if (re.isStorage && !re.graphNode) {
+        listEl.innerHTML = '<div class="route-empty">⚠️ 终点库位所属巷道 ' + (re.info ? re.info.aisleCode : '') + ' 未找到入口节点</div>';
+        statEl.textContent = '';
+        mpDraw();
+        return;
+    }
+
+    var start = rs.graphNode, end = re.graphNode;
+
+    // Special case: same aisle (storage to storage in same aisle) => no graph hops needed
+    if (start === end) {
+        MP.routes = [[start]];
+        MP.activeRouteIdx = 0;
+        mpRenderRouteList();
+        var s0 = MP.nodeMap[start];
+        if (s0) { MP.scale = 2; MP.offsetX = MP.W / 2 - s0.x * MP.scale; MP.offsetY = MP.H / 2 - s0.y * MP.scale; }
+        mpDraw();
+        return;
+    }
+
+    var MAX_PATHS = 40;
+    var MAX_DEPTH = 60;
+    var paths = [];
+    var visited = {};
+
+    function dfs(node, path) {
+        if (paths.length >= MAX_PATHS) return;
+        if (path.length > MAX_DEPTH) return;
+        if (node === end) {
+            paths.push(path.slice());
+            return;
+        }
+        var neighbors = MP.adjacency[node] || [];
+        for (var i = 0; i < neighbors.length; i++) {
+            var nb = neighbors[i];
+            if (visited[nb]) continue;
+            visited[nb] = true;
+            path.push(nb);
+            dfs(nb, path);
+            path.pop();
+            visited[nb] = false;
+        }
+    }
+    visited[start] = true;
+    dfs(start, [start]);
+
+    // Sort by length (shortest first)
+    paths.sort(function(a, b) { return a.length - b.length; });
+    MP.routes = paths;
+    MP.activeRouteIdx = paths.length > 0 ? 0 : -1;
+
+    mpRenderRouteList();
+    if (paths.length > 0) {
+        mpFitToRoute(paths[0]);
+    } else {
+        var s = MP.nodeMap[start];
+        if (s) { MP.scale = 1.5; MP.offsetX = MP.W / 2 - s.x * MP.scale; MP.offsetY = MP.H / 2 - s.y * MP.scale; }
+        mpDraw();
+    }
+}
+
+function mpRenderRouteList() {
+    var listEl = document.getElementById('mpRouteList');
+    var statEl = document.getElementById('mpRouteStat');
+    var n = MP.routes.length;
+
+    if (n === 0) {
+        statEl.innerHTML = '未找到可达路径';
+        listEl.innerHTML = '<div class="route-empty">🚫 根据连线无法从起点到达终点<br><span style="font-size:10px;">可能方向受限或不连通</span></div>';
+        mpDraw();
+        return;
+    }
+    var capped = n >= 40 ? '40+' : n;
+    var storageNote = '';
+    if ((MP.routeStartResolved && MP.routeStartResolved.isStorage) || (MP.routeEndResolved && MP.routeEndResolved.isStorage)) {
+        storageNote = '<br><span style="font-size:10px;color:rgba(250,204,21,0.8);">⚑ 库位已映射到所属巷道入口节点</span>';
+    }
+    statEl.innerHTML = '共找到 <b>' + capped + '</b> 条路径（按最短优先）' + storageNote;
+
+    listEl.innerHTML = MP.routes.map(function(p, idx) {
+        var hops = p.length - 1;
+        // Prepend/append storage codes to display the full logical path
+        var displaySeq = p.slice();
+        if (MP.routeStartResolved && MP.routeStartResolved.isStorage) {
+            displaySeq.unshift('▦' + MP.routeStart);
+        }
+        if (MP.routeEndResolved && MP.routeEndResolved.isStorage) {
+            displaySeq.push('▦' + MP.routeEnd);
+        }
+        var pathStr = displaySeq.map(function(c) {
+            if (c.charAt(0) === '▦') return '<span style="color:#fbbf24;">库位</span>';
+            return c.replace('ND_', '');
+        }).join(' → ');
+        return '<div class="route-item ' + (idx === MP.activeRouteIdx ? 'active' : '') + '" onclick="mpSelectRoute(' + idx + ')">' +
+            '<div class="route-item-head"><span class="route-item-name">路径 ' + (idx + 1) + '</span><span class="route-item-hops">' + hops + ' 跳</span></div>' +
+            '<div class="route-item-path">' + pathStr + '</div>' +
+            '</div>';
+    }).join('');
+    mpDraw();
+}
+
+function mpSelectRoute(idx) {
+    MP.activeRouteIdx = idx;
+    mpRenderRouteList();
+    if (MP.routes[idx]) mpFitToRoute(MP.routes[idx]);
+}
+
+function mpFitToRoute(path) {
+    var pts = [];
+    path.forEach(function(c) { if (MP.nodeMap[c]) pts.push(MP.nodeMap[c]); });
+    if (pts.length === 0) { mpDraw(); return; }
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    pts.forEach(function(n) { if (n.x < minX) minX = n.x; if (n.y < minY) minY = n.y; if (n.x > maxX) maxX = n.x; if (n.y > maxY) maxY = n.y; });
+    var pad = 120;
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+    var mw = maxX - minX, mh = maxY - minY;
+    // leave room for the route panel on the left
+    var availW = MP.W - 340;
+    MP.scale = Math.min(availW / mw, MP.H / mh, 4);
+    MP.offsetX = 340 + (availW - mw * MP.scale) / 2 - minX * MP.scale;
+    MP.offsetY = (MP.H - mh * MP.scale) / 2 - minY * MP.scale;
+    mpDraw();
+}
+
+// Search
+function mpOnSearch(val) {
+    var container = document.getElementById('mpSearchResults');
+    val = (val || '').trim().toUpperCase();
+    if (!val || val.length < 1) {
+        container.classList.remove('show');
+        return;
+    }
+    var results = MP.allNodeCodes.filter(function(n) {
+        return n.code.toUpperCase().indexOf(val) >= 0 || (n.num && String(n.num).indexOf(val) >= 0);
+    }).slice(0, 20);
+
+    if (results.length === 0) {
+        container.classList.remove('show');
+        return;
+    }
+    container.innerHTML = results.map(function(r) {
+        return '<div class="map-picker-search-item" onclick="mpLocateNode(\'' + r.code + '\')">' +
+            '<span class="sp-code">' + r.code + '</span>' +
+            (r.num ? '<span class="sp-num">电气:' + r.num + '</span>' : '') +
+            '</div>';
+    }).join('');
+    container.classList.add('show');
+}
+
+function mpLocateNode(code) {
+    document.getElementById('mpSearchResults').classList.remove('show');
+    document.getElementById('mpSearchInput').value = code;
+    var node = MP.nodeMap[code];
+    if (!node) return;
+    // Center on node and zoom in
+    MP.scale = 2.5;
+    MP.offsetX = MP.W / 2 - node.x * MP.scale;
+    MP.offsetY = MP.H / 2 - node.y * MP.scale;
+    MP.hoveredNode = node;
+    mpDraw();
+}
+
+// Close search results when clicking elsewhere
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.map-picker-search') && !e.target.closest('.map-picker-search-results')) {
+        document.getElementById('mpSearchResults').classList.remove('show');
+    }
+});
+
+// Init events once DOM ready
+mpInitEvents();
+</script>
+
+<!-- Coverage Route Generator Modal -->
+<div class="json-modal-overlay" id="coverageModal" onclick="if(event.target===this)closeCoverageModal()">
+    <div class="json-modal" style="width:580px;">
+        <div class="json-modal-head">
+            <div class="json-modal-title">🛣️ 最少任务全覆盖测试</div>
+            <div class="json-modal-actions">
+                <button class="json-modal-btn close" onclick="closeCoverageModal()">✕ 关闭</button>
+            </div>
+        </div>
+        <div class="json-modal-body" style="color:#e2e8f0;">
+            <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <label style="font-size:13px;color:#cbd5e1;">楼层：</label>
+                    <select id="covFloorSel" style="height:32px;padding:0 10px;font-size:13px;border-radius:8px;background:#0f1629;color:#e2e8f0;border:1px solid rgba(99,102,241,0.3);outline:none;"></select>
+                </div>
+                <div style="font-size:12px;color:#94a3b8;line-height:1.7;background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.15);border-radius:10px;padding:12px;">
+                    📌 系统按<b style="color:#67e8f9;">最短路径</b>规划路线。本工具模拟最短路，用<b style="color:#67e8f9;">尽量少的点到点任务</b>，让这些任务的实际行走路线<b style="color:#67e8f9;">合起来覆盖所有线路（边）</b>。<br>
+                    每个任务只给起点和终点，不指定途径点；零碎未覆盖的边会用相邻直连任务兜底，确保 100% 覆盖。
+                </div>
+                <button class="btn-send-all" onclick="runCoverageGen()" id="covRunBtn" style="height:40px;">⚙️ 分析并生成最少任务</button>
+                <div id="covResult" style="font-size:13px;color:#cbd5e1;line-height:1.8;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ============ Coverage Route Generator ============
+let _covData = null; // { circuit: [...], floorList: [...] }
+
+async function openCoverageGen() {
+    document.getElementById('coverageModal').classList.add('show');
+    document.getElementById('covResult').innerHTML = '';
+    // load floor list
+    const sel = document.getElementById('covFloorSel');
+    sel.innerHTML = '<option>加载中...</option>';
+    try {
+        const res = await fetch(currentServer + '/api/map/config/queryViewList');
+        const json = await res.json();
+        let list = json.data || [];
+        sel.innerHTML = list.map(v => `<option value="${v.viewCode}">${v.viewName}</option>`).join('');
+    } catch (e) {
+        sel.innerHTML = '<option value="1">1楼</option><option value="2">2楼</option>';
+    }
+}
+
+function closeCoverageModal() {
+    document.getElementById('coverageModal').classList.remove('show');
+}
+
+async function runCoverageGen() {
+    const btn = document.getElementById('covRunBtn');
+    const resEl = document.getElementById('covResult');
+    const viewCode = document.getElementById('covFloorSel').value;
+    btn.disabled = true; btn.textContent = '⏳ 分析中...';
+    resEl.innerHTML = '';
+    try {
+        const res = await fetch(currentServer + '/api/map/config/queryViewDetail', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ viewCode })
+        });
+        const text = await res.text();
+        let json = JSON.parse(text);
+        let data = json.data || json;
+        if (typeof data === 'string') data = JSON.parse(data);
+        if (data && data.data) data = data.data;
+
+        // allow UI to paint the loading state before heavy compute
+        await new Promise(r => setTimeout(r, 30));
+        const result = computeMinCoverage(data);
+        _covData = result;
+        if (!result.tasks || result.tasks.length === 0) {
+            resEl.innerHTML = '<span style="color:#f87171;">⚠️ 该楼层没有可用连线</span>';
+        } else {
+            resEl.innerHTML =
+                `<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:12px;">` +
+                `✅ 分析完成（基于最短路模拟）<br>` +
+                `总线路：<b style="color:#67e8f9;">${result.totalEdges}</b> 条 · 覆盖：<b style="color:#67e8f9;">${result.totalEdges - result.miss}</b> 条` +
+                (result.miss > 0 ? ` · <span style="color:#fbbf24;">遗漏 ${result.miss}</span>` : '') + `<br>` +
+                `最少任务数：<b style="color:#34d399;font-size:15px;">${result.tasks.length}</b> 个` +
+                (result.fallback > 0 ? `（含 ${result.fallback} 个直连兜底）` : '') +
+                `</div>` +
+                `<div style="margin-top:10px;max-height:220px;overflow-y:auto;font-family:var(--font-mono);font-size:11px;background:#0f1629;border-radius:8px;padding:10px;">` +
+                result.tasks.map((t, i) => `<div style="padding:2px 0;color:#cbd5e1;">${String(i + 1).padStart(2, '0')}. <span style="color:#34d399;">${t.start}</span> → <span style="color:#f87171;">${t.end}</span> <span style="color:#64748b;">(${t.hops}段)</span></div>`).join('') +
+                `</div>` +
+                `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">` +
+                `<button class="btn-sm" onclick="addCoverageToQueue()" style="background:var(--gradient-btn);color:#fff;border:none;">➕ 生成 ${result.tasks.length} 个点到点任务入队</button>` +
+                `<button class="btn-sm" onclick="copyCoverageSeq()">📋 复制任务列表</button>` +
+                `</div>`;
+        }
+    } catch (e) {
+        resEl.innerHTML = '<span style="color:#f87171;">❌ 获取地图失败: ' + e.message + '</span>';
+    } finally {
+        btn.disabled = false; btn.textContent = '⚙️ 分析并生成最少任务';
+    }
+}
+
+function addCoverageToQueue() {
+    if (!_covData || !_covData.tasks) return;
+    let added = 0;
+    _covData.tasks.forEach((t, i) => {
+        const data = { ...{ taskSource: 'WMS', bizType: '默认', bizPriority: 0, independentRun: '', remark: '覆盖测试' },
+            type: 'single', tplName: '覆盖#' + (i + 1) + '(' + t.hops + '段)', taskType: 'N2N', startNode: t.start, endNode: t.end, funcs: [] };
+        queue.push({ id: genId(), tpl: 'n2n', data });
+        added++;
+    });
+    renderQueue();
+    closeCoverageModal();
+    alert('已生成 ' + added + ' 个点到点任务入队');
+}
+
+function copyCoverageSeq() {
+    if (!_covData || !_covData.tasks) return;
+    const txt = _covData.tasks.map((t, i) => `${i + 1}. ${t.start} -> ${t.end} (${t.hops}段) [${(t.route || []).join(' > ')}]`).join('\n');
+    navigator.clipboard.writeText(txt).then(() => alert('已复制任务列表'));
+}
+
+// Core algorithm: system uses SHORTEST PATH. Pick the fewest (start,end) tasks
+// so the union of their shortest paths covers all edges. Greedy set-cover +
+// guaranteed fallback with adjacent direct-edge tasks.
+function computeMinCoverage(data) {
+    const links = data.linkDataList || [];
+    const edges = [];
+    const eset = new Set();
+    const addE = (f, t) => { const k = f + '\u0001' + t; if (!eset.has(k)) { eset.add(k); edges.push([f, t]); } };
+    links.forEach(l => {
+        if (!l.from || !l.to || l.activate === 'OFF') return;
+        addE(l.from, l.to);
+        if ((l.direction || 'oneWay') === 'twoWay') addE(l.to, l.from);
+    });
+
+    const outAdj = {};
+    const nodes = [];
+    const nodeSet = new Set();
+    edges.forEach(([f, t]) => {
+        (outAdj[f] = outAdj[f] || []).push(t);
+        if (!nodeSet.has(f)) { nodeSet.add(f); nodes.push(f); }
+        if (!nodeSet.has(t)) { nodeSet.add(t); nodes.push(t); }
+    });
+
+    // BFS shortest-path predecessor tree from each node (unit weights = hops)
+    const pred = {}, dist = {};
+    nodes.forEach(src => {
+        const pv = {}, dv = {};
+        pv[src] = null; dv[src] = 0;
+        const q = [src]; let qi = 0;
+        while (qi < q.length) {
+            const u = q[qi++];
+            const nb = outAdj[u] || [];
+            for (let i = 0; i < nb.length; i++) {
+                const w = nb[i];
+                if (dv[w] === undefined) { dv[w] = dv[u] + 1; pv[w] = u; q.push(w); }
+            }
+        }
+        pred[src] = pv; dist[src] = dv;
+    });
+
+    function pathEdges(s, e) {
+        const pv = pred[s];
+        if (pv[e] === undefined) return null;
+        const seq = [e]; let c = e;
+        while (pv[c] !== null) { c = pv[c]; seq.push(c); }
+        seq.reverse();
+        const ek = [];
+        for (let i = 0; i < seq.length - 1; i++) ek.push(seq[i] + '\u0001' + seq[i + 1]);
+        return { seq, ek };
+    }
+
+    // Build candidate pairs (reachable, non-empty path)
+    const candidates = [];
+    for (let a = 0; a < nodes.length; a++) {
+        const s = nodes[a];
+        const dv = dist[s];
+        for (let b = 0; b < nodes.length; b++) {
+            if (a === b) continue;
+            const e = nodes[b];
+            if (dv[e] === undefined) continue;
+            const pe = pathEdges(s, e);
+            if (!pe || pe.ek.length === 0) continue;
+            candidates.push({ s, e, ek: pe.ek, seq: pe.seq });
+        }
+    }
+    candidates.sort((x, y) => y.ek.length - x.ek.length);
+
+    // Greedy set cover
+    const uncovered = new Set(eset);
+    const chosen = [];
+    while (uncovered.size > 0) {
+        let best = null, bestGain = 0;
+        for (let i = 0; i < candidates.length; i++) {
+            const c = candidates[i];
+            if (c.ek.length <= bestGain) break; // sorted desc: can't improve
+            let gain = 0;
+            for (let j = 0; j < c.ek.length; j++) if (uncovered.has(c.ek[j])) gain++;
+            if (gain > bestGain) { bestGain = gain; best = c; }
+        }
+        if (!best || bestGain === 0) break;
+        chosen.push(best);
+        for (let j = 0; j < best.ek.length; j++) uncovered.delete(best.ek[j]);
+    }
+
+    // Fallback: remaining edges -> direct adjacent tasks (shortest path = the edge itself)
+    const fallback = [];
+    uncovered.forEach(k => {
+        const parts = k.split('\u0001');
+        fallback.push({ s: parts[0], e: parts[1], ek: [k], seq: [parts[0], parts[1]] });
+    });
+
+    const all = chosen.concat(fallback);
+    const cov = new Set();
+    all.forEach(c => c.ek.forEach(k => cov.add(k)));
+    let miss = 0;
+    edges.forEach(([f, t]) => { if (!cov.has(f + '\u0001' + t)) miss++; });
+
+    all.sort((a, b) => b.ek.length - a.ek.length);
+    return {
+        totalEdges: edges.length,
+        fallback: fallback.length,
+        miss,
+        tasks: all.map(c => ({ start: c.s, end: c.e, hops: c.ek.length, route: c.seq }))
+    };
+}
 </script>
 </body>
 </html>
