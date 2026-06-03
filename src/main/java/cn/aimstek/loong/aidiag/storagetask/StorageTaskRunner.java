@@ -272,7 +272,7 @@ public class StorageTaskRunner {
     }
 
     /**
-     * 修复报警数据: 对 recentTasks 和 currentTask 中的报警进行去重.
+     * 修复报警数据: 对 recentTasks、currentTask 和 CSV 历史中的报警进行去重.
      * 相同的 alarmMessage 只保留一条, alarmCount 修正为去重后的条数.
      * 用于修复旧逻辑导致的重复报警记录.
      */
@@ -291,7 +291,113 @@ public class StorageTaskRunner {
         if (fixed > 0) {
             saveState();
         }
-        return fixed;
+        // 修复 CSV 文件
+        int csvFixed = fixCsvAlarmDedup();
+        return fixed + csvFixed;
+    }
+
+    /**
+     * 修复 CSV 历史文件中的报警去重: 逐行读取, 对 alarmMessages 列去重,
+     * 更新 alarmCount, 如果有变化则重写整个文件.
+     */
+    private int fixCsvAlarmDedup() {
+        File csvFile = historyFile();
+        if (!csvFile.exists() || csvFile.length() == 0) return 0;
+
+        try {
+            List<String> lines = java.nio.file.Files.readAllLines(csvFile.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+            if (lines.isEmpty()) return 0;
+
+            String header = lines.get(0);
+            // 去 BOM
+            if (header.startsWith("\ufeff")) header = header.substring(1);
+            String[] cols = header.split(",", -1);
+            int alarmCountIdx = -1, alarmMessagesIdx = -1;
+            for (int i = 0; i < cols.length; i++) {
+                if ("alarmCount".equals(cols[i].trim())) alarmCountIdx = i;
+                if ("alarmMessages".equals(cols[i].trim())) alarmMessagesIdx = i;
+            }
+            if (alarmCountIdx < 0 || alarmMessagesIdx < 0) return 0;
+
+            int fixed = 0;
+            boolean anyChanged = false;
+            for (int lineIdx = 1; lineIdx < lines.size(); lineIdx++) {
+                String line = lines.get(lineIdx);
+                if (line.isBlank()) continue;
+                String[] fields = parseCsvLineSimple(line);
+                if (fields.length <= Math.max(alarmCountIdx, alarmMessagesIdx)) continue;
+
+                String msgsRaw = fields[alarmMessagesIdx];
+                if (msgsRaw == null || msgsRaw.isBlank()) continue;
+
+                // alarmMessages 格式: "msg1; msg2; msg3" (分号分隔)
+                String[] parts = msgsRaw.split(";\\s*");
+                java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
+                for (String p : parts) {
+                    String trimmed = p.trim();
+                    if (!trimmed.isEmpty()) seen.add(trimmed);
+                }
+                if (seen.size() == parts.length) continue; // 没重复
+
+                // 有重复, 重建
+                String newMsgs = String.join("; ", seen);
+                String newCount = String.valueOf(seen.size());
+                fields[alarmCountIdx] = newCount;
+                fields[alarmMessagesIdx] = newMsgs;
+                lines.set(lineIdx, rebuildCsvLine(fields));
+                fixed++;
+                anyChanged = true;
+            }
+
+            if (anyChanged) {
+                java.nio.file.Files.write(csvFile.toPath(), lines, java.nio.charset.StandardCharsets.UTF_8);
+                log.info("CSV 报警去重修复完成, 修改了 {} 行", fixed);
+            }
+            return fixed;
+        } catch (Exception e) {
+            log.warn("修复 CSV 报警去重失败: {}", e.getMessage());
+            return 0;
+        }
+    }
+
+    /** 简单 CSV 行解析 (支持双引号包裹的字段) */
+    private String[] parseCsvLineSimple(String line) {
+        List<String> fields = new ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+        boolean inQuote = false;
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c == '"') {
+                if (inQuote && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                    sb.append('"');
+                    i++;
+                } else {
+                    inQuote = !inQuote;
+                }
+            } else if (c == ',' && !inQuote) {
+                fields.add(sb.toString());
+                sb.setLength(0);
+            } else {
+                sb.append(c);
+            }
+        }
+        fields.add(sb.toString());
+        return fields.toArray(new String[0]);
+    }
+
+    /** 重建 CSV 行, 含引号的字段加双引号包裹 */
+    private String rebuildCsvLine(String[] fields) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < fields.length; i++) {
+            if (i > 0) sb.append(',');
+            String f = fields[i];
+            if (f.contains(",") || f.contains("\"") || f.contains("\n")) {
+                sb.append('"').append(f.replace("\"", "\"\"")).append('"');
+            } else {
+                sb.append(f);
+            }
+        }
+        return sb.toString();
     }
 
     private boolean dedupAlarmRecord(StorageTaskRecord rec) {
