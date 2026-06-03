@@ -330,8 +330,8 @@ public class StorageTaskRunner {
                 String msgsRaw = fields[alarmMessagesIdx];
                 if (msgsRaw == null || msgsRaw.isBlank()) continue;
 
-                // alarmMessages 格式: "msg1; msg2; msg3" (分号分隔)
-                String[] parts = msgsRaw.split(";\\s*");
+                // alarmMessages 格式: "msg1 | msg2 | msg3" (写入时用 " | " 分隔)
+                String[] parts = msgsRaw.split("\\s*\\|\\s*");
                 java.util.LinkedHashSet<String> seen = new java.util.LinkedHashSet<>();
                 for (String p : parts) {
                     String trimmed = p.trim();
@@ -340,7 +340,7 @@ public class StorageTaskRunner {
                 if (seen.size() == parts.length) continue; // 没重复
 
                 // 有重复, 重建
-                String newMsgs = String.join("; ", seen);
+                String newMsgs = String.join(" | ", seen);
                 String newCount = String.valueOf(seen.size());
                 fields[alarmCountIdx] = newCount;
                 fields[alarmMessagesIdx] = newMsgs;
@@ -400,20 +400,26 @@ public class StorageTaskRunner {
         return sb.toString();
     }
 
+    /**
+     * 折叠"连续相同"的报警, 与运行时去重规则一致:
+     *   - 连续出现的相同报警只保留一条 (设备报警未解除, 重复采集)
+     *   - 中间穿插了不同报警后再出现, 视为新的一次, 保留
+     * 例: [A,A,A,B,A] -> [A,B,A], alarmCount=3
+     */
     private boolean dedupAlarmRecord(StorageTaskRecord rec) {
         List<String> msgs = rec.getAlarmMessages();
         if (msgs == null || msgs.size() <= 1) return false;
-        // 按出现顺序去重
-        List<String> deduped = new ArrayList<>();
-        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        List<String> collapsed = new ArrayList<>();
+        String prev = null;
         for (String m : msgs) {
-            if (seen.add(m)) {
-                deduped.add(m);
+            if (!java.util.Objects.equals(m, prev)) {
+                collapsed.add(m);
             }
+            prev = m;
         }
-        if (deduped.size() == msgs.size()) return false; // 没变化
-        rec.setAlarmMessages(deduped);
-        rec.setAlarmCount(deduped.size());
+        if (collapsed.size() == msgs.size()) return false; // 没变化
+        rec.setAlarmMessages(collapsed);
+        rec.setAlarmCount(collapsed.size());
         return true;
     }
 

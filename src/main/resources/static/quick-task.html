@@ -105,7 +105,8 @@
     .history-section { margin-top: 16px; }
     .history-title { font-size: 13px; font-weight: 700; color: var(--color-text); margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
     .history-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
-    .h-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(255,255,255,0.4); border: 1px solid rgba(99,102,241,0.06); border-radius: 8px; font-size: 11px; }
+    .h-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: rgba(255,255,255,0.4); border: 1px solid rgba(99,102,241,0.06); border-radius: 8px; font-size: 11px; transition: all .15s; }
+    .h-item:hover { background: rgba(99,102,241,0.08); border-color: rgba(99,102,241,0.2); transform: translateX(2px); }
     .h-item .h-time { color: var(--color-text-muted); width: 70px; flex-shrink: 0; }
     .h-item .h-type { font-weight: 700; color: var(--color-primary); width: 50px; flex-shrink: 0; }
     .h-item .h-route { flex: 1; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -257,6 +258,7 @@
                 <div class="template-card" onclick="addToQueue('n2n_shape')"><span class="t-icon">📐</span><span class="t-name">输送+外形检测</span><span class="t-tag">N2N</span></div>
                 <div class="template-card" onclick="addToQueue('n2n_disassemble_single')"><span class="t-icon">🪜</span><span class="t-name">叠单个(多个) 子(母)托盘</span><span class="t-tag">N2N</span></div>
                 <div class="template-card" onclick="addToQueue('n2n_disassemble_from_mother')"><span class="t-icon">🪓</span><span class="t-name">拆单个(多个)子托盘到母托</span><span class="t-tag">N2N</span></div>
+                <div class="template-card" onclick="addToQueue('n2n_disassemble_mother_to')"><span class="t-icon">🏗️</span><span class="t-name">拆单个母托盘到某处</span><span class="t-tag">N2N</span></div>
             </div>
             <div class="template-group">
                 <div class="template-group-title">🏗️ 入库/出库/移库</div>
@@ -267,6 +269,7 @@
             <div class="template-group">
                 <div class="template-group-title">📋 任务组</div>
                 <div class="template-card" onclick="addToQueue('group_add')"><span class="t-icon">➕</span><span class="t-name">合托任务组</span><span class="t-tag">GROUP</span></div>
+                <div class="template-card" onclick="addToQueue('group_add_wait')"><span class="t-icon">⏳</span><span class="t-name">合托任务组(子托等待)</span><span class="t-tag">GROUP</span></div>
                 <div class="template-card" onclick="addToQueue('group_remove_add')"><span class="t-icon">🔀</span><span class="t-name">拆合托任务组</span><span class="t-tag">GROUP</span></div>
             </div>
         </div>
@@ -467,10 +470,12 @@ function getTemplateData(tpl) {
         case 'n2n_disassemble': return { ...base, type: 'single', tplName: '输送+拆子托', taskType: 'N2N', startNode: 'ND_22067', endNode: 'ND_22037', funcs: ['DISASSEMBLE_SUB_PALLET_NODE'], containerNum: '7', deviceLocationCode: 'ND_22069' };
         case 'n2n_disassemble_single': return { ...base, type: 'single', tplName: '叠单个(多个) 子(母)托盘', taskType: 'N2N', startNode: 'ND_22037', endNode: 'ND_21071', funcs: [], goodsList: [{ goodsCode: 'GS_1223' }] };
         case 'n2n_disassemble_from_mother': return { ...base, type: 'single', tplName: '拆单个(多个)子托盘到母托', taskType: 'N2N', startNode: 'ND_21069', endNode: 'ND_22037', funcs: ['DISASSEMBLE_SUB_PALLET_NODE'], containerNum: '1', deviceLocationCode: 'ND_21071' };
+        case 'n2n_disassemble_mother_to': return { ...base, type: 'single', tplName: '拆单个母托盘到某处', taskType: 'N2N', startNode: 'ND_11073', endNode: 'ND_22048', funcs: [], motherHighNodes: true };
         case 'n2s': return { ...base, type: 'single', tplName: '入库任务', taskType: 'N2S', startNode: 'ND_11025', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', funcs: [], remark: '入库' };
         case 's2n': return { ...base, type: 'single', tplName: '出库任务', taskType: 'S2N', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', endNode: 'ND_11025', funcs: [], remark: '出库' };
         case 's2s': return { ...base, type: 'single', tplName: '移库任务', taskType: 'S2S', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-02-01-0003-03', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-R-01-03-0003-04', funcs: [], remark: '移库' };
-        case 'group_add': return { type: 'group', tplName: '合托任务组', groupType: 'HALF_ADD_CONTAINER', mainStart: 'ND_22057', mainEnd: '', mainTaskType: 'N2S', mainIndependent: 'NO', mainFunc: 'WHOLE_PLACE_NODE', subStart: 'ND_22015', subEnd: '', subTaskType: 'N2S', subIndependent: 'NO', subFunc: 'NONE', subTargetEnd: '' };
+        case 'group_add': return { type: 'group', tplName: '合托任务组', groupType: 'HALF_ADD_CONTAINER', mainStart: 'ND_22057', mainTaskType: 'N2S', mainIndependent: 'NO', mainFuncs: ['SCANNER_NODE', 'WHOLE_PLACE_NODE'], mainTargetEnd: 'ND_22059', subStart: 'ND_22018', subTaskType: 'N2S', subIndependent: 'NO' };
+        case 'group_add_wait': return { type: 'group', tplName: '合托任务组(子托等待)', groupType: 'HALF_ADD_CONTAINER', mainStart: 'ND_22008', mainTaskType: 'N2S', mainIndependent: 'NO', mainFuncs: ['SCANNER_NODE', 'WHOLE_PLACE_NODE'], mainTargetEnd: 'ND_22020', subStart: 'ND_22058', subTaskType: 'N2S', subIndependent: 'NO' };
         case 'group_remove_add': return { type: 'group', tplName: '拆合托任务组', groupType: 'HALF_REMOVE_ADD_CONTAINER', mainStart: 'ND_11066', mainEnd: '', mainTaskType: 'N2N', mainIndependent: 'NO', mainFunc: 'WHOLE_DISASSEMBLE_PALLET_NODE', subStart: 'ND_11013', subEnd: '', subTaskType: 'N2N', subIndependent: 'NO', subFunc: 'WHOLE_PLACE_NODE', subTargetEnd: 'ND_11091' };
         default: return { ...base, type: 'single', tplName: '点到点', taskType: 'N2N', startNode: '', endNode: '', funcs: [] };
     }
@@ -515,8 +520,9 @@ function renderSingleCard(item, idx) {
     const funcTags = FUNC_OPTIONS.map(f => `<span class="qf-tag ${d.funcs.includes(f.key)?'active':''}" onclick="toggleQFunc('${item.id}','${f.key}')">${f.label}</span>`).join('');
     const isDisassembleTpl = (item.tpl === 'n2n_disassemble_from_mother');
     const isStackTpl = (item.tpl === 'n2n_disassemble_single');
-    const startLabel = item.tpl === 'n2n_disassemble_from_mother' ? '起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(拆叠盘机母托盘高位)</span>' : item.tpl === 'n2n_disassemble_single' ? '起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(某个输送线起点)</span>' : '起点';
-    const endLabel = item.tpl === 'n2n_disassemble_from_mother' ? '终点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(目的点)</span>' : item.tpl === 'n2n_disassemble_single' ? '终点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(拆叠盘机 子/母托 高位)</span>' : '终点';
+    const isMotherToTpl = (item.tpl === 'n2n_disassemble_mother_to');
+    const startLabel = item.tpl === 'n2n_disassemble_from_mother' ? '起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(拆叠盘机母托盘高位)</span>' : item.tpl === 'n2n_disassemble_single' ? '起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(某个输送线起点)</span>' : isMotherToTpl ? '起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(母托盘高位)</span>' : '起点';
+    const endLabel = item.tpl === 'n2n_disassemble_from_mother' ? '终点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(目的点)</span>' : item.tpl === 'n2n_disassemble_single' ? '终点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(拆叠盘机 子/母托 高位)</span>' : isMotherToTpl ? '终点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(去的终点)</span>' : '终点';
     let extraFields = '';
     if (isDisassembleTpl) {
         extraFields = `
@@ -547,7 +553,19 @@ function renderSingleCard(item, idx) {
             </div>
         </div>
         <div class="q-card-body">
-            <div class="q-field-with-map"><div class="q-field"><label>${startLabel}</label><input value="${d.startNode}" onchange="updateQField('${item.id}','startNode',this.value)"></div><button class="map-pick-btn" onclick="openMapPicker('${item.id}','startNode')" title="地图选点">🗺️</button></div>
+            ${isMotherToTpl ? `<div class="q-field-with-map"><div class="q-field"><label>${startLabel}</label><div style="display:flex;gap:4px;align-items:center;"><select onchange="this.nextElementSibling.value=this.value;updateQField('${item.id}','startNode',this.value)" style="flex:1;height:28px;padding:0 8px;font-size:12px;border:1px solid rgba(99,102,241,0.1);border-radius:6px;background:rgba(255,255,255,0.6);outline:none;">
+                <optgroup label="1楼">
+                    <option value="ND_11073" ${d.startNode==='ND_11073'?'selected':''}>ND_11073</option>
+                    <option value="ND_11070" ${d.startNode==='ND_11070'?'selected':''}>ND_11070</option>
+                    <option value="ND_12059" ${d.startNode==='ND_12059'?'selected':''}>ND_12059</option>
+                </optgroup>
+                <optgroup label="2楼">
+                    <option value="ND_21069" ${d.startNode==='ND_21069'?'selected':''}>ND_21069</option>
+                    <option value="ND_22067" ${d.startNode==='ND_22067'?'selected':''}>ND_22067</option>
+                    <option value="ND_22057" ${d.startNode==='ND_22057'?'selected':''}>ND_22057</option>
+                </optgroup>
+            </select><input type="text" value="${d.startNode}" onchange="updateQField('${item.id}','startNode',this.value)" placeholder="或手动输入" style="width:110px;height:28px;padding:0 8px;font-size:12px;border:1px solid rgba(99,102,241,0.1);border-radius:6px;background:rgba(255,255,255,0.6);outline:none;"></div></div><button class="map-pick-btn" onclick="openMapPicker('${item.id}','startNode')" title="地图选点">🗺️</button><button class="map-pick-btn" onclick="swapStartEnd('${item.id}')" title="起终点互换" style="font-size:14px;">🔄</button></div>`
+            : `<div class="q-field-with-map"><div class="q-field"><label>${startLabel}</label><input value="${d.startNode}" onchange="updateQField('${item.id}','startNode',this.value)"></div><button class="map-pick-btn" onclick="openMapPicker('${item.id}','startNode')" title="地图选点">🗺️</button><button class="map-pick-btn" onclick="swapStartEnd('${item.id}')" title="起终点互换" style="font-size:14px;">🔄</button></div>`}
             <div class="q-field-with-map"><div class="q-field"><label>${endLabel}</label><input value="${d.endNode}" onchange="updateQField('${item.id}','endNode',this.value)"></div><button class="map-pick-btn" onclick="openMapPicker('${item.id}','endNode')" title="地图选点">🗺️</button></div>
             <div class="q-field"><label>类型</label><select onchange="updateQField('${item.id}','taskType',this.value)"><option ${d.taskType==='N2N'?'selected':''}>N2N</option><option ${d.taskType==='N2S'?'selected':''}>N2S</option><option ${d.taskType==='S2N'?'selected':''}>S2N</option><option ${d.taskType==='S2S'?'selected':''}>S2S</option></select></div>
             <div class="q-field"><label>独立运行</label><select onchange="updateQField('${item.id}','independentRun',this.value)"><option value="" ${d.independentRun===''?'selected':''}>空</option><option value="YES" ${d.independentRun==='YES'?'selected':''}>YES</option><option value="NO" ${d.independentRun==='NO'?'selected':''}>NO</option></select></div>${extraFields}${goodsSection}
@@ -557,6 +575,63 @@ function renderSingleCard(item, idx) {
 }
 
 function renderGroupCard(item, idx) {
+    const d = item.data;
+    if (item.tpl === 'group_add' || item.tpl === 'group_add_wait') return renderGroupAddCard(item, idx);
+    return renderGroupRemoveAddCard(item, idx);
+}
+
+function renderGroupAddCard(item, idx) {
+    const d = item.data;
+    const isWaitVariant = (item.tpl === 'group_add_wait');
+    const MAIN_FUNC_OPTIONS_GROUP = [
+        { key: 'SCANNER_NODE', label: '🔍 SCANNER_NODE (扫码)' },
+        { key: 'WHOLE_PLACE_NODE', label: '📦 WHOLE_PLACE_NODE (整体合垛)' },
+        { key: 'WHOLE_DISASSEMBLE_PALLET_NODE', label: '🔨 WHOLE_DISASSEMBLE (整体拆垛)' },
+        { key: 'DISASSEMBLE_BY_PIECE_NODE', label: '🔧 DISASSEMBLE_BY_PIECE (按件拆垛)' },
+        { key: 'ASSEMBLE_BY_PIECE_NODE', label: '🧱 ASSEMBLE_BY_PIECE (按件码垛)' },
+    ];
+    const mainFuncs = d.mainFuncs || [];
+    const mainFuncTags = MAIN_FUNC_OPTIONS_GROUP.map(f => `<span class="qf-tag ${mainFuncs.includes(f.key)?'active':''}" onclick="toggleGroupMainFunc('${item.id}','${f.key}')">${f.label}</span>`).join('');
+    const showTargetEnd = mainFuncs.includes('WHOLE_PLACE_NODE');
+    const mainStartLabel = isWaitVariant ? '起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(母托的位置，不一定是高位)</span>' : '起点 <span style="font-size:10px;color:#6366f1;font-weight:400;">(母托盘的高位)</span>';
+    const subStartLabel = isWaitVariant ? '起点 <span style="font-size:10px;color:#059669;font-weight:400;">(子托盘在拆合托机高位，等待合托)</span>' : '起点 <span style="font-size:10px;color:#059669;font-weight:400;">(子托盘带货的起点)</span>';
+    const mainDesc = isWaitVariant ? '— 母托盘(去接子托)' : '— 母托盘';
+    const subDesc = isWaitVariant ? '— 子托盘(等待合托)' : '— 子(木)托盘带货';
+    return `<div class="q-card" id="card_${item.id}">
+        <div class="q-card-head">
+            <div class="q-card-info"><span class="q-card-type group">GROUP</span><span class="q-card-name">${d.tplName}</span></div>
+            <div class="q-card-btns">
+                <button class="q-btn" onclick="previewOneJson('${item.id}')" title="查看 JSON">{ }</button>
+                <button class="q-btn go" onclick="sendOne('${item.id}')" title="单独下发">▶</button>
+                <button class="q-btn del" onclick="removeFromQueue('${item.id}')" title="删除">✕</button>
+            </div>
+        </div>
+        <div class="q-card-body" style="grid-template-columns:1fr 1fr;">
+            <div style="grid-column:1/-1;margin-bottom:4px;">
+                <div class="q-field"><label>组类型</label><select onchange="updateQField('${item.id}','groupType',this.value)">
+                    <option ${d.groupType==='HALF_ADD_CONTAINER'?'selected':''} value="HALF_ADD_CONTAINER">HALF_ADD_CONTAINER (合托无输送)</option>
+                    <option ${d.groupType==='ADD_CONTAINER'?'selected':''} value="ADD_CONTAINER">ADD_CONTAINER (整体合托)</option>
+                </select></div>
+            </div>
+            <div style="padding:8px;background:rgba(99,102,241,0.03);border-radius:8px;border:1px solid rgba(99,102,241,0.08);">
+                <div style="font-size:11px;font-weight:700;color:var(--color-primary);margin-bottom:6px;">🔵 主任务 <span style="font-weight:400;color:var(--color-text-muted);">${mainDesc}</span></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>${mainStartLabel}</label><div style="display:flex;gap:4px;"><input value="${d.mainStart}" onchange="updateQField('${item.id}','mainStart',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','mainStart')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','mainTaskType',this.value)"><option ${d.mainTaskType==='N2N'?'selected':''}>N2N</option><option ${d.mainTaskType==='N2S'?'selected':''}>N2S</option><option ${d.mainTaskType==='S2N'?'selected':''}>S2N</option></select></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','mainIndependent',this.value)"><option value="NO" ${d.mainIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.mainIndependent==='YES'?'selected':''}>YES</option></select></div>
+                <div style="margin-top:6px;"><label style="font-size:10px;font-weight:700;color:var(--color-primary);">功能 (可多选)</label><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${mainFuncTags}</div></div>
+                ${showTargetEnd ? `<div class="q-field" style="margin-top:6px;padding:6px 8px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.3);border-radius:8px;"><label style="color:#d97706;font-weight:700;">TARGET_END_NODE <span style="font-weight:400;font-size:10px;color:#92400e;">(合托后可能去的终点)</span></label><input value="${d.mainTargetEnd||''}" onchange="updateQField('${item.id}','mainTargetEnd',this.value)" placeholder="如 ND_22059" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>` : ''}
+            </div>
+            <div style="padding:8px;background:rgba(16,185,129,0.03);border-radius:8px;border:1px solid rgba(16,185,129,0.08);">
+                <div style="font-size:11px;font-weight:700;color:var(--color-success);margin-bottom:6px;">🟢 子任务 <span style="font-weight:400;color:var(--color-text-muted);">${subDesc}</span></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>${subStartLabel}</label><div style="display:flex;gap:4px;"><input value="${d.subStart}" onchange="updateQField('${item.id}','subStart',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','subStart')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','subTaskType',this.value)"><option ${d.subTaskType==='N2N'?'selected':''}>N2N</option><option ${d.subTaskType==='N2S'?'selected':''}>N2S</option><option ${d.subTaskType==='S2N'?'selected':''}>S2N</option></select></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','subIndependent',this.value)"><option value="NO" ${d.subIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.subIndependent==='YES'?'selected':''}>YES</option></select></div>
+            </div>
+        </div>
+    </div>`;
+}
+
+function renderGroupRemoveAddCard(item, idx) {
     const d = item.data;
     return `<div class="q-card" id="card_${item.id}">
         <div class="q-card-head">
@@ -605,12 +680,31 @@ function updateQField(id, field, value) {
     if (item) item.data[field] = value;
 }
 
+function swapStartEnd(id) {
+    const item = queue.find(q => q.id === id);
+    if (!item) return;
+    const tmp = item.data.startNode;
+    item.data.startNode = item.data.endNode;
+    item.data.endNode = tmp;
+    renderQueue();
+}
+
 function toggleQFunc(id, funcKey) {
     const item = queue.find(q => q.id === id);
     if (!item) return;
     const idx = item.data.funcs.indexOf(funcKey);
     if (idx >= 0) item.data.funcs.splice(idx, 1);
     else item.data.funcs.push(funcKey);
+    renderQueue();
+}
+
+function toggleGroupMainFunc(id, funcKey) {
+    const item = queue.find(q => q.id === id);
+    if (!item) return;
+    if (!item.data.mainFuncs) item.data.mainFuncs = [];
+    const idx = item.data.mainFuncs.indexOf(funcKey);
+    if (idx >= 0) item.data.mainFuncs.splice(idx, 1);
+    else item.data.mainFuncs.push(funcKey);
     renderQueue();
 }
 
@@ -667,6 +761,46 @@ function buildFuncList(data) {
 
 function buildGroupPayload(data) {
     const taskNo = genTaskNo();
+
+    // group_add / group_add_wait (合托任务组) uses different structure
+    if (data.tplName === '合托任务组' || data.tplName === '合托任务组(子托等待)') {
+        // Build mainFuncList from multi-select
+        const mainFuncList = (data.mainFuncs || []).map(ft => {
+            if (ft === 'WHOLE_PLACE_NODE') return { functionType: 'WHOLE_PLACE_NODE', extData: { TARGET_END_NODE: data.mainTargetEnd || '' } };
+            if (ft === 'DISASSEMBLE_BY_PIECE_NODE') return { functionType: 'DISASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: 8 } };
+            if (ft === 'ASSEMBLE_BY_PIECE_NODE') return { functionType: 'ASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: 8 } };
+            return { functionType: ft };
+        });
+
+        return {
+            groupCode: genGroupCode(),
+            groupType: data.groupType,
+            taskSource: 'WMS',
+            bizPriority: 0,
+            mainTaskList: [{
+                taskNo: taskNo + '_M', taskSource: 'WMS', taskType: data.mainTaskType, bizType: '默认', bizPriority: 0,
+                preStartTaskNo: '', preEndTaskNo: '',
+                startNode: data.mainStart,
+                independentRun: data.mainIndependent,
+                requiredFunctionList: mainFuncList,
+                containerList: [{ containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' } }],
+                goodsInfoList: [{ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: '60', width: '50', height: '10', unit: 'cm' } }],
+                expectedStartTime: '', expectedFinishTime: '', remark: '任务备注'
+            }],
+            subTaskList: [{
+                taskNo: taskNo + '_S', taskSource: 'WMS', taskType: data.subTaskType, bizType: '默认', bizPriority: 0,
+                preStartTaskNo: '', preEndTaskNo: '',
+                startNode: data.subStart,
+                independentRun: data.subIndependent,
+                requiredFunctionList: [],
+                containerInfo: { containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' } },
+                goodsInfoList: [{ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: '60', width: '50', height: '10', unit: 'cm' } }],
+                expectedStartTime: '', expectedFinishTime: '', remark: '任务备注'
+            }]
+        };
+    }
+
+    // group_remove_add (拆合托任务组)
     let mainFuncList = [];
     if (data.mainFunc === 'WHOLE_PLACE_NODE') mainFuncList = [{ functionType: 'WHOLE_PLACE_NODE', extData: { TARGET_END_NODE: data.mainEnd || '' } }];
     else if (data.mainFunc === 'DISASSEMBLE_BY_PIECE_NODE') mainFuncList = [{ functionType: 'DISASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: 8 } }];
@@ -889,7 +1023,7 @@ function renderHistory() {
         updateHistoryStats();
         return;
     }
-    list.innerHTML = history.slice(0, 50).map(h => {
+    list.innerHTML = history.slice(0, 50).map((h, idx) => {
         const time = h.timestamp ? h.timestamp.substring(11, 19) : (h.time || '');
         const type = h.taskType || h.type || '';
         const from = h.startNode || h.from || '-';
@@ -898,7 +1032,7 @@ function renderHistory() {
         const elapsed = h.elapsedMs ? `${h.elapsedMs}ms` : '';
         const taskNo = h.taskNo || h.groupCode || '';
         const server = h.server ? h.server.replace(/^https?:\/\//, '') : '';
-        return `<div class="h-item">
+        return `<div class="h-item" style="cursor:pointer;" onclick="fillFromHistory(${idx})" title="点击填充到队列">
             <span class="h-time">${time}</span>
             <span class="h-type">${type}</span>
             <span class="h-route">${from} → ${to}</span>
@@ -909,6 +1043,60 @@ function renderHistory() {
         </div>`;
     }).join('');
     updateHistoryStats();
+}
+
+function fillFromHistory(idx) {
+    const h = history[idx];
+    if (!h) return;
+    // Determine task type and create appropriate queue item
+    const taskType = h.taskType || h.type || 'N2N';
+    const startNode = h.startNode || h.from || '';
+    const endNode = h.endNode || h.to || '';
+
+    // If we have the original request payload, try to reconstruct from it
+    if (h.groupCode || h.groupType) {
+        // It's a group task — hard to reconstruct, just notify
+        // But if requestPayload is available use it as reference
+        const tpl = h.groupType === 'HALF_ADD_CONTAINER' ? 'group_add' : 'group_remove_add';
+        const data = getTemplateData(tpl);
+        if (h.requestPayload) {
+            const rp = typeof h.requestPayload === 'string' ? JSON.parse(h.requestPayload) : h.requestPayload;
+            if (rp.mainTaskList && rp.mainTaskList[0]) {
+                data.mainStart = rp.mainTaskList[0].startNode || data.mainStart;
+                data.mainTaskType = rp.mainTaskList[0].taskType || data.mainTaskType;
+                data.mainIndependent = rp.mainTaskList[0].independentRun || data.mainIndependent;
+                if (rp.mainTaskList[0].endNode) data.mainEnd = rp.mainTaskList[0].endNode;
+            }
+            if (rp.subTaskList && rp.subTaskList[0]) {
+                data.subStart = rp.subTaskList[0].startNode || data.subStart;
+                data.subTaskType = rp.subTaskList[0].taskType || data.subTaskType;
+                data.subIndependent = rp.subTaskList[0].independentRun || data.subIndependent;
+                if (rp.subTaskList[0].endNode) data.subEnd = rp.subTaskList[0].endNode;
+            }
+            if (rp.groupType) data.groupType = rp.groupType;
+        }
+        queue.push({ id: genId(), tpl, data });
+    } else {
+        // Single task — fill with basic info
+        const tpl = 'n2n'; // default, will override fields
+        const data = getTemplateData(tpl);
+        data.taskType = taskType;
+        data.startNode = startNode;
+        data.endNode = endNode;
+        // Restore functions if available
+        if (h.functions && h.functions.length > 0) {
+            data.funcs = h.functions;
+        }
+        // If requestPayload available, use richer data
+        if (h.requestPayload) {
+            const rp = typeof h.requestPayload === 'string' ? JSON.parse(h.requestPayload) : h.requestPayload;
+            if (rp.independentRun) data.independentRun = rp.independentRun;
+            if (rp.remark) data.remark = rp.remark;
+        }
+        data.tplName = `${taskType} (历史填充)`;
+        queue.push({ id: genId(), tpl, data });
+    }
+    renderQueue();
 }
 
 // ============ 初始化 ============

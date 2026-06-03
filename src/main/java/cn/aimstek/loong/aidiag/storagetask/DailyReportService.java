@@ -1,6 +1,7 @@
 package cn.aimstek.loong.aidiag.storagetask;
 
 import cn.aimstek.loong.aidiag.storagetask.dto.DailyReport;
+import cn.aimstek.loong.aidiag.storagetask.dto.StorageTaskRecord;
 import cn.aimstek.loong.aidiag.storagetask.dto.StorageTaskRunnerState;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -139,34 +140,59 @@ public class DailyReportService {
         StorageTaskRunner runner = manager.getRunner(aisle);
         if (runner == null) return null;
 
-        File csvFile = runner.historyFile();
-        if (!csvFile.exists()) return null;
+        StorageTaskRunnerState state = runner.getState();
 
-        List<CsvRow> rows = parseCsv(csvFile, date);
-        if (rows.isEmpty()) {
-            // 即便没有 CSV 记录, 也返回一个空报告 (带覆盖度信息)
-            DailyReport r = new DailyReport();
-            r.setDate(date);
-            r.setAisle(aisle);
-            StorageTaskRunnerState state = runner.getState();
-            r.setTotalCodes(state.getValidCodes() != null ? state.getValidCodes().size() : 0);
-            r.setVisitedCodes(state.getVisitedCodes() != null ? state.getVisitedCodes().size() : 0);
-            if (r.getTotalCodes() > 0) {
-                r.setCoveragePct(Math.round(r.getVisitedCodes() * 1000.0 / r.getTotalCodes()) / 10.0);
+        // ============ 单一数据源: 合并 CSV(全量历史) 与内存(最近任务) ============
+        // 按 taskNo 去重; 内存记录报警/状态数据最准确, 覆盖 CSV 中的同名记录.
+        // 这样"今日统计"与上方"任务历史"表格永远一致, 不会出现报警对不上的情况.
+        Map<String, CsvRow> merged = new LinkedHashMap<>();
+        int anon = 0;
+
+        File csvFile = runner.historyFile();
+        if (csvFile.exists()) {
+            for (CsvRow row : parseCsv(csvFile, date)) {
+                String k = row.taskNo != null && !row.taskNo.isBlank() ? row.taskNo : "__anon_" + (anon++);
+                merged.put(k, row);
             }
-            return r;
         }
+        // 内存覆盖 (recentTasks + currentTask), 仅当天
+        if (state != null) {
+            if (state.getRecentTasks() != null) {
+                for (var rec : state.getRecentTasks()) {
+                    CsvRow row = recordToRow(rec, date);
+                    if (row != null) {
+                        String k = row.taskNo != null && !row.taskNo.isBlank() ? row.taskNo : "__anon_" + (anon++);
+                        merged.put(k, row);
+                    }
+                }
+            }
+            var current = state.getCurrentTask();
+            if (current != null) {
+                CsvRow row = recordToRow(current, date);
+                if (row != null && row.taskNo != null && !row.taskNo.isBlank()) {
+                    merged.put(row.taskNo, row);
+                }
+            }
+        }
+
+        List<CsvRow> rows = new ArrayList<>(merged.values());
 
         DailyReport r = new DailyReport();
         r.setDate(date);
         r.setAisle(aisle);
 
         // 覆盖度信息
-        StorageTaskRunnerState state = runner.getState();
-        r.setTotalCodes(state.getValidCodes() != null ? state.getValidCodes().size() : 0);
-        r.setVisitedCodes(state.getVisitedCodes() != null ? state.getVisitedCodes().size() : 0);
-        if (r.getTotalCodes() > 0) {
-            r.setCoveragePct(Math.round(r.getVisitedCodes() * 1000.0 / r.getTotalCodes()) / 10.0);
+        if (state != null) {
+            r.setTotalCodes(state.getValidCodes() != null ? state.getValidCodes().size() : 0);
+            r.setVisitedCodes(state.getVisitedCodes() != null ? state.getVisitedCodes().size() : 0);
+            if (r.getTotalCodes() > 0) {
+                r.setCoveragePct(Math.round(r.getVisitedCodes() * 1000.0 / r.getTotalCodes()) / 10.0);
+            }
+        }
+
+        if (rows.isEmpty()) {
+            // 没有当天记录, 返回带覆盖度的空报告
+            return r;
         }
 
         // 遍历当天记录
@@ -183,6 +209,8 @@ public class DailyReportService {
         String earliest = null, latest = null;
         Set<String> todayVisited = new HashSet<>();
         List<DailyReport.AbnormalTask> abnormals = new ArrayList<>();
+        // 报警明细: message -> [出现次数, 触发任务数]
+        Map<String, int[]> alarmAgg = new LinkedHashMap<>();
 
         for (CsvRow row : rows) {
             totalIssued++;
@@ -222,6 +250,18 @@ public class DailyReportService {
 
             // 报警
             alarms += row.alarmCount;
+            // 报警明细分组: 同一任务内同种报警计入"任务数"一次, "次数"按出现条数累加
+            if (row.alarmMessages != null && !row.alarmMessages.isEmpty()) {
+                Set<String> msgsInThisTask = new HashSet<>();
+                for (String msg : row.alarmMessages) {
+                    if (msg == null || msg.isBlank()) continue;
+                    int[] agg = alarmAgg.computeIfAbsent(msg, k -> new int[2]);
+                    agg[0]++; // 总次数
+                    if (msgsInThisTask.add(msg)) {
+                        agg[1]++; // 该报警涉及的任务数 (本任务只 +1)
+                    }
+                }
+            }
 
             // 轮次
             if (row.round > 0) {
@@ -276,6 +316,18 @@ public class DailyReportService {
         r.setOutboundCount(outbound);
         r.setConveyorCount(conveyor);
         r.setTotalAlarms(alarms);
+
+        // 报警明细, 按出现次数降序
+        List<DailyReport.AlarmStat> alarmStats = new ArrayList<>();
+        for (Map.Entry<String, int[]> e : alarmAgg.entrySet()) {
+            DailyReport.AlarmStat st = new DailyReport.AlarmStat();
+            st.setMessage(e.getKey());
+            st.setCount(e.getValue()[0]);
+            st.setTaskCount(e.getValue()[1]);
+            alarmStats.add(st);
+        }
+        alarmStats.sort((a, b) -> Integer.compare(b.getCount(), a.getCount()));
+        r.setAlarmBreakdown(alarmStats);
         r.setStartRound(startRound);
         r.setEndRound(endRound);
         r.setCompletedRounds(completedRounds.size());
@@ -308,74 +360,47 @@ public class DailyReportService {
             } catch (Exception ignored) {}
         }
 
-        // 补充内存中未归档任务的报警 (currentTask + recentTasks 中今天的、CSV 未统计到的)
-        supplementAlarmsFromMemory(r, runner, date, rows);
-
         return r;
     }
 
     /**
-     * 从内存 state 中补充报警数据.
-     * CSV 只包含已归档的任务, 正在运行的 currentTask 和刚归档但还在 recentTasks 里的任务
-     * 可能有报警没被 CSV 统计到 (因为 CSV 写入有延迟, 或任务还没结束).
+     * 把内存中的任务记录转成 CsvRow (与 CSV 行同口径), 仅返回当天的记录.
+     * date 比对使用 submittedAt 的日期部分; submittedAt 缺失时退回 finishedAt.
      */
-    private void supplementAlarmsFromMemory(DailyReport r, StorageTaskRunner runner, String date, List<CsvRow> csvRows) {
-        StorageTaskRunnerState state = runner.getState();
-        if (state == null) return;
+    private CsvRow recordToRow(StorageTaskRecord rec, String date) {
+        if (rec == null) return null;
+        String dateRef = (rec.getSubmittedAt() != null && rec.getSubmittedAt().length() >= 10)
+                ? rec.getSubmittedAt()
+                : rec.getFinishedAt();
+        if (dateRef == null || dateRef.length() < 10) return null;
+        if (!date.equals(dateRef.substring(0, 10))) return null;
 
-        // 收集 CSV 中已统计的 taskNo, 避免重复计数
-        Set<String> csvTaskNos = new HashSet<>();
-        for (CsvRow row : csvRows) {
-            if (row.taskNo != null) csvTaskNos.add(row.taskNo);
+        CsvRow row = new CsvRow();
+        row.submittedAt = rec.getSubmittedAt();
+        row.finishedAt = rec.getFinishedAt();
+        row.taskNo = rec.getTaskNo();
+        row.taskType = rec.getTaskType();
+        row.state = rec.getState();
+        row.cellCode = StorageHistoryWriter.cellCodeOf(rec);
+        row.stuck = rec.isStuck();
+        row.alarmCount = rec.getAlarmCount();
+        row.round = rec.getRound();
+        if (rec.getAlarmMessages() != null) {
+            row.alarmMessages = new ArrayList<>(rec.getAlarmMessages());
         }
 
-        int extraAlarms = 0;
-
-        // 检查 currentTask (正在执行, 尚未归档)
-        var current = state.getCurrentTask();
-        if (current != null && current.getAlarmCount() > 0) {
-            String submittedDate = current.getSubmittedAt() != null && current.getSubmittedAt().length() >= 10
-                    ? current.getSubmittedAt().substring(0, 10) : null;
-            if (date.equals(submittedDate) && !csvTaskNos.contains(current.getTaskNo())) {
-                extraAlarms += current.getAlarmCount();
-                // 加入异常清单
-                DailyReport.AbnormalTask at = new DailyReport.AbnormalTask();
-                at.setTime(current.getSubmittedAt());
-                at.setAisle(r.getAisle());
-                at.setTaskNo(current.getTaskNo());
-                at.setTaskType(current.getTaskType());
-                at.setState(current.getState());
-                at.setIssue("报警" + current.getAlarmCount() + "次 (执行中)");
-                r.getAbnormalTasks().add(at);
-            }
+        long dur = -1;
+        if (rec.getSubmittedAt() != null && rec.getFinishedAt() != null) {
+            try {
+                LocalDateTime s = LocalDateTime.parse(rec.getSubmittedAt(), TS_FMT);
+                LocalDateTime e = LocalDateTime.parse(rec.getFinishedAt(), TS_FMT);
+                dur = ChronoUnit.SECONDS.between(s, e);
+            } catch (Exception ignored) {}
         }
-
-        // 检查 recentTasks (已归档在内存, 但可能还没被写到 CSV 或刚写入还没被本次读取覆盖)
-        var recent = state.getRecentTasks();
-        if (recent != null) {
-            for (var rec : recent) {
-                if (rec.getAlarmCount() <= 0) continue;
-                if (csvTaskNos.contains(rec.getTaskNo())) continue; // CSV 已统计
-                String submittedDate = rec.getSubmittedAt() != null && rec.getSubmittedAt().length() >= 10
-                        ? rec.getSubmittedAt().substring(0, 10) : null;
-                if (!date.equals(submittedDate)) continue;
-                extraAlarms += rec.getAlarmCount();
-                // 加入异常清单
-                DailyReport.AbnormalTask at = new DailyReport.AbnormalTask();
-                at.setTime(rec.getSubmittedAt());
-                at.setAisle(r.getAisle());
-                at.setTaskNo(rec.getTaskNo());
-                at.setTaskType(rec.getTaskType());
-                at.setState(rec.getState());
-                at.setIssue("报警" + rec.getAlarmCount() + "次");
-                r.getAbnormalTasks().add(at);
-            }
-        }
-
-        if (extraAlarms > 0) {
-            r.setTotalAlarms(r.getTotalAlarms() + extraAlarms);
-        }
+        if (dur >= 0) row.durationSec = (int) dur;
+        return row;
     }
+
 
     /**
      * 合并单个巷道报告到汇总报告.
@@ -413,6 +438,30 @@ public class DailyReportService {
 
         // 合并异常列表
         summary.getAbnormalTasks().addAll(r.getAbnormalTasks());
+
+        // 合并报警明细 (按 message 累加)
+        if (r.getAlarmBreakdown() != null && !r.getAlarmBreakdown().isEmpty()) {
+            Map<String, DailyReport.AlarmStat> map = new LinkedHashMap<>();
+            for (DailyReport.AlarmStat st : summary.getAlarmBreakdown()) {
+                map.put(st.getMessage(), st);
+            }
+            for (DailyReport.AlarmStat st : r.getAlarmBreakdown()) {
+                DailyReport.AlarmStat ex = map.get(st.getMessage());
+                if (ex == null) {
+                    DailyReport.AlarmStat copy = new DailyReport.AlarmStat();
+                    copy.setMessage(st.getMessage());
+                    copy.setCount(st.getCount());
+                    copy.setTaskCount(st.getTaskCount());
+                    map.put(st.getMessage(), copy);
+                } else {
+                    ex.setCount(ex.getCount() + st.getCount());
+                    ex.setTaskCount(ex.getTaskCount() + st.getTaskCount());
+                }
+            }
+            List<DailyReport.AlarmStat> merged = new ArrayList<>(map.values());
+            merged.sort((a, b) -> Integer.compare(b.getCount(), a.getCount()));
+            summary.setAlarmBreakdown(merged);
+        }
     }
 
     // ============ CSV 解析 ============
@@ -459,6 +508,13 @@ public class DailyReportService {
                 if (alarmStr != null && !alarmStr.isBlank()) {
                     try { row.alarmCount = Integer.parseInt(alarmStr.trim()); }
                     catch (NumberFormatException ignored) {}
+                }
+                String alarmMsgStr = getField(fields, colIdx, "alarmMessages");
+                if (alarmMsgStr != null && !alarmMsgStr.isBlank()) {
+                    for (String m : alarmMsgStr.split("\\s*\\|\\s*")) {
+                        String t = m.trim();
+                        if (!t.isEmpty()) row.alarmMessages.add(t);
+                    }
                 }
                 String roundStr = getField(fields, colIdx, "round");
                 if (roundStr != null && !roundStr.isBlank()) {
@@ -559,5 +615,7 @@ public class DailyReportService {
         Integer durationSec;
         int alarmCount;
         int round;
+        /** 报警明细 (去重后), 用于报警分组统计 */
+        List<String> alarmMessages = new ArrayList<>();
     }
 }

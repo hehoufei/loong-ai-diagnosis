@@ -97,6 +97,19 @@ public final class StorageHistoryWriter {
     }
 
     /**
+     * 取一条任务记录用于"分析视角"的库位编码 (endNode 优先, 失败退回 startNode).
+     * 供日报聚合等复用, 保证与 CSV 中 cellCode 列口径一致.
+     */
+    public static String cellCodeOf(StorageTaskRecord r) {
+        if (r == null) return "";
+        String[] parsed = parseCellCode(r.getEndNode());
+        if (parsed[0].isEmpty()) {
+            parsed = parseCellCode(r.getStartNode());
+        }
+        return parsed[0];
+    }
+
+    /**
      * 解析库位编码, 返回 [code, aisle, side, depth, row, col, layer], 失败全空字符串
      */
     private static String[] parseCellCode(String node) {

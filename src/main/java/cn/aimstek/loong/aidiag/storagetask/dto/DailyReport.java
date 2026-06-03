@@ -57,6 +57,9 @@ public class DailyReport {
     // ===== 报警 =====
     private int totalAlarms;
 
+    /** 报警明细: 按报警内容分组统计次数, 频次降序 */
+    private List<AlarmStat> alarmBreakdown = new ArrayList<>();
+
     // ===== 运行时间 =====
     private String runStartTime;
     private String runEndTime;
@@ -76,5 +79,16 @@ public class DailyReport {
         private String taskType;
         private String issue;
         private String state;
+    }
+
+    /** 单种报警的统计 */
+    @Data
+    public static class AlarmStat {
+        /** 报警内容 (alarmMessage) */
+        private String message;
+        /** 出现次数 (去重后, 跨任务累加) */
+        private int count;
+        /** 触发该报警的任务数 */
+        private int taskCount;
     }
 }
