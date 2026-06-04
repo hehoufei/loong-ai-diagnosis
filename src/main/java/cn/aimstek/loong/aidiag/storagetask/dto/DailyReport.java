@@ -90,5 +90,19 @@ public class DailyReport {
         private int count;
         /** 触发该报警的任务数 */
         private int taskCount;
+        /** 触发该报警的任务列表 (时间 + 任务号 + 类型) */
+        private List<AlarmTaskRef> tasks = new ArrayList<>();
+    }
+
+    /** 报警关联的任务简要信息 */
+    @Data
+    public static class AlarmTaskRef {
+        private String taskNo;
+        private String taskType;
+        private String submittedAt;
+        private String startNode;
+        private String endNode;
+        /** 该任务内此报警出现的次数 */
+        private int count;
     }
 }

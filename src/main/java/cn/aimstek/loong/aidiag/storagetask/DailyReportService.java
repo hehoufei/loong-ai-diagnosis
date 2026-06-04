@@ -123,7 +123,12 @@ public class DailyReportService {
         // 如果是今天的数据, 总是重新生成 (实时性)
         String today = LocalDate.now().format(DATE_FMT);
         if (cached != null && !date.equals(today)) {
-            return cached;
+            // 旧缓存缺少 alarmBreakdown 或 tasks 明细时, 重新生成一次
+            if (cached.getTotalAlarms() > 0 && needsAlarmRegeneration(cached)) {
+                // fall through to regenerate
+            } else {
+                return cached;
+            }
         }
         // 生成
         DailyReport r = generateFromCsv(date, aisle);
@@ -131,6 +136,20 @@ public class DailyReportService {
             saveReport(date, aisle, r);
         }
         return r;
+    }
+
+    /** 判断缓存报告是否需要重新生成报警明细 (缺少 breakdown 或 tasks 列表) */
+    private boolean needsAlarmRegeneration(DailyReport cached) {
+        if (cached.getAlarmBreakdown() == null || cached.getAlarmBreakdown().isEmpty()) {
+            return true;
+        }
+        // 有 breakdown 但 tasks 列表全为空 (旧版本生成的缓存)
+        for (DailyReport.AlarmStat st : cached.getAlarmBreakdown()) {
+            if (st.getTasks() != null && !st.getTasks().isEmpty()) {
+                return false; // 至少有一条有 tasks, 不需要重新生成
+            }
+        }
+        return true;
     }
 
     /**
@@ -209,8 +228,8 @@ public class DailyReportService {
         String earliest = null, latest = null;
         Set<String> todayVisited = new HashSet<>();
         List<DailyReport.AbnormalTask> abnormals = new ArrayList<>();
-        // 报警明细: message -> [出现次数, 触发任务数]
-        Map<String, int[]> alarmAgg = new LinkedHashMap<>();
+        // 报警明细: message -> AlarmStat (累积次数, 任务数, 任务列表)
+        Map<String, DailyReport.AlarmStat> alarmAgg = new LinkedHashMap<>();
 
         for (CsvRow row : rows) {
             totalIssued++;
@@ -250,16 +269,33 @@ public class DailyReportService {
 
             // 报警
             alarms += row.alarmCount;
-            // 报警明细分组: 同一任务内同种报警计入"任务数"一次, "次数"按出现条数累加
+            // 报警明细分组: 收集每种报警的次数、任务数、关联任务列表
             if (row.alarmMessages != null && !row.alarmMessages.isEmpty()) {
-                Set<String> msgsInThisTask = new HashSet<>();
+                // 统计本任务内每种报警出现次数
+                Map<String, Integer> msgCountInTask = new LinkedHashMap<>();
                 for (String msg : row.alarmMessages) {
                     if (msg == null || msg.isBlank()) continue;
-                    int[] agg = alarmAgg.computeIfAbsent(msg, k -> new int[2]);
-                    agg[0]++; // 总次数
-                    if (msgsInThisTask.add(msg)) {
-                        agg[1]++; // 该报警涉及的任务数 (本任务只 +1)
-                    }
+                    msgCountInTask.merge(msg, 1, Integer::sum);
+                }
+                for (Map.Entry<String, Integer> me : msgCountInTask.entrySet()) {
+                    String msg = me.getKey();
+                    int cnt = me.getValue();
+                    DailyReport.AlarmStat stat = alarmAgg.computeIfAbsent(msg, k -> {
+                        DailyReport.AlarmStat s = new DailyReport.AlarmStat();
+                        s.setMessage(k);
+                        return s;
+                    });
+                    stat.setCount(stat.getCount() + cnt);
+                    stat.setTaskCount(stat.getTaskCount() + 1);
+                    // 记录关联任务
+                    DailyReport.AlarmTaskRef ref = new DailyReport.AlarmTaskRef();
+                    ref.setTaskNo(row.taskNo);
+                    ref.setTaskType(row.taskType);
+                    ref.setSubmittedAt(row.submittedAt);
+                    ref.setStartNode(row.startNode);
+                    ref.setEndNode(row.endNode);
+                    ref.setCount(cnt);
+                    stat.getTasks().add(ref);
                 }
             }
 
@@ -318,14 +354,7 @@ public class DailyReportService {
         r.setTotalAlarms(alarms);
 
         // 报警明细, 按出现次数降序
-        List<DailyReport.AlarmStat> alarmStats = new ArrayList<>();
-        for (Map.Entry<String, int[]> e : alarmAgg.entrySet()) {
-            DailyReport.AlarmStat st = new DailyReport.AlarmStat();
-            st.setMessage(e.getKey());
-            st.setCount(e.getValue()[0]);
-            st.setTaskCount(e.getValue()[1]);
-            alarmStats.add(st);
-        }
+        List<DailyReport.AlarmStat> alarmStats = new ArrayList<>(alarmAgg.values());
         alarmStats.sort((a, b) -> Integer.compare(b.getCount(), a.getCount()));
         r.setAlarmBreakdown(alarmStats);
         r.setStartRound(startRound);
@@ -382,6 +411,8 @@ public class DailyReportService {
         row.taskType = rec.getTaskType();
         row.state = rec.getState();
         row.cellCode = StorageHistoryWriter.cellCodeOf(rec);
+        row.startNode = rec.getStartNode();
+        row.endNode = rec.getEndNode();
         row.stuck = rec.isStuck();
         row.alarmCount = rec.getAlarmCount();
         row.round = rec.getRound();
@@ -452,10 +483,12 @@ public class DailyReportService {
                     copy.setMessage(st.getMessage());
                     copy.setCount(st.getCount());
                     copy.setTaskCount(st.getTaskCount());
+                    copy.setTasks(new ArrayList<>(st.getTasks()));
                     map.put(st.getMessage(), copy);
                 } else {
                     ex.setCount(ex.getCount() + st.getCount());
                     ex.setTaskCount(ex.getTaskCount() + st.getTaskCount());
+                    ex.getTasks().addAll(st.getTasks());
                 }
             }
             List<DailyReport.AlarmStat> merged = new ArrayList<>(map.values());
@@ -497,6 +530,8 @@ public class DailyReportService {
                 row.taskType = getField(fields, colIdx, "taskType");
                 row.state = getField(fields, colIdx, "state");
                 row.cellCode = getField(fields, colIdx, "cellCode");
+                row.startNode = getField(fields, colIdx, "startNode");
+                row.endNode = getField(fields, colIdx, "endNode");
                 row.stuck = "true".equalsIgnoreCase(getField(fields, colIdx, "stuck"));
 
                 String durStr = getField(fields, colIdx, "durationSec");
@@ -611,6 +646,8 @@ public class DailyReportService {
         String taskType;
         String state;
         String cellCode;
+        String startNode;
+        String endNode;
         boolean stuck;
         Integer durationSec;
         int alarmCount;

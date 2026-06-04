@@ -304,6 +304,9 @@ public class StorageTaskRunner {
         File csvFile = historyFile();
         if (!csvFile.exists() || csvFile.length() == 0) return 0;
 
+        // 先迁移旧格式 CSV (补 alarmCount/alarmMessages 列)
+        StorageHistoryWriter.migrateIfNeeded(csvFile);
+
         try {
             List<String> lines = java.nio.file.Files.readAllLines(csvFile.toPath(), java.nio.charset.StandardCharsets.UTF_8);
             if (lines.isEmpty()) return 0;

@@ -2109,36 +2109,67 @@ function renderDailyReport(r) {
     $('dailyReportHint').textContent = r.runStartTime ? '运行 ' + (r.effectiveMinutes ? fmtClock2(r.effectiveMinutes) : '') : '';
 }
 
-// 报警明细: 按报警内容分组, 频次降序, 带占比条
+// 报警明细: 按报警内容分组, 频次降序, 带占比条, 点击展开关联任务列表
 function alarmBreakdownHtml(breakdown, totalAlarms) {
     if (!breakdown || !breakdown.length) return '';
     const total = totalAlarms || breakdown.reduce((s, x) => s + (x.count||0), 0);
     const maxCount = Math.max(...breakdown.map(x => x.count||0), 1);
+    const uid = 'ab_' + Date.now();
     const rows = breakdown.map((x, i) => {
         const pct = total > 0 ? Math.round((x.count||0) * 100 / total) : 0;
         const barPct = Math.max(Math.round((x.count||0) * 100 / maxCount), 4);
         const rank = i + 1;
         const rankColor = rank === 1 ? '#ef4444' : (rank === 2 ? '#f59e0b' : 'var(--color-text-muted)');
-        return `
-            <div style="display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12px;">
-                <span style="width:18px;text-align:right;font-weight:700;color:${rankColor};">${rank}</span>
-                <span style="flex:1;min-width:0;">
-                    <span style="display:block;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(x.message||'')}">${esc(x.message||'(空)')}</span>
-                    <span style="display:block;height:6px;background:rgba(239,68,68,0.08);border-radius:3px;overflow:hidden;margin-top:2px;">
-                        <span style="display:block;width:${barPct}%;height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:3px;"></span>
-                    </span>
-                </span>
-                <span style="width:96px;text-align:right;color:var(--color-text-secondary);white-space:nowrap;">
-                    <b style="color:var(--color-error);">${x.count||0}</b> 次
-                    <span style="color:var(--color-text-muted);">· ${x.taskCount||0} 任务</span>
-                </span>
-                <span style="width:38px;text-align:right;color:var(--color-text-muted);">${pct}%</span>
+        const taskListId = uid + '_' + i;
+        const taskRows = (x.tasks || []).map(t => `
+            <tr style="font-size:11.5px;">
+                <td style="padding:3px 8px;color:var(--color-text-muted);">${esc(t.submittedAt||'').slice(11)||'-'}</td>
+                <td style="padding:3px 8px;font-family:var(--font-mono);font-size:11px;word-break:break-all;">${esc(t.taskNo||'')}</td>
+                <td style="padding:3px 8px;">${esc(t.taskType||'')}</td>
+                <td style="padding:3px 8px;font-family:var(--font-mono);font-size:10.5px;">${esc(t.startNode||'')}</td>
+                <td style="padding:3px 8px;font-family:var(--font-mono);font-size:10.5px;">${esc(t.endNode||'')}</td>
+                <td style="padding:3px 8px;text-align:right;">${t.count||1}</td>
+            </tr>`).join('');
+        const taskTable = (x.tasks && x.tasks.length) ? `
+            <div id="${taskListId}" style="display:none;margin:4px 0 8px 26px;padding:6px 10px;background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.1);border-radius:8px;overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;">
+                    <tr style="font-size:11px;color:var(--color-text-muted);">
+                        <th style="padding:2px 8px;text-align:left;">时间</th>
+                        <th style="padding:2px 8px;text-align:left;">任务号</th>
+                        <th style="padding:2px 8px;text-align:left;">类型</th>
+                        <th style="padding:2px 8px;text-align:left;">起点</th>
+                        <th style="padding:2px 8px;text-align:left;">终点</th>
+                        <th style="padding:2px 8px;text-align:right;">次数</th>
+                    </tr>
+                    ${taskRows}
+                </table>
+            </div>` : `
+            <div id="${taskListId}" style="display:none;margin:4px 0 8px 26px;padding:8px 12px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.1);border-radius:8px;font-size:12px;color:var(--color-text-muted);">
+                暂无任务明细 (历史数据未记录报警关联信息)
             </div>`;
+        return `
+            <div style="cursor:pointer;" onclick="var el=document.getElementById('${taskListId}');if(el)el.style.display=el.style.display==='none'?'block':'none';">
+                <div style="display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12px;">
+                    <span style="width:18px;text-align:right;font-weight:700;color:${rankColor};">${rank}</span>
+                    <span style="flex:1;min-width:0;">
+                        <span style="display:block;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${esc(x.message||'')}">${esc(x.message||'(空)')}</span>
+                        <span style="display:block;height:6px;background:rgba(239,68,68,0.08);border-radius:3px;overflow:hidden;margin-top:2px;">
+                            <span style="display:block;width:${barPct}%;height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:3px;"></span>
+                        </span>
+                    </span>
+                    <span style="width:96px;text-align:right;color:var(--color-text-secondary);white-space:nowrap;">
+                        <b style="color:var(--color-error);">${x.count||0}</b> 次
+                        <span style="color:var(--color-text-muted);">· ${x.taskCount||0} 任务</span>
+                    </span>
+                    <span style="width:38px;text-align:right;color:var(--color-text-muted);">${pct}%</span>
+                </div>
+            </div>
+            ${taskTable}`;
     }).join('');
     return `
         <div style="margin-top:14px;padding-top:12px;border-top:1px dashed rgba(99,102,241,0.15);">
             <div style="font-size:13px;font-weight:700;color:var(--color-text);margin-bottom:6px;">
-                ⚠ 报警明细 <span style="font-weight:400;color:var(--color-text-muted);font-size:11px;">共 ${breakdown.length} 种 · ${total} 次</span>
+                ⚠ 报警明细 <span style="font-weight:400;color:var(--color-text-muted);font-size:11px;">共 ${breakdown.length} 种 · ${total} 次 (点击展开)</span>
             </div>
             ${rows}
         </div>`;
