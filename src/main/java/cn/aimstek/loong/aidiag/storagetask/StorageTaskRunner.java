@@ -683,6 +683,21 @@ public class StorageTaskRunner {
 
                 // 进入新一轮
                 if (state.getCurrentStepInRound() == 0 && state.getCurrentTask() == null) {
+                    // 检查是否所有库位已访问完毕, 配置了自动停止则结束
+                    if (config.isStopWhenAllVisited()) {
+                        List<String> valid = state.getValidCodes();
+                        List<String> visited = state.getVisitedCodes();
+                        if (valid != null && visited != null && !valid.isEmpty()
+                                && visited.size() >= valid.size()) {
+                            log.info("所有库位已访问完毕 ({}/{}), 自动停止",
+                                    visited.size(), valid.size());
+                            state.setStatus(Status.FINISHED);
+                            state.setErrorMessage(null);
+                            saveState();
+                            return;
+                        }
+                    }
+
                     // 新一轮开始
                     state.setCurrentRound(state.getCurrentRound() + 1);
                     state.setCurrentCursor(state.getCurrentStartIdx());

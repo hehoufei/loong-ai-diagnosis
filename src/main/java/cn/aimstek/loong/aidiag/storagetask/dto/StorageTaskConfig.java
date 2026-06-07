@@ -92,6 +92,9 @@ public class StorageTaskConfig {
     /** 一轮内移库次数 */
     private int shuffleTimesPerRound = 10;
 
+    /** 所有库位访问完一遍后自动停止 (true=停, false=继续无限循环). 默认 true. */
+    private boolean stopWhenAllVisited = true;
+
     /**
      * 移库目标选取策略.
      *   SEQUENTIAL: 顺序滚动 (取 validCodes[(cursor+1) % n], 路径最短, 覆盖最快)
