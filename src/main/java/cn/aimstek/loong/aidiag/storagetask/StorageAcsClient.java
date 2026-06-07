@@ -167,4 +167,121 @@ public class StorageAcsClient {
         if (s == null) return "";
         return s.length() <= max ? s : s.substring(0, max) + "...";
     }
+
+    /**
+     * 通过 HTTP 接口查询任务状态 (替代直接查数据库, 避免外挂工具占用业务连接池).
+     * GET {taskDetailUrl}?taskNo=xxx
+     * 返回 taskState 字段值, 查不到返回 null.
+     */
+    public String queryTaskState(String taskNo) {
+        HttpURLConnection conn = null;
+        try {
+            String apiUrl = cfg.getTaskDetailUrl() + "?taskNo="
+                    + java.net.URLEncoder.encode(taskNo, StandardCharsets.UTF_8);
+            log.info("queryTaskState 请求: {}", apiUrl);
+
+            URL url = URI.create(apiUrl).toURL();
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "*/*");
+            conn.setConnectTimeout(cfg.getHttpTimeoutSeconds() * 1000);
+            conn.setReadTimeout(cfg.getHttpTimeoutSeconds() * 1000);
+
+            int code = conn.getResponseCode();
+            if (code >= 300) {
+                log.warn("queryTaskState HTTP {}: taskNo={}", code, taskNo);
+                return null;
+            }
+            String respBody = readBody(conn);
+            log.debug("queryTaskState 响应: {}", respBody.length() > 300 ? respBody.substring(0, 300) : respBody);
+            JsonNode root = mapper.readTree(respBody);
+            JsonNode data = root.get("data");
+            if (data == null || data.isNull()) {
+                log.warn("queryTaskState data 为空, taskNo={}, respBody={}", taskNo,
+                        respBody.length() > 200 ? respBody.substring(0, 200) : respBody);
+                return null;
+            }
+            JsonNode stateNode = data.get("taskState");
+            if (stateNode == null || stateNode.isNull()) {
+                log.warn("queryTaskState taskState 字段为空, taskNo={}", taskNo);
+                return null;
+            }
+            return stateNode.asText();
+        } catch (Exception e) {
+            log.warn("queryTaskState 异常 taskNo={}: {}", taskNo, e.getMessage());
+            return null;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
+     * 查询输送线点位的占位状态.
+     *
+     * @param nodeCode 点位编码, 如 "ND_11001". 会自动去掉 "ND_" 前缀取数字部分.
+     * @return true=有占位 (occupancyState==1), false=无占位, null=查询失败
+     */
+    public Boolean queryOccupancy(String nodeCode) {
+        if (nodeCode == null || nodeCode.isBlank()) return null;
+
+        // 去掉 ND_ 前缀, 得到纯数字 pointCode
+        String pointCode = nodeCode.replaceFirst("(?i)^ND_", "");
+
+        // 根据 pointCode 前缀决定 deviceCode: 11xxx -> DV_SSX_001, 12xxx -> DV_SSX_002, ...
+        String deviceCode = resolveConveyorDeviceCode(pointCode);
+        if (deviceCode == null) return null;
+
+        String base = cfg.getDeviceCacheBaseUrl();
+        if (base == null || base.isBlank()) return null;
+
+        String apiUrl = base.replaceAll("/+$", "")
+                + "/iot/deviceCache/client/get/"
+                + java.net.URLEncoder.encode(deviceCode, StandardCharsets.UTF_8);
+
+        HttpURLConnection conn = null;
+        try {
+            URL url = URI.create(apiUrl).toURL();
+            conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "*/*");
+            conn.setConnectTimeout(cfg.getHttpTimeoutSeconds() * 1000);
+            conn.setReadTimeout(cfg.getHttpTimeoutSeconds() * 1000);
+
+            int code = conn.getResponseCode();
+            if (code >= 300) {
+                log.warn("queryOccupancy HTTP {}: deviceCode={}, pointCode={}", code, deviceCode, pointCode);
+                return null;
+            }
+            String respBody = readBody(conn);
+            JsonNode root = mapper.readTree(respBody);
+            JsonNode pointNode = root.path("data").path("conveyorPointStateListMap").path(pointCode);
+            if (pointNode.isMissingNode() || pointNode.isNull()) {
+                log.warn("queryOccupancy 点位不存在: deviceCode={}, pointCode={}", deviceCode, pointCode);
+                return null;
+            }
+            int occupancy = pointNode.path("occupancyState").asInt(-1);
+            return occupancy == 1;
+        } catch (Exception e) {
+            log.warn("queryOccupancy 异常: deviceCode={}, pointCode={}, err={}", deviceCode, pointCode, e.getMessage());
+            return null;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /**
+     * 根据点位编码前两位数字确定输送线设备编码.
+     * 11xxx -> DV_SSX_001, 12xxx -> DV_SSX_002, 13xxx -> DV_SSX_003, ...
+     */
+    private String resolveConveyorDeviceCode(String pointCode) {
+        if (pointCode.length() < 2) return null;
+        try {
+            int prefix = Integer.parseInt(pointCode.substring(0, 2));
+            int idx = prefix - 10; // 11->1, 12->2, ...
+            if (idx < 1) return null;
+            return String.format("DV_SSX_%03d", idx);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
 }

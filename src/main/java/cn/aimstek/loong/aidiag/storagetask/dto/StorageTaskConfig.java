@@ -22,6 +22,31 @@ public class StorageTaskConfig {
     private String acsAddTaskUrl = System.getenv("ACS_ADD_TASK_URL") != null
             ? System.getenv("ACS_ADD_TASK_URL")
             : "http://localhost:8088/task/addTask";
+    /** 查询任务状态的接口 URL (GET, 拼接 ?taskNo=xxx). 为空时自动从 acsAddTaskUrl 推导同域地址. */
+    private String taskDetailUrl;
+
+    /** 如果 taskDetailUrl 未配置, 从 acsAddTaskUrl 推导出同域的查询接口地址 */
+    public String getTaskDetailUrl() {
+        if (taskDetailUrl != null && !taskDetailUrl.isBlank()) {
+            return taskDetailUrl;
+        }
+        // 从 acsAddTaskUrl (如 http://10.15.81.15:8088/task/addTask) 推导基地址
+        String base = acsAddTaskUrl;
+        if (base != null && base.contains("/task/addTask")) {
+            base = base.substring(0, base.indexOf("/task/addTask"));
+        } else if (base != null) {
+            // 取到端口号为止
+            int idx = base.indexOf("://");
+            if (idx > 0) {
+                int slashAfterHost = base.indexOf('/', idx + 3);
+                if (slashAfterHost > 0) {
+                    base = base.substring(0, slashAfterHost);
+                }
+            }
+        }
+        return (base == null ? "http://localhost:8088" : base)
+                + "/api/admin/scheduler/task/detail/getTaskDetail";
+    }
     private int httpTimeoutSeconds = 15;
 
     // ========== 库位编码规则 ==========

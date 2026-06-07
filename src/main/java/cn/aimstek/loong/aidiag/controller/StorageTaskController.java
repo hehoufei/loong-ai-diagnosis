@@ -143,6 +143,26 @@ public class StorageTaskController {
         }
     }
 
+    @GetMapping("/{aisle}/test-task-query")
+    public Response<String> testTaskQuery(@PathVariable int aisle, @RequestParam String taskNo) {
+        try {
+            String state = runner(aisle).testTaskQuery(taskNo);
+            return BaseResponse.success(state);
+        } catch (Exception e) {
+            return BaseResponse.failure("QUERY_ERROR", e.getMessage());
+        }
+    }
+
+    @GetMapping("/{aisle}/test-occupancy")
+    public Response<String> testOccupancy(@PathVariable int aisle, @RequestParam String nodeCode) {
+        try {
+            String result = runner(aisle).testOccupancyQuery(nodeCode);
+            return BaseResponse.success(result);
+        } catch (Exception e) {
+            return BaseResponse.failure("QUERY_ERROR", e.getMessage());
+        }
+    }
+
     @PostMapping("/{aisle}/clear-visited")
     public Response<Void> clearVisited(@PathVariable int aisle) {
         try {

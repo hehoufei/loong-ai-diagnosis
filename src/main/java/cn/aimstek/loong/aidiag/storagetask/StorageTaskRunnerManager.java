@@ -1,5 +1,6 @@
 package cn.aimstek.loong.aidiag.storagetask;
 
+import cn.aimstek.loong.aidiag.storagetask.dto.StorageTaskRecord;
 import cn.aimstek.loong.aidiag.storagetask.dto.StorageTaskRunnerState;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
@@ -110,6 +111,27 @@ public class StorageTaskRunnerManager {
             o.setTotalSuccess(s.getTotalSuccess());
             o.setTotalFailed(s.getTotalFailed());
             o.setErrorMessage(s.getErrorMessage());
+            // 根据 errorMessage 或 currentTask 状态推导分类标签
+            if (s.getErrorMessage() != null && !s.getErrorMessage().isBlank()) {
+                String msg = s.getErrorMessage();
+                if (msg.contains("无占位")) {
+                    o.setErrorTag("NO_OCCUPANCY");
+                } else if (msg.contains("占位查询接口异常")) {
+                    o.setErrorTag("OCCUPANCY_CHECK_FAILED");
+                } else if (msg.contains("addTask 失败")) {
+                    o.setErrorTag("ADD_FAILED");
+                } else if (msg.contains("任务终态失败")) {
+                    o.setErrorTag("TASK_FAILED");
+                } else {
+                    o.setErrorTag("ERROR");
+                }
+            }
+            // 检查当前任务是否有堆垛机报警
+            if (s.getCurrentTask() != null && s.getCurrentTask().getAlarmCount() > 0) {
+                if (o.getErrorTag() == null) {
+                    o.setErrorTag("CRANE_ALARM");
+                }
+            }
             if (o.getTotalCodes() > 0) {
                 o.setProgress(Math.round(o.getVisitedCodes() * 1000.0 / o.getTotalCodes()) / 10.0);
             }
@@ -163,6 +185,8 @@ public class StorageTaskRunnerManager {
         private long totalSuccess;
         private long totalFailed;
         private String errorMessage;
+        /** 错误分类标签: NO_OCCUPANCY / OCCUPANCY_CHECK_FAILED / ADD_FAILED / TASK_FAILED / CRANE_ALARM / null */
+        private String errorTag;
         private double progress; // 百分比 0~100
     }
 }

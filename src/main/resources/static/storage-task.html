@@ -621,6 +621,8 @@
             <span style="flex:1;"></span>
             <button class="glass-btn-outline" id="btnReloadCfg" style="padding:5px 12px;font-size:12px;">↻ 重新加载</button>
             <button class="glass-btn-outline" id="btnValidateSql" style="padding:5px 12px;font-size:12px;">🧪 校验 SQL</button>
+            <button class="glass-btn-outline" id="btnTestTaskQuery" style="padding:5px 12px;font-size:12px;">🔍 测试任务查询</button>
+            <button class="glass-btn-outline" id="btnTestOccupancy" style="padding:5px 12px;font-size:12px;">📍 测试占位查询</button>
             <button class="glass-btn"          id="btnSaveCfg" style="padding:5px 14px;font-size:12px;">💾 保存</button>
             <button class="modal-close" onclick="closeCfgModal()" title="关闭">✕</button>
         </div>
@@ -722,6 +724,15 @@ function renderOverview(list) {
         card.className = 'glass-card stat-card clickable';
         card.style.cursor = 'pointer';
         card.onclick = () => switchAisle(o.aisle);
+        const errorTagMap = {
+            'NO_OCCUPANCY': '📍 无占位',
+            'OCCUPANCY_CHECK_FAILED': '📍 占位查询失败',
+            'ADD_FAILED': '❌ 下发失败',
+            'TASK_FAILED': '❌ 任务失败',
+            'CRANE_ALARM': '🚨 堆垛机报警',
+            'ERROR': '⚠ 异常'
+        };
+        const tagText = o.errorTag ? (errorTagMap[o.errorTag] || '⚠ ' + o.errorTag) : '';
         card.innerHTML = `
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
                 <span style="font-size:14px;font-weight:700;">${o.aisle} 巷道</span>
@@ -730,6 +741,7 @@ function renderOverview(list) {
             </div>
             <div class="stat-value" style="font-size:18px;">${o.progress}%</div>
             <div class="stat-label">已访问 ${o.visitedCodes} / ${o.totalCodes} · 第${o.currentRound}轮</div>
+            ${tagText ? `<div style="font-size:11px;color:var(--color-error);margin-top:6px;line-height:1.3;" title="${(o.errorMessage||'').replace(/"/g,'&quot;')}">${tagText}</div>` : ''}
         `;
         grid.appendChild(card);
 
@@ -853,6 +865,8 @@ const CFG_FIELDS = [
     { key: 'dbUsername',                label: 'DB 账号',             type: 'text' },
     { key: 'dbPassword',                label: 'DB 密码',             type: 'password' },
     { key: 'acsAddTaskUrl',             label: 'addTask 地址',        type: 'text',     wide: true },
+    { key: 'taskDetailUrl',             label: '任务查询接口',         type: 'text',     wide: true,
+      hint: 'GET 拼接 ?taskNo=xxx 查询任务状态' },
     { key: 'httpTimeoutSeconds',        label: 'HTTP 超时(秒)',       type: 'number' },
     { key: 'storagePrefix',             label: '库位编码前缀',         type: 'text',     wide: true,  hint: '一般不改' },
     { key: 'aisles',                    label: '巷道',                type: 'intArray', hint: '逗号分隔, 例: 8 或 8,9' },
@@ -1766,6 +1780,28 @@ function bindActions() {
             toast('SQL 合法 ✓', 'success');
         } catch (e) {
             toast('SQL 校验失败: ' + e.message, 'error', 4500);
+        }
+    });
+
+    $('btnTestTaskQuery').addEventListener('click', async () => {
+        const taskNo = prompt('输入任务号测试查询接口', 'ZDYNDTASK_20260513');
+        if (!taskNo) return;
+        try {
+            const res = await api('/test-task-query?taskNo=' + encodeURIComponent(taskNo));
+            toast('查询成功, taskState = ' + res, 'success', 4000);
+        } catch (e) {
+            toast('查询失败: ' + e.message, 'error', 4500);
+        }
+    });
+
+    $('btnTestOccupancy').addEventListener('click', async () => {
+        const nodeCode = prompt('输入点位编码测试占位查询', 'ND_11001');
+        if (!nodeCode) return;
+        try {
+            const res = await api('/test-occupancy?nodeCode=' + encodeURIComponent(nodeCode));
+            toast('占位查询: ' + res, 'success', 4000);
+        } catch (e) {
+            toast('占位查询失败: ' + e.message, 'error', 4500);
         }
     });
 

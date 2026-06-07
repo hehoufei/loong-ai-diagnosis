@@ -35,6 +35,11 @@ public class StorageDb {
         return DriverManager.getConnection(cfg.getDbUrl(), cfg.getDbUsername(), cfg.getDbPassword());
     }
 
+    /** 关闭资源 (DriverManager 模式无需操作, 保留接口兼容) */
+    public void close() {
+        // no-op for DriverManager mode
+    }
+
     /** 测试连接, 返回成功或抛异常 */
     public void ping() throws SQLException {
         try (Connection conn = open();

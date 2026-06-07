@@ -43,6 +43,9 @@ public class StorageTaskRunner {
     private volatile StorageTaskConfig config;
     private final StorageTaskRunnerState state = new StorageTaskRunnerState();
 
+    /** 数据库操作 (仅用于库位校验等低频操作, 任务状态轮询已改走 HTTP 接口) */
+    private volatile StorageDb db;
+
     /** 控制信号 */
     private final Object pauseLock = new Object();
     private volatile boolean pauseRequested = false;
@@ -62,6 +65,8 @@ public class StorageTaskRunner {
         // 确保 config 中的 aisles 只包含本巷道
         config.setAisles(new ArrayList<>(List.of(aisle)));
         loadState();
+        // 数据库仅用于库位校验等低频操作
+        this.db = new StorageDb(config);
         // 进程重启后, 重新进入 PAUSED 状态, 由用户决定是否继续
         if (state.getStatus() == Status.RUNNING) {
             state.setStatus(Status.PAUSED);
@@ -97,8 +102,11 @@ public class StorageTaskRunner {
                     "validateLocationSql 必须包含占位符 " + StorageDb.CODES_PLACEHOLDER);
         }
         StorageDb.validateSelectSql("queryTaskStateSql", newConfig.getQueryTaskStateSql());
+
         this.config = newConfig;
         saveConfig();
+        // 更新 db 实例以使用新配置
+        this.db = new StorageDb(config);
     }
 
     public synchronized StorageTaskRunnerState getState() {
@@ -228,7 +236,6 @@ public class StorageTaskRunner {
 
     /** 重新加载有效库位 (同时保留进度, 根据 currentHoldPosition 重新定位 cursor) */
     public synchronized void regenerateValidCodes() {
-        StorageDb db = new StorageDb(config);
         List<String> all = StorageCodeGenerator.generate(config);
         List<String> valid;
         try {
@@ -259,10 +266,37 @@ public class StorageTaskRunner {
 
     public synchronized void testDb() {
         try {
-            new StorageDb(config).ping();
+            db.ping();
         } catch (Exception e) {
             throw new RuntimeException("数据库连接失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 测试任务查询接口: 用指定的 taskNo 调用 taskDetailUrl, 返回查询到的 taskState.
+     * 用于 UI 上验证接口是否可用.
+     */
+    public synchronized String testTaskQuery(String taskNo) {
+        StorageAcsClient acs = new StorageAcsClient(config, mapper);
+        String result = acs.queryTaskState(taskNo);
+        if (result == null) {
+            String url = config.getTaskDetailUrl() + "?taskNo=" + taskNo;
+            throw new RuntimeException("查询返回空, 实际请求: " + url + " ── 请确认 URL 可达且任务号存在");
+        }
+        return result;
+    }
+
+    /**
+     * 测试占位查询接口: 指定点位编码 (如 ND_11001), 返回占位状态描述.
+     * 用于 UI 上验证设备缓存接口是否可用.
+     */
+    public synchronized String testOccupancyQuery(String nodeCode) {
+        StorageAcsClient acs = new StorageAcsClient(config, mapper);
+        Boolean occupied = acs.queryOccupancy(nodeCode);
+        if (occupied == null) {
+            throw new RuntimeException("查询失败, 请确认 deviceCacheBaseUrl 配置正确且点位存在: " + nodeCode);
+        }
+        return occupied ? "有占位 (occupancyState=1)" : "无占位 (occupancyState=2)";
     }
 
     /** 清空已访问库位标记 (不影响其他进度状态) */
@@ -446,6 +480,23 @@ public class StorageTaskRunner {
 
         // 同步重新下发 (入库任务自动重试3次)
         StorageAcsClient acs = new StorageAcsClient(config, mapper);
+
+        // N2S / N2N 重试前再次检查起点占位
+        if ("N2S".equals(rec.getTaskType()) || "N2N".equals(rec.getTaskType())) {
+            Boolean occupied = acs.queryOccupancy(rec.getStartNode());
+            if (occupied == null) {
+                state.setErrorMessage("占位查询接口异常 (" + rec.getStartNode() + "), 请检查配置");
+                saveState();
+                throw new RuntimeException("占位查询失败: " + rec.getStartNode());
+            }
+            if (!occupied) {
+                state.setErrorMessage("起点 " + rec.getStartNode()
+                        + " 仍无占位, 请确认货物到位后再重试");
+                saveState();
+                throw new RuntimeException("起点 " + rec.getStartNode() + " 无占位");
+            }
+        }
+
         try {
             addTaskWithRetry(acs, rec);
         } catch (Exception e) {
@@ -619,7 +670,6 @@ public class StorageTaskRunner {
 
     private void runLoop() {
         try {
-            StorageDb db = new StorageDb(config);
             StorageAcsClient acs = new StorageAcsClient(config, mapper);
             CraneAlarmClient crane = new CraneAlarmClient(config, mapper);
 
@@ -656,6 +706,38 @@ public class StorageTaskRunner {
                 // 下发任务
                 if (state.getCurrentTask() == null) {
                     StorageTaskRecord rec = newRecord(plan);
+
+                    // N2S(入库) / N2N(输送): 起点是输送线点位, 下发前检查占位
+                    if ("N2S".equals(rec.getTaskType()) || "N2N".equals(rec.getTaskType())) {
+                        Boolean occupied = acs.queryOccupancy(rec.getStartNode());
+                        if (occupied == null) {
+                            // 查询失败, 报警暂停
+                            rec.setState("OCCUPANCY_CHECK_FAILED");
+                            rec.setRemark("占位查询失败, 起点=" + rec.getStartNode() + ", 请检查 deviceCacheBaseUrl 配置");
+                            state.setCurrentTask(rec);
+                            state.setStatus(Status.PAUSED);
+                            state.setErrorMessage("占位查询接口异常 (" + rec.getStartNode()
+                                    + ") ── 确认接口可用后, 点 重试当前");
+                            saveState();
+                            log.warn("占位查询失败, 进入 PAUSED: startNode={}", rec.getStartNode());
+                            return;
+                        }
+                        if (!occupied) {
+                            // 起点没有占位, 不下发, 报警暂停
+                            rec.setState("NO_OCCUPANCY");
+                            rec.setRemark("起点 " + rec.getStartNode() + " 无占位, 无法下发");
+                            state.setCurrentTask(rec);
+                            state.setStatus(Status.PAUSED);
+                            state.setErrorMessage("起点 " + rec.getStartNode()
+                                    + " 无占位 (occupancyState≠1), 不下发"
+                                    + " ── 确认货物到位后, 点 重试当前");
+                            saveState();
+                            log.warn("起点无占位, 进入 PAUSED: startNode={}", rec.getStartNode());
+                            return;
+                        }
+                        log.info("起点 {} 占位确认 OK, 继续下发", rec.getStartNode());
+                    }
+
                     state.setCurrentTask(rec);
                     state.setTotalIssued(state.getTotalIssued() + 1);
                     saveState();
@@ -677,7 +759,7 @@ public class StorageTaskRunner {
                 }
 
                 // 轮询直到终态 / 暂停 / 跳过
-                String finalState = pollUntilTerminal(db, crane);
+                String finalState = pollUntilTerminal(acs, crane);
                 StorageTaskRecord rec = state.getCurrentTask();
                 if (rec == null) {
                     continue;
@@ -737,11 +819,11 @@ public class StorageTaskRunner {
     }
 
     /**
-     * 轮询任务状态:
+     * 轮询任务状态 (通过 HTTP 接口查询, 不直连数据库):
      *   返回 "SUCCESS" / "MANUAL_SUCCESS" / "CANCEL" / "FAIL" / ...
      *   或特殊标记 "__PAUSE__" / "__SKIP__"
      */
-    private String pollUntilTerminal(StorageDb db, CraneAlarmClient crane) {
+    private String pollUntilTerminal(StorageAcsClient acs, CraneAlarmClient crane) {
         StorageTaskRecord rec = state.getCurrentTask();
         long startMs = System.currentTimeMillis();
         long thresholdMs = config.getTaskStuckThresholdSeconds() * 1000L;
@@ -761,16 +843,16 @@ public class StorageTaskRunner {
                 return "__PAUSE__";
             }
 
-            String dbState = db.queryTaskState(rec.getTaskNo());
-            rec.setDbTaskState(dbState);
+            String taskState = acs.queryTaskState(rec.getTaskNo());
+            rec.setDbTaskState(taskState);
 
             // 堆垛机报警采集 (与任务状态轮询同频)
             if (monitorAlarm) {
                 lastAlarmKeys = collectCraneAlarms(crane, craneCode, rec, lastAlarmKeys);
             }
 
-            if (dbState != null) {
-                String upper = dbState.toUpperCase();
+            if (taskState != null) {
+                String upper = taskState.toUpperCase();
                 if (ADVANCING_STATES.contains(upper)) {
                     return upper;
                 }
