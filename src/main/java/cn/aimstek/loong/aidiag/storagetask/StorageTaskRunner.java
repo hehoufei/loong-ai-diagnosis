@@ -823,6 +823,22 @@ public class StorageTaskRunner {
                 StorageTaskRecord justFinished = rec;
                 archiveCurrent();
                 advanceStep(justFinished);
+
+                // 每个任务完成后检查: 所有库位已访问完毕则自动停止
+                if (config.isStopWhenAllVisited()) {
+                    List<String> valid = state.getValidCodes();
+                    List<String> visited = state.getVisitedCodes();
+                    if (valid != null && visited != null && !valid.isEmpty()
+                            && visited.size() >= valid.size()) {
+                        log.info("所有库位已访问完毕 ({}/{}), 自动停止",
+                                visited.size(), valid.size());
+                        state.setStatus(Status.FINISHED);
+                        state.setErrorMessage(null);
+                        saveState();
+                        return;
+                    }
+                }
+
                 saveState();
             }
         } catch (Throwable t) {
