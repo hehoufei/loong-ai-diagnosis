@@ -901,6 +901,8 @@ const CFG_FIELDS = [
       hint: 'LOCAL 模式下随机抽 cursor ± N' },
     { key: 'avoidSameColSameSide',      label: '避免同列同侧移库',     type: 'bool',
       hint: '同巷道+同层+同列+同侧 (如左远→左近) 直接跳过' },
+    { key: 'crossColumnMove',           label: '移库强制跨列',         type: 'bool',
+      hint: '开启后每次移库跳到相邻列(±1), 优先选未访问的 row' },
     { key: 'pollIntervalSeconds',       label: '轮询间隔(秒)',         type: 'number' },
     { key: 'taskStuckThresholdSeconds', label: '卡住阈值(秒)',         type: 'number' },
     { key: 'enableCraneAlarmMonitor',   label: '堆垛机报警监控',       type: 'bool',

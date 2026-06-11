@@ -113,6 +113,13 @@ public class StorageTaskConfig {
      */
     private boolean avoidSameColSameSide = true;
 
+    /**
+     * 移库是否强制跨列 (默认 false).
+     * 开启后, 每次 S2S 移库会跳过同列的库位, 选取下一个不同列的库位作为目标.
+     * 关闭则按原有顺序逐个取下一个库位.
+     */
+    private boolean crossColumnMove = false;
+
     // ========== 轮询 ==========
     private int pollIntervalSeconds = 3;
     /** 单任务轮询超时 (秒). 超时不会中止, 仅在 UI 标记为"卡住", 等待手动处理 */

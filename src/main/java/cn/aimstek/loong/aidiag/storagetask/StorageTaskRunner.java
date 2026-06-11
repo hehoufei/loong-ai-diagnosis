@@ -1104,19 +1104,110 @@ public class StorageTaskRunner {
     }
 
     /**
-     * 选移库目标: 纯顺序取下一个.
-     * 因为 validCodes 的生成顺序已保证相邻库位跨侧 (ROW_VISIT_ORDER={1,3,2,4}),
-     * 不需要运行时做任何 avoid 判断, 直接取 codes[(curIdx+1) % n] 即可.
+     * 选移库目标: 根据 crossColumnMove 开关决定策略.
+     * - 关闭: 纯顺序取下一个 (原有逻辑)
+     * - 开启: 跳到相邻列 (列号差1), 并在目标列内轮转选不同 row,
+     *         保证跨列的同时兼顾覆盖度.
      */
     private String pickMoveTarget(List<String> codes, int curIdx, String cur, String strategy, int window) {
         int n = codes.size();
         if (n <= 1) return cur;
-        int next = (curIdx + 1) % n;
-        // 防止极端情况下起终点相同
-        if (codes.get(next).equals(cur)) {
-            next = (next + 1) % n;
+
+        if (!config.isCrossColumnMove()) {
+            // 原有逻辑: 纯顺序取下一个
+            int next = (curIdx + 1) % n;
+            if (codes.get(next).equals(cur)) {
+                next = (next + 1) % n;
+            }
+            return codes.get(next);
         }
-        return codes.get(next);
+
+        // 跨列模式: 找相邻列, 优先选未访问的 row
+        int curCol = extractColNum(cur);
+
+        // 依次尝试 col+1, col-1, 任意不同列
+        String result = findInAdjacentCol(codes, curIdx, n, curCol + 1);
+        if (result == null && curCol - 1 >= 1) {
+            result = findInAdjacentCol(codes, curIdx, n, curCol - 1);
+        }
+        if (result == null) {
+            // 退化: 找任意不同列的第一个未访问库位
+            result = findInDifferentCol(codes, curIdx, n, curCol);
+        }
+        if (result == null) {
+            // 极端退化: 所有库位同列
+            result = codes.get((curIdx + 1) % n);
+        }
+        return result;
+    }
+
+    /**
+     * 在目标列 targetCol 中找一个库位, 优先选未访问过的.
+     * 如果目标列所有库位都已访问, 则取该列中离 curIdx 最近的一个.
+     * 找不到目标列返回 null.
+     */
+    private String findInAdjacentCol(List<String> codes, int curIdx, int n, int targetCol) {
+        List<String> visited = state.getVisitedCodes();
+        String firstInCol = null;     // 该列第一个命中 (离 curIdx 最近的)
+        String unvisitedInCol = null; // 该列第一个未访问的
+
+        for (int offset = 1; offset < n; offset++) {
+            int candidateIdx = (curIdx + offset) % n;
+            String candidate = codes.get(candidateIdx);
+            if (extractColNum(candidate) == targetCol) {
+                if (firstInCol == null) {
+                    firstInCol = candidate;
+                }
+                if (unvisitedInCol == null && (visited == null || !visited.contains(candidate))) {
+                    unvisitedInCol = candidate;
+                    break; // 找到未访问的就够了
+                }
+            }
+        }
+        // 优先返回未访问的, 否则返回该列第一个 (已全部访问时仍能工作)
+        return unvisitedInCol != null ? unvisitedInCol : firstInCol;
+    }
+
+    /**
+     * 找任意不同列中第一个未访问的库位; 都访问过则取第一个不同列的.
+     */
+    private String findInDifferentCol(List<String> codes, int curIdx, int n, int curCol) {
+        List<String> visited = state.getVisitedCodes();
+        String firstDiffCol = null;
+        String unvisitedDiffCol = null;
+
+        for (int offset = 1; offset < n; offset++) {
+            int candidateIdx = (curIdx + offset) % n;
+            String candidate = codes.get(candidateIdx);
+            if (extractColNum(candidate) != curCol) {
+                if (firstDiffCol == null) {
+                    firstDiffCol = candidate;
+                }
+                if (unvisitedDiffCol == null && (visited == null || !visited.contains(candidate))) {
+                    unvisitedDiffCol = candidate;
+                    break;
+                }
+            }
+        }
+        return unvisitedDiffCol != null ? unvisitedDiffCol : firstDiffCol;
+    }
+
+    /**
+     * 从库位编码中提取列号 (col) 的数值.
+     * 编码格式: SL_-WH_001-SA_HSMD_1-AL_L08-L-02-01-0005-01
+     *                                                ^^^^ 倒数第2段
+     */
+    private static int extractColNum(String code) {
+        if (code == null || code.isEmpty()) return 0;
+        int lastDash = code.lastIndexOf('-');
+        if (lastDash <= 0) return 0;
+        int secondLastDash = code.lastIndexOf('-', lastDash - 1);
+        if (secondLastDash < 0) return 0;
+        try {
+            return Integer.parseInt(code.substring(secondLastDash + 1, lastDash));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private StorageTaskRecord newRecord(StepPlan plan) {

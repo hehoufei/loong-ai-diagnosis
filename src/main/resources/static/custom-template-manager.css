@@ -1,0 +1,194 @@
+/* 模板管理器弹窗样式 */
+
+.ctm-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15,23,42,0.5);
+    backdrop-filter: blur(6px);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+}
+.ctm-overlay.show { display: flex; animation: fadeIn .2s ease; }
+
+.ctm-modal {
+    background: #fff;
+    border-radius: 16px;
+    width: 980px;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.2);
+}
+
+.ctm-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(99,102,241,0.1);
+}
+
+.ctm-modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.ctm-modal-actions { display: flex; gap: 8px; }
+
+.ctm-modal-body {
+    flex: 1;
+    overflow: auto;
+    padding: 16px 20px;
+}
+
+/* 按钮 */
+.ctm-btn {
+    height: 32px;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1.5px solid rgba(99,102,241,0.2);
+    background: transparent;
+    color: var(--color-text-secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s;
+}
+.ctm-btn:hover { border-color: var(--color-primary); color: var(--color-primary); background: rgba(99,102,241,0.04); }
+.ctm-btn.primary { background: var(--gradient-btn); color: #fff; border: none; }
+.ctm-btn.primary:hover { box-shadow: 0 4px 16px rgba(99,102,241,0.3); }
+.ctm-btn.close { border-color: rgba(239,68,68,0.3); color: rgba(239,68,68,0.7); }
+.ctm-btn.close:hover { background: rgba(239,68,68,0.06); }
+
+.ctm-btn-sm {
+    height: 26px;
+    padding: 0 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid rgba(99,102,241,0.15);
+    background: transparent;
+    color: var(--color-text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all .15s;
+}
+.ctm-btn-sm:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.ctm-btn-sm.del { border-color: rgba(239,68,68,0.2); color: rgba(239,68,68,0.6); }
+.ctm-btn-sm.del:hover { background: rgba(239,68,68,0.06); color: #ef4444; }
+
+/* 表格 */
+.ctm-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ctm-table th {
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    background: rgba(248,250,252,0.8);
+    border-bottom: 1px solid rgba(99,102,241,0.08);
+}
+.ctm-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(99,102,241,0.04);
+    color: var(--color-text);
+    vertical-align: middle;
+}
+.ctm-table tr:hover td { background: rgba(99,102,241,0.03); }
+
+.ctm-empty {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+}
+
+/* 表单 */
+.ctm-form-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(99,102,241,0.08);
+}
+
+.ctm-form-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.ctm-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 140px;
+}
+.ctm-form-field label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+.ctm-form-field input,
+.ctm-form-field select {
+    height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+    border: 1.5px solid rgba(99,102,241,0.12);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.8);
+    outline: none;
+    transition: border-color .15s;
+}
+.ctm-form-field input:focus,
+.ctm-form-field select:focus { border-color: var(--color-primary); }
+
+.ctm-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 14px 0 8px;
+    padding: 4px 0;
+    border-bottom: 1px dashed rgba(99,102,241,0.15);
+}
+
+/* 功能行 */
+.ctm-func-row, .ctm-extra-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+.ctm-func-row input, .ctm-extra-row input, .ctm-extra-row select {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 11px;
+    border: 1px solid rgba(99,102,241,0.12);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.6);
+    outline: none;
+}
+.ctm-func-row input:focus, .ctm-extra-row input:focus { border-color: var(--color-primary); }
+
+/* JSON 编辑器 textarea */
+.ctm-json-editor {
+    width: 100%;
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    border: 1.5px solid rgba(99,102,241,0.12);
+    border-radius: 8px;
+    background: rgba(248,250,252,0.8);
+    outline: none;
+    resize: vertical;
+    transition: border-color .15s;
+}
+.ctm-json-editor:focus { border-color: var(--color-primary); background: #fff; }

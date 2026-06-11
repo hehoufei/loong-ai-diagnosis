@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WCS 智能诊断 - 快捷任务下发</title>
 <link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="custom-template-manager.css">
 <style>
     .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
     .topbar-logo { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--color-primary); white-space: nowrap; }
@@ -259,6 +260,7 @@
                 <div class="template-card" onclick="addToQueue('n2n_disassemble_single')"><span class="t-icon">🪜</span><span class="t-name">叠单个(多个) 子(母)托盘</span><span class="t-tag">N2N</span></div>
                 <div class="template-card" onclick="addToQueue('n2n_disassemble_from_mother')"><span class="t-icon">🪓</span><span class="t-name">拆单个(多个)子托盘到母托</span><span class="t-tag">N2N</span></div>
                 <div class="template-card" onclick="addToQueue('n2n_disassemble_mother_to')"><span class="t-icon">🏗️</span><span class="t-name">拆单个母托盘到某处</span><span class="t-tag">N2N</span></div>
+                <div class="template-card" onclick="addToQueue('s2n_film_wrapping')"><span class="t-icon">🎞️</span><span class="t-name">缠膜机任务</span><span class="t-tag">S2N</span></div>
             </div>
             <div class="template-group">
                 <div class="template-group-title">🏗️ 入库/出库/移库</div>
@@ -271,6 +273,13 @@
                 <div class="template-card" onclick="addToQueue('group_add')"><span class="t-icon">➕</span><span class="t-name">合托任务组</span><span class="t-tag">GROUP</span></div>
                 <div class="template-card" onclick="addToQueue('group_add_wait')"><span class="t-icon">⏳</span><span class="t-name">合托任务组(子托等待)</span><span class="t-tag">GROUP</span></div>
                 <div class="template-card" onclick="addToQueue('group_remove_add')"><span class="t-icon">🔀</span><span class="t-name">拆合托任务组</span><span class="t-tag">GROUP</span></div>
+            </div>
+            <!-- 自定义模板区域 -->
+            <div id="customTemplateGroups"></div>
+            <div style="margin-top:12px;padding-top:10px;border-top:1px dashed rgba(99,102,241,0.15);">
+                <div class="template-card" onclick="openTemplateManager()" style="background:rgba(99,102,241,0.06);border-color:rgba(99,102,241,0.2);">
+                    <span class="t-icon">⚙️</span><span class="t-name" style="color:var(--color-primary);">模板管理器</span><span class="t-tag" style="background:rgba(139,92,246,0.1);color:#7c3aed;">配置</span>
+                </div>
             </div>
         </div>
         <!-- Right: Queue -->
@@ -471,6 +480,7 @@ function getTemplateData(tpl) {
         case 'n2n_disassemble_single': return { ...base, type: 'single', tplName: '叠单个(多个) 子(母)托盘', taskType: 'N2N', startNode: 'ND_22037', endNode: 'ND_21071', funcs: [], goodsList: [{ goodsCode: 'GS_1223' }] };
         case 'n2n_disassemble_from_mother': return { ...base, type: 'single', tplName: '拆单个(多个)子托盘到母托', taskType: 'N2N', startNode: 'ND_21069', endNode: 'ND_22037', funcs: ['DISASSEMBLE_SUB_PALLET_NODE'], containerNum: '1', deviceLocationCode: 'ND_21071' };
         case 'n2n_disassemble_mother_to': return { ...base, type: 'single', tplName: '拆单个母托盘到某处', taskType: 'N2N', startNode: 'ND_11073', endNode: 'ND_22048', funcs: [], motherHighNodes: true };
+        case 's2n_film_wrapping': return { ...base, type: 'single', tplName: '缠膜机任务', taskType: 'S2N', startNode: 'ND_11010', endNode: 'ND_11009', funcs: ['FILM_WRAPPING_BAGGING_NODE'], remark: '缠膜' };
         case 'n2s': return { ...base, type: 'single', tplName: '入库任务', taskType: 'N2S', startNode: 'ND_11025', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', funcs: [], remark: '入库' };
         case 's2n': return { ...base, type: 'single', tplName: '出库任务', taskType: 'S2N', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', endNode: 'ND_11025', funcs: [], remark: '出库' };
         case 's2s': return { ...base, type: 'single', tplName: '移库任务', taskType: 'S2S', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-02-01-0003-03', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-R-01-03-0003-04', funcs: [], remark: '移库' };
@@ -529,6 +539,13 @@ function renderSingleCard(item, idx) {
             <div class="q-field"><label>CONTAINER_NUM <span style="font-size:10px;color:#d97706;font-weight:400;">(拆子托数量)</span></label><input value="${d.containerNum||'1'}" onchange="updateQField('${item.id}','containerNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
             <div class="q-field"><label>DEVICE_LOCATION_CODE <span style="font-size:10px;color:#d97706;font-weight:400;">(拆叠盘机子托盘高位)</span></label><input value="${d.deviceLocationCode||''}" onchange="updateQField('${item.id}','deviceLocationCode',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>`;
     }
+    // 自定义模板的额外字段
+    if (item.tpl === '__custom_single__' && d._customTpl && d._customTpl.extraFields) {
+        d._customTpl.extraFields.forEach(ef => {
+            const val = (d._extraValues && d._extraValues[ef.key]) || ef.defaultValue || '';
+            extraFields += `<div class="q-field"><label>${ef.label || ef.key} <span style="font-size:10px;color:#d97706;font-weight:400;">(${ef.key})</span></label><input value="${val}" onchange="updateQExtraField('${item.id}','${ef.key}',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>`;
+        });
+    }
     let goodsSection = '';
     if (isStackTpl) {
         const goodsList = d.goodsList || [{ goodsCode: 'GS_1223' }];
@@ -576,6 +593,7 @@ function renderSingleCard(item, idx) {
 
 function renderGroupCard(item, idx) {
     const d = item.data;
+    if (item.tpl === '__custom_group__') return renderCustomGroupCard(item, idx);
     if (item.tpl === 'group_add' || item.tpl === 'group_add_wait') return renderGroupAddCard(item, idx);
     return renderGroupRemoveAddCard(item, idx);
 }
@@ -675,9 +693,49 @@ function renderGroupRemoveAddCard(item, idx) {
     </div>`;
 }
 
+function renderCustomGroupCard(item, idx) {
+    const d = item.data;
+    return `<div class="q-card" id="card_${item.id}">
+        <div class="q-card-head">
+            <div class="q-card-info"><span class="q-card-type group">GROUP</span><span class="q-card-name">${d.tplName}</span></div>
+            <div class="q-card-btns">
+                <button class="q-btn" onclick="previewOneJson('${item.id}')" title="查看 JSON">{ }</button>
+                <button class="q-btn go" onclick="sendOne('${item.id}')" title="单独下发">▶</button>
+                <button class="q-btn del" onclick="removeFromQueue('${item.id}')" title="删除">✕</button>
+            </div>
+        </div>
+        <div class="q-card-body" style="grid-template-columns:1fr 1fr;">
+            <div style="grid-column:1/-1;margin-bottom:4px;">
+                <div class="q-field"><label>组类型</label><input value="${d.groupType}" onchange="updateQField('${item.id}','groupType',this.value)"></div>
+            </div>
+            <div style="padding:8px;background:rgba(99,102,241,0.03);border-radius:8px;border:1px solid rgba(99,102,241,0.08);">
+                <div style="font-size:11px;font-weight:700;color:var(--color-primary);margin-bottom:6px;">🔵 主任务</div>
+                <div class="q-field" style="margin-bottom:4px;"><label>起点</label><div style="display:flex;gap:4px;"><input value="${d.mainStart}" onchange="updateQField('${item.id}','mainStart',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','mainStart')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>终点</label><div style="display:flex;gap:4px;"><input value="${d.mainEnd||''}" onchange="updateQField('${item.id}','mainEnd',this.value)" style="flex:1;" placeholder="可为空"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','mainEnd')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','mainTaskType',this.value)"><option ${d.mainTaskType==='N2N'?'selected':''}>N2N</option><option ${d.mainTaskType==='N2S'?'selected':''}>N2S</option><option ${d.mainTaskType==='S2N'?'selected':''}>S2N</option></select></div>
+                <div class="q-field"><label>独立运行</label><select onchange="updateQField('${item.id}','mainIndependent',this.value)"><option value="NO" ${d.mainIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.mainIndependent==='YES'?'selected':''}>YES</option></select></div>
+            </div>
+            <div style="padding:8px;background:rgba(16,185,129,0.03);border-radius:8px;border:1px solid rgba(16,185,129,0.08);">
+                <div style="font-size:11px;font-weight:700;color:var(--color-success);margin-bottom:6px;">🟢 子任务</div>
+                <div class="q-field" style="margin-bottom:4px;"><label>起点</label><div style="display:flex;gap:4px;"><input value="${d.subStart}" onchange="updateQField('${item.id}','subStart',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','subStart')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>终点</label><div style="display:flex;gap:4px;"><input value="${d.subEnd||''}" onchange="updateQField('${item.id}','subEnd',this.value)" style="flex:1;" placeholder="可为空"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','subEnd')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','subTaskType',this.value)"><option ${d.subTaskType==='N2N'?'selected':''}>N2N</option><option ${d.subTaskType==='N2S'?'selected':''}>N2S</option><option ${d.subTaskType==='S2N'?'selected':''}>S2N</option></select></div>
+                <div class="q-field"><label>独立运行</label><select onchange="updateQField('${item.id}','subIndependent',this.value)"><option value="NO" ${d.subIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.subIndependent==='YES'?'selected':''}>YES</option></select></div>
+            </div>
+        </div>
+    </div>`;
+}
+
 function updateQField(id, field, value) {
     const item = queue.find(q => q.id === id);
     if (item) item.data[field] = value;
+}
+function updateQExtraField(id, key, value) {
+    const item = queue.find(q => q.id === id);
+    if (item) {
+        if (!item.data._extraValues) item.data._extraValues = {};
+        item.data._extraValues[key] = value;
+    }
 }
 
 function swapStartEnd(id) {
@@ -727,6 +785,17 @@ function removeGoods(id, idx) {
 
 <script>
 // ============ 构建 Payload ============
+
+// 统一 payload 构建入口：支持内置模板 + 自定义模板
+function buildAnyPayload(item) {
+    const isGroup = item.data.type === 'group';
+    const isCustom = item.tpl === '__custom_single__' || item.tpl === '__custom_group__';
+    if (isCustom) {
+        return isGroup ? buildCustomGroupPayload(item.data) : buildCustomSinglePayload(item.data);
+    }
+    return isGroup ? buildGroupPayload(item.data) : buildSinglePayload(item.data);
+}
+
 function buildSinglePayload(data) {
     const goodsInfoList = (data.goodsList && data.goodsList.length > 0)
         ? data.goodsList.map(g => ({ ...DEFAULT_GOODS, goodsCode: g.goodsCode }))
@@ -848,7 +917,7 @@ async function sendOne(id) {
 
     const isGroup = item.data.type === 'group';
     const url = currentServer + (isGroup ? '/task/addTaskGroup' : '/task/addTask');
-    const payload = isGroup ? buildGroupPayload(item.data) : buildSinglePayload(item.data);
+    const payload = buildAnyPayload(item);
     const startTime = Date.now();
 
     try {
@@ -1130,7 +1199,7 @@ function previewAllJson() {
     queue.forEach((item, idx) => {
         const isGroup = item.data.type === 'group';
         const url = currentServer + (isGroup ? '/task/addTaskGroup' : '/task/addTask');
-        const payload = isGroup ? buildGroupPayload(item.data) : buildSinglePayload(item.data);
+        const payload = buildAnyPayload(item);
         const label = `// ─── [${idx + 1}] ${item.data.tplName || item.data.taskType || 'Task'} ── ${url}`;
         parts.push(label + '\n' + JSON.stringify(payload, null, 2));
     });
@@ -1144,7 +1213,7 @@ function previewOneJson(id) {
     if (!item) return;
     const isGroup = item.data.type === 'group';
     const url = currentServer + (isGroup ? '/task/addTaskGroup' : '/task/addTask');
-    const payload = isGroup ? buildGroupPayload(item.data) : buildSinglePayload(item.data);
+    const payload = buildAnyPayload(item);
     const header = `// POST ${url}\n`;
     _lastPreviewJson = JSON.stringify(payload, null, 2);
     document.getElementById('jsonPreviewContent').textContent = header + _lastPreviewJson;
@@ -2634,5 +2703,7 @@ function computeMinCoverage(data) {
     };
 }
 </script>
+<script src="custom-template-manager.js"></script>
+<script src="custom-template-modal.js"></script>
 </body>
 </html>
