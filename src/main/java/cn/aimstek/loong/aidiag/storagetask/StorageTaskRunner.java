@@ -1106,8 +1106,8 @@ public class StorageTaskRunner {
     /**
      * 选移库目标: 根据 crossColumnMove 开关决定策略.
      * - 关闭: 纯顺序取下一个 (原有逻辑)
-     * - 开启: 跳到相邻列 (列号差1), 并在目标列内轮转选不同 row,
-     *         保证跨列的同时兼顾覆盖度.
+     * - 开启: 跳到相邻列 (列号差1) + 相近层 (层号差≤1),
+     *         并优先选未访问过的 row, 保证跨列不跨远层.
      */
     private String pickMoveTarget(List<String> codes, int curIdx, String cur, String strategy, int window) {
         int n = codes.size();
@@ -1122,74 +1122,111 @@ public class StorageTaskRunner {
             return codes.get(next);
         }
 
-        // 跨列模式: 找相邻列, 优先选未访问的 row
+        // 跨列模式: 找相邻列 + 相近层, 优先选未访问的 row
         int curCol = extractColNum(cur);
+        int curLayer = extractLayerNum(cur);
 
-        // 依次尝试 col+1, col-1, 任意不同列
-        String result = findInAdjacentCol(codes, curIdx, n, curCol + 1);
+        // 依次尝试 col+1, col-1, 任意不同列; 每次都限制层差≤1
+        String result = findInAdjacentCol(codes, curIdx, n, curCol + 1, curLayer);
         if (result == null && curCol - 1 >= 1) {
-            result = findInAdjacentCol(codes, curIdx, n, curCol - 1);
+            result = findInAdjacentCol(codes, curIdx, n, curCol - 1, curLayer);
         }
         if (result == null) {
-            // 退化: 找任意不同列的第一个未访问库位
-            result = findInDifferentCol(codes, curIdx, n, curCol);
+            // 放宽: 任意不同列但仍限制相近层
+            result = findInDifferentCol(codes, curIdx, n, curCol, curLayer);
         }
         if (result == null) {
-            // 极端退化: 所有库位同列
+            // 极端退化: 不限制层, 找任意不同列
+            result = findInDifferentColAnyLayer(codes, curIdx, n, curCol);
+        }
+        if (result == null) {
             result = codes.get((curIdx + 1) % n);
         }
         return result;
     }
 
     /**
-     * 在目标列 targetCol 中找一个库位, 优先选未访问过的.
-     * 如果目标列所有库位都已访问, 则取该列中离 curIdx 最近的一个.
-     * 找不到目标列返回 null.
+     * 在目标列 targetCol 中找一个库位, 要求层差≤1, 优先选未访问过的.
+     * 找不到返回 null.
      */
-    private String findInAdjacentCol(List<String> codes, int curIdx, int n, int targetCol) {
+    private String findInAdjacentCol(List<String> codes, int curIdx, int n, int targetCol, int curLayer) {
         List<String> visited = state.getVisitedCodes();
-        String firstInCol = null;     // 该列第一个命中 (离 curIdx 最近的)
-        String unvisitedInCol = null; // 该列第一个未访问的
+        String bestUnvisited = null;
+        int bestUnvisitedLayerDiff = Integer.MAX_VALUE;
+        String bestAny = null;
+        int bestAnyLayerDiff = Integer.MAX_VALUE;
 
         for (int offset = 1; offset < n; offset++) {
             int candidateIdx = (curIdx + offset) % n;
             String candidate = codes.get(candidateIdx);
-            if (extractColNum(candidate) == targetCol) {
-                if (firstInCol == null) {
-                    firstInCol = candidate;
-                }
-                if (unvisitedInCol == null && (visited == null || !visited.contains(candidate))) {
-                    unvisitedInCol = candidate;
-                    break; // 找到未访问的就够了
-                }
+            if (extractColNum(candidate) != targetCol) continue;
+
+            int candLayer = extractLayerNum(candidate);
+            int layerDiff = Math.abs(candLayer - curLayer);
+            if (layerDiff > 1) continue; // 只要同层或相邻层
+
+            // 记录最佳候选 (层差最小的)
+            if (layerDiff < bestAnyLayerDiff) {
+                bestAny = candidate;
+                bestAnyLayerDiff = layerDiff;
+            }
+            boolean isUnvisited = (visited == null || !visited.contains(candidate));
+            if (isUnvisited && layerDiff < bestUnvisitedLayerDiff) {
+                bestUnvisited = candidate;
+                bestUnvisitedLayerDiff = layerDiff;
             }
         }
-        // 优先返回未访问的, 否则返回该列第一个 (已全部访问时仍能工作)
-        return unvisitedInCol != null ? unvisitedInCol : firstInCol;
+        return bestUnvisited != null ? bestUnvisited : bestAny;
     }
 
     /**
-     * 找任意不同列中第一个未访问的库位; 都访问过则取第一个不同列的.
+     * 找任意不同列 + 层差≤1 中第一个未访问的库位.
      */
-    private String findInDifferentCol(List<String> codes, int curIdx, int n, int curCol) {
+    private String findInDifferentCol(List<String> codes, int curIdx, int n, int curCol, int curLayer) {
         List<String> visited = state.getVisitedCodes();
-        String firstDiffCol = null;
-        String unvisitedDiffCol = null;
+        String bestUnvisited = null;
+        int bestUnvisitedDist = Integer.MAX_VALUE;
+        String bestAny = null;
+        int bestAnyDist = Integer.MAX_VALUE;
 
+        for (int offset = 1; offset < n; offset++) {
+            int candidateIdx = (curIdx + offset) % n;
+            String candidate = codes.get(candidateIdx);
+            int candCol = extractColNum(candidate);
+            if (candCol == curCol) continue;
+
+            int candLayer = extractLayerNum(candidate);
+            int layerDiff = Math.abs(candLayer - curLayer);
+            if (layerDiff > 1) continue;
+
+            int colDiff = Math.abs(candCol - curCol);
+            int dist = colDiff + layerDiff;
+
+            if (dist < bestAnyDist) {
+                bestAny = candidate;
+                bestAnyDist = dist;
+            }
+            boolean isUnvisited = (visited == null || !visited.contains(candidate));
+            if (isUnvisited && dist < bestUnvisitedDist) {
+                bestUnvisited = candidate;
+                bestUnvisitedDist = dist;
+            }
+        }
+        return bestUnvisited != null ? bestUnvisited : bestAny;
+    }
+
+    /**
+     * 极端退化: 不限层, 找任意不同列的最近库位.
+     */
+    private String findInDifferentColAnyLayer(List<String> codes, int curIdx, int n, int curCol) {
         for (int offset = 1; offset < n; offset++) {
             int candidateIdx = (curIdx + offset) % n;
             String candidate = codes.get(candidateIdx);
             if (extractColNum(candidate) != curCol) {
-                if (firstDiffCol == null) {
-                    firstDiffCol = candidate;
-                }
-                if (unvisitedDiffCol == null && (visited == null || !visited.contains(candidate))) {
-                    unvisitedDiffCol = candidate;
-                    break;
-                }
+                return candidate;
             }
         }
-        return unvisitedDiffCol != null ? unvisitedDiffCol : firstDiffCol;
+        return null;
     }
 
     /**
@@ -1205,6 +1242,22 @@ public class StorageTaskRunner {
         if (secondLastDash < 0) return 0;
         try {
             return Integer.parseInt(code.substring(secondLastDash + 1, lastDash));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * 从库位编码中提取层号 (layer) 的数值.
+     * 编码格式: SL_-WH_001-SA_HSMD_1-AL_L08-L-02-01-0005-01
+     *                                                      ^^ 最后一段
+     */
+    private static int extractLayerNum(String code) {
+        if (code == null || code.isEmpty()) return 0;
+        int lastDash = code.lastIndexOf('-');
+        if (lastDash < 0 || lastDash >= code.length() - 1) return 0;
+        try {
+            return Integer.parseInt(code.substring(lastDash + 1));
         } catch (NumberFormatException e) {
             return 0;
         }
