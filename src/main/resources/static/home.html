@@ -228,6 +228,12 @@ body {
 </style>
 </head>
 <body>
+<script>
+// 登录校验：未登录则跳转到登录页
+if (sessionStorage.getItem('wcs_logged_in') !== 'true') {
+    window.location.replace('login.html');
+}
+</script>
 
 <div class="home-header">
     <h1>🤖 WCS 智能诊断平台</h1>
