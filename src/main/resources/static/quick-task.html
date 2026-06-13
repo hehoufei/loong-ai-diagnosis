@@ -28,6 +28,29 @@
     .server-chip .chip-del { display: none; margin-left: 4px; font-size: 11px; color: rgba(239,68,68,0.6); cursor: pointer; }
     .server-chip:hover .chip-del { display: inline; }
     .server-chip .chip-del:hover { color: rgba(239,68,68,1); }
+    .server-chip .chip-edit { display: none; margin-left: 4px; font-size: 11px; color: rgba(99,102,241,0.6); cursor: pointer; }
+    .server-chip:hover .chip-edit { display: inline; }
+    .server-chip .chip-edit:hover { color: rgba(99,102,241,1); }
+
+    /* 编辑服务器弹窗 */
+    .edit-server-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.45); backdrop-filter: blur(6px); z-index: 2000; align-items: center; justify-content: center; }
+    .edit-server-overlay.show { display: flex; animation: fadeIn .2s ease; }
+    .edit-server-modal { background: rgba(255,255,255,0.96); backdrop-filter: blur(20px); border: 1px solid rgba(99,102,241,0.12); border-radius: 20px; padding: 28px 28px 24px; width: 380px; max-width: calc(100vw - 40px); box-shadow: 0 24px 64px rgba(15,23,42,0.18); }
+    .edit-server-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .edit-server-title { font-size: 16px; font-weight: 700; color: var(--color-text); }
+    .edit-server-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--color-text-muted); transition: color .2s; padding: 4px 8px; border-radius: 6px; }
+    .edit-server-close:hover { color: var(--color-error); background: rgba(239,68,68,0.06); }
+    .edit-server-field { margin-bottom: 14px; }
+    .edit-server-label { display: block; font-size: 13px; font-weight: 600; color: var(--color-text-secondary); margin-bottom: 6px; }
+    .edit-server-input { width: 100%; height: 40px; padding: 0 14px; font-size: 14px; border: 1.5px solid rgba(99,102,241,0.15); border-radius: 10px; outline: none; background: rgba(255,255,255,0.8); color: var(--color-text); transition: border-color .2s, box-shadow .2s; box-sizing: border-box; }
+    .edit-server-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+    .edit-server-error { font-size: 12px; color: var(--color-error); min-height: 18px; margin-bottom: 8px; }
+    .edit-server-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .edit-server-btn { height: 36px; padding: 0 20px; font-size: 13px; font-weight: 600; border-radius: 10px; cursor: pointer; transition: all .2s; border: none; }
+    .edit-server-btn.cancel { background: rgba(99,102,241,0.06); color: var(--color-text-secondary); border: 1px solid rgba(99,102,241,0.15); }
+    .edit-server-btn.cancel:hover { background: rgba(99,102,241,0.1); }
+    .edit-server-btn.confirm { background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); color: #fff; }
+    .edit-server-btn.confirm:hover { box-shadow: 0 4px 16px rgba(99,102,241,0.35); }
 
     .main-layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
     @media (max-width: 900px) { .main-layout { grid-template-columns: 1fr; } }
@@ -240,10 +263,7 @@
 <div class="container">
     <div class="server-bar">
         <label>🖥️ 目标服务器：</label>
-        <span class="server-chip active" data-url="http://10.15.58.250:18088" onclick="selectServer(this)">输送线 250:18088</span>
-        <span class="server-chip" data-url="http://10.15.58.249:8088" onclick="selectServer(this)">立库 249:8088</span>
-        <span class="server-chip" data-url="http://localhost:8088" onclick="selectServer(this)">本地 localhost</span>
-        <span id="customChipsContainer"></span>
+        <span id="serverChipsContainer"></span>
         <div class="server-custom">
             <input type="text" id="customServerName" class="input-name" placeholder="名称">
             <input type="text" id="customServer" class="input-url" placeholder="如 http://10.0.0.1:8088">
@@ -348,16 +368,29 @@ function genGroupCode() { const d = new Date(); const ts = `${d.getFullYear()}${
 function nowStr() { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`; }
 
 // ============ 服务器选择 ============
-const CUSTOM_SERVERS_KEY = 'qt_custom_servers';
+const SERVERS_KEY = 'qt_all_servers';
 const ACTIVE_SERVER_KEY = 'qt_active_server';
 
-function getCustomServers() {
-    try { return JSON.parse(localStorage.getItem(CUSTOM_SERVERS_KEY)) || []; }
-    catch(e) { return []; }
+// 默认预设服务器（首次使用时初始化）
+const DEFAULT_SERVERS = [
+    { name: '输送线 250:18088', url: 'http://10.15.58.250:18088' },
+    { name: '立库 249:8088', url: 'http://10.15.58.249:8088' },
+    { name: '本地 localhost', url: 'http://localhost:8088' },
+];
+
+function getAllServers() {
+    try {
+        const saved = localStorage.getItem(SERVERS_KEY);
+        if (!saved) {
+            localStorage.setItem(SERVERS_KEY, JSON.stringify(DEFAULT_SERVERS));
+            return [...DEFAULT_SERVERS];
+        }
+        return JSON.parse(saved) || [];
+    } catch(e) { return [...DEFAULT_SERVERS]; }
 }
 
-function saveCustomServers(list) {
-    localStorage.setItem(CUSTOM_SERVERS_KEY, JSON.stringify(list));
+function saveAllServers(list) {
+    localStorage.setItem(SERVERS_KEY, JSON.stringify(list));
 }
 
 function saveActiveServer(url) {
@@ -392,56 +425,101 @@ function applyCustomServer() {
     }
 
     // 检查是否已存在
-    const servers = getCustomServers();
+    const servers = getAllServers();
     const existing = servers.find(s => s.url === urlVal);
     if (existing) {
         existing.name = displayName;
     } else {
         servers.push({ name: displayName, url: urlVal });
     }
-    saveCustomServers(servers);
+    saveAllServers(servers);
 
-    // 重新渲染自定义 chips 并选中新添加的
-    renderCustomChips(urlVal);
+    // 重新渲染 chips 并选中新添加的
+    renderServerChips(urlVal);
 
     // 清空输入
     document.getElementById('customServer').value = '';
     document.getElementById('customServerName').value = '';
 }
 
-function removeCustomServer(url, event) {
+function removeServer(url, event) {
     event.stopPropagation();
-    const servers = getCustomServers().filter(s => s.url !== url);
-    saveCustomServers(servers);
-    // 如果删除的是当前选中的，切回第一个预设
+    const servers = getAllServers().filter(s => s.url !== url);
+    saveAllServers(servers);
+    // 如果删除的是当前选中的，切回第一个
     if (currentServer === url) {
         const firstChip = document.querySelector('.server-bar .server-chip[data-url]');
-        if (firstChip) selectServer(firstChip);
+        if (firstChip) {
+            selectServer(firstChip);
+        } else {
+            currentServer = '';
+        }
     }
-    renderCustomChips();
+    renderServerChips();
 }
 
-function renderCustomChips(activeUrl) {
-    const container = document.getElementById('customChipsContainer');
-    const servers = getCustomServers();
+function editServer(url, event) {
+    event.stopPropagation();
+    const servers = getAllServers();
+    const server = servers.find(s => s.url === url);
+    if (!server) return;
+
+    // 填充编辑弹窗
+    document.getElementById('editServerOriginalUrl').value = server.url;
+    document.getElementById('editServerName').value = server.name;
+    document.getElementById('editServerUrl').value = server.url;
+    document.getElementById('editServerError').textContent = '';
+    document.getElementById('editServerOverlay').classList.add('show');
+    setTimeout(() => document.getElementById('editServerName').focus(), 100);
+}
+
+function closeEditServerModal() {
+    document.getElementById('editServerOverlay').classList.remove('show');
+}
+
+function confirmEditServer() {
+    const originalUrl = document.getElementById('editServerOriginalUrl').value;
+    const newName = document.getElementById('editServerName').value.trim();
+    const newUrl = document.getElementById('editServerUrl').value.trim();
+    const errorEl = document.getElementById('editServerError');
+
+    if (!newUrl) {
+        errorEl.textContent = '地址不能为空';
+        return;
+    }
+    if (!newName) {
+        errorEl.textContent = '名称不能为空';
+        return;
+    }
+
+    const servers = getAllServers();
+    const server = servers.find(s => s.url === originalUrl);
+    if (!server) return;
+
+    const wasActive = (currentServer === originalUrl);
+    server.name = newName;
+    server.url = newUrl;
+    saveAllServers(servers);
+
+    if (wasActive) {
+        currentServer = newUrl;
+        saveActiveServer(currentServer);
+    }
+
+    closeEditServerModal();
+    renderServerChips();
+}
+
+function renderServerChips(activeUrl) {
+    const container = document.getElementById('serverChipsContainer');
+    const servers = getAllServers();
     container.innerHTML = '';
     servers.forEach(s => {
-        // 提取 host:port 用于显示
-        let hostPort = '';
-        try {
-            const u = new URL(s.url);
-            hostPort = u.hostname + (u.port ? ':' + u.port : '');
-        } catch(e) {
-            hostPort = s.url.replace(/^https?:\/\//, '');
-        }
-        // 显示格式：名称 + host:port（如果名称和 hostPort 不同才同时显示）
-        const label = (s.name && s.name !== hostPort) ? `${s.name} ${hostPort}` : hostPort;
-
         const chip = document.createElement('span');
         chip.className = 'server-chip';
         chip.dataset.url = s.url;
         chip.title = s.url;
-        chip.innerHTML = `${label} <span class="chip-del" onclick="removeCustomServer('${s.url}', event)" title="删除">✕</span>`;
+        chip.innerHTML = `${s.name} <span class="chip-edit" onclick="editServer('${s.url}', event)" title="编辑">✎</span><span class="chip-del" onclick="removeServer('${s.url}', event)" title="删除">✕</span>`;
         chip.onclick = function() { selectServer(this); };
         container.appendChild(chip);
     });
@@ -452,14 +530,21 @@ function renderCustomChips(activeUrl) {
     if (activeChip) {
         activeChip.classList.add('active');
         currentServer = targetUrl;
+    } else if (servers.length > 0) {
+        // 如果目标不存在，选中第一个
+        const firstChip = container.querySelector('.server-chip');
+        if (firstChip) {
+            firstChip.classList.add('active');
+            currentServer = firstChip.dataset.url;
+        }
     }
     saveActiveServer(currentServer);
 }
 
-// 页面加载时恢复自定义服务器
-function initCustomServers() {
+// 页面加载时渲染服务器列表
+function initServers() {
     const savedActive = localStorage.getItem(ACTIVE_SERVER_KEY);
-    renderCustomChips();
+    renderServerChips();
     // 恢复上次选中的服务器
     if (savedActive) {
         const chip = document.querySelector(`.server-chip[data-url="${savedActive}"]`);
@@ -468,7 +553,7 @@ function initCustomServers() {
         }
     }
 }
-initCustomServers();
+initServers();
 </script>
 
 <script>
@@ -2946,6 +3031,30 @@ function computeMinCoverage(data) {
     };
 }
 </script>
+<!-- 编辑服务器弹窗 -->
+<div id="editServerOverlay" class="edit-server-overlay" onclick="if(event.target===this)closeEditServerModal()">
+    <div class="edit-server-modal">
+        <div class="edit-server-header">
+            <span class="edit-server-title">✎ 编辑服务器</span>
+            <button class="edit-server-close" onclick="closeEditServerModal()">✕</button>
+        </div>
+        <input type="hidden" id="editServerOriginalUrl">
+        <div class="edit-server-field">
+            <label class="edit-server-label">名称</label>
+            <input type="text" id="editServerName" class="edit-server-input" placeholder="服务器名称">
+        </div>
+        <div class="edit-server-field">
+            <label class="edit-server-label">地址</label>
+            <input type="text" id="editServerUrl" class="edit-server-input" placeholder="如 http://10.0.0.1:8088" onkeydown="if(event.key==='Enter')confirmEditServer()">
+        </div>
+        <div id="editServerError" class="edit-server-error"></div>
+        <div class="edit-server-actions">
+            <button class="edit-server-btn cancel" onclick="closeEditServerModal()">取消</button>
+            <button class="edit-server-btn confirm" onclick="confirmEditServer()">确定</button>
+        </div>
+    </div>
+</div>
+
 <script src="custom-template-manager.js"></script>
 <script src="custom-template-modal.js"></script>
 </body>
