@@ -35,7 +35,7 @@ async function ctmSave(tpl) {
         await ctmLoadAll();
         return res.data;
     } else {
-        alert('保存失败: ' + (res.msg || ''));
+        showToast('保存失败: ' + (res.msg || ''), 'error');
         return null;
     }
 }
@@ -46,18 +46,19 @@ async function ctmUpdate(id, tpl) {
         await ctmLoadAll();
         return res.data;
     } else {
-        alert('更新失败: ' + (res.msg || ''));
+        showToast('更新失败: ' + (res.msg || ''), 'error');
         return null;
     }
 }
 
 async function ctmDelete(id) {
-    if (!confirm('确定删除此模板？')) return;
+    const confirmed = await showConfirm('确定删除此模板？', { title: '删除确认', okText: '删除', cancelText: '取消' });
+    if (!confirmed) return;
     const res = await ctmFetch(CTM_API + '/' + id, { method: 'DELETE' });
     if (res.code === 200 || res.code === '200') {
         await ctmLoadAll();
     } else {
-        alert('删除失败: ' + (res.msg || ''));
+        showToast('删除失败: ' + (res.msg || ''), 'error');
     }
 }
 
@@ -98,7 +99,7 @@ function ctmRenderPanel() {
 
 function ctmAddToQueue(tplId) {
     const tpl = customTemplates.find(t => t.id === tplId);
-    if (!tpl) { alert('模板未找到'); return; }
+    if (!tpl) { showToast('模板未找到', 'error'); return; }
 
     if (tpl.type === 'group') {
         const data = {

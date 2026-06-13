@@ -413,7 +413,7 @@ function ctmCollectExtras(containerId) {
 // ============ 提交表单 ============
 async function ctmSubmitForm() {
     const name = document.getElementById('ctmF_name').value.trim();
-    if (!name) { alert('请输入模板名称'); return; }
+    if (!name) { showToast('请输入模板名称', 'warn'); return; }
 
     const type = document.getElementById('ctmF_type').value;
     const tpl = {

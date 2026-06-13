@@ -261,6 +261,7 @@
                 <div class="template-card" onclick="addToQueue('n2n_disassemble_from_mother')"><span class="t-icon">🪓</span><span class="t-name">拆单个(多个)子托盘到母托</span><span class="t-tag">N2N</span></div>
                 <div class="template-card" onclick="addToQueue('n2n_disassemble_mother_to')"><span class="t-icon">🏗️</span><span class="t-name">拆单个母托盘到某处</span><span class="t-tag">N2N</span></div>
                 <div class="template-card" onclick="addToQueue('s2n_film_wrapping')"><span class="t-icon">🎞️</span><span class="t-name">缠膜机任务</span><span class="t-tag">S2N</span></div>
+                <div class="template-card" onclick="addToQueue('s2n_robot_arm')"><span class="t-icon">🤖</span><span class="t-name">机械手搬运</span><span class="t-tag">S2N</span></div>
             </div>
             <div class="template-group">
                 <div class="template-group-title">🏗️ 入库/出库/移库</div>
@@ -273,6 +274,7 @@
                 <div class="template-card" onclick="addToQueue('group_add')"><span class="t-icon">➕</span><span class="t-name">合托任务组</span><span class="t-tag">GROUP</span></div>
                 <div class="template-card" onclick="addToQueue('group_add_wait')"><span class="t-icon">⏳</span><span class="t-name">合托任务组(子托等待)</span><span class="t-tag">GROUP</span></div>
                 <div class="template-card" onclick="addToQueue('group_remove_add')"><span class="t-icon">🔀</span><span class="t-name">拆合托任务组</span><span class="t-tag">GROUP</span></div>
+                <div class="template-card" onclick="addToQueue('group_robot_arm')"><span class="t-icon">🤖</span><span class="t-name">机械手搬运组</span><span class="t-tag">GROUP</span></div>
             </div>
             <!-- 自定义模板区域 -->
             <div id="customTemplateGroups"></div>
@@ -330,13 +332,13 @@ const PALLET_CHILD = { containerCode: "C_1225", containerType: "PALLET", size: {
 const DEFAULT_GOODS = { goodsCode: "GS_1223", goodsType: "GOODS", size: { length: "800", width: "900", height: "1000", unit: "mm" }, weight: { value: "200", unit: "kg" } };
 
 const FUNC_OPTIONS = [
-    { key: 'SHAPE_DETECTION', label: '📐 SHAPE_DETECTION' },
-    { key: 'SCANNER_NODE', label: '🔍 SCANNER_NODE' },
-    { key: 'WEIGHING_NODE', label: '⚖️ WEIGHING_NODE' },
-    { key: 'FILM_WRAPPING_BAGGING_NODE', label: '🎞️ FILM_WRAPPING' },
-    { key: 'DISASSEMBLE_SUB_PALLET_NODE', label: '🔧 DISASSEMBLE_SUB' },
-    { key: 'WHOLE_DISASSEMBLE_PALLET_NODE', label: '🔨 WHOLE_DISASSEMBLE' },
-    { key: 'WHOLE_PLACE_NODE', label: '📦 WHOLE_PLACE' },
+    { key: 'SHAPE_DETECTION', label: '📐 外形检测 SHAPE_DETECTION' },
+    { key: 'SCANNER_NODE', label: '🔍 扫码 SCANNER_NODE' },
+    { key: 'WEIGHING_NODE', label: '⚖️ 称重 WEIGHING_NODE' },
+    { key: 'FILM_WRAPPING_BAGGING_NODE', label: '🎞️ 缠膜 FILM_WRAPPING' },
+    { key: 'DISASSEMBLE_SUB_PALLET_NODE', label: '🔧 拆子托 DISASSEMBLE_SUB' },
+    { key: 'WHOLE_DISASSEMBLE_PALLET_NODE', label: '🔨 整体拆垛 WHOLE_DISASSEMBLE' },
+    { key: 'WHOLE_PLACE_NODE', label: '📦 整体合垛 WHOLE_PLACE' },
 ];
 
 // ============ 工具函数 ============
@@ -481,12 +483,14 @@ function getTemplateData(tpl) {
         case 'n2n_disassemble_from_mother': return { ...base, type: 'single', tplName: '拆单个(多个)子托盘到母托', taskType: 'N2N', startNode: 'ND_21069', endNode: 'ND_22037', funcs: ['DISASSEMBLE_SUB_PALLET_NODE'], containerNum: '1', deviceLocationCode: 'ND_21071' };
         case 'n2n_disassemble_mother_to': return { ...base, type: 'single', tplName: '拆单个母托盘到某处', taskType: 'N2N', startNode: 'ND_11073', endNode: 'ND_22048', funcs: [], motherHighNodes: true };
         case 's2n_film_wrapping': return { ...base, type: 'single', tplName: '缠膜机任务', taskType: 'S2N', startNode: 'ND_11010', endNode: 'ND_11009', funcs: ['FILM_WRAPPING_BAGGING_NODE'], remark: '缠膜' };
+        case 's2n_robot_arm': return { ...base, type: 'single', tplName: '机械手搬运', taskType: 'S2N', startNode: 'ND_21060', endNode: '', funcs: ['DISASSEMBLE_BY_PIECE_NODE'], remark: '机械手搬运', isRobotArm: true, goodsNum: '2', goodsTargetEndNode: 'ND_21046', goodsLength: '755', goodsWidth: '385', goodsHeight: '335' };
         case 'n2s': return { ...base, type: 'single', tplName: '入库任务', taskType: 'N2S', startNode: 'ND_11025', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', funcs: [], remark: '入库' };
         case 's2n': return { ...base, type: 'single', tplName: '出库任务', taskType: 'S2N', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', endNode: 'ND_11025', funcs: [], remark: '出库' };
         case 's2s': return { ...base, type: 'single', tplName: '移库任务', taskType: 'S2S', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-02-01-0003-03', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-R-01-03-0003-04', funcs: [], remark: '移库' };
         case 'group_add': return { type: 'group', tplName: '合托任务组', groupType: 'HALF_ADD_CONTAINER', mainStart: 'ND_22057', mainTaskType: 'N2S', mainIndependent: 'NO', mainFuncs: ['SCANNER_NODE', 'WHOLE_PLACE_NODE'], mainTargetEnd: 'ND_22059', subStart: 'ND_22018', subTaskType: 'N2S', subIndependent: 'NO' };
         case 'group_add_wait': return { type: 'group', tplName: '合托任务组(子托等待)', groupType: 'HALF_ADD_CONTAINER', mainStart: 'ND_22008', mainTaskType: 'N2S', mainIndependent: 'NO', mainFuncs: ['SCANNER_NODE', 'WHOLE_PLACE_NODE'], mainTargetEnd: 'ND_22020', subStart: 'ND_22058', subTaskType: 'N2S', subIndependent: 'NO' };
         case 'group_remove_add': return { type: 'group', tplName: '拆合托任务组', groupType: 'HALF_REMOVE_ADD_CONTAINER', mainStart: 'ND_11066', mainEnd: '', mainTaskType: 'N2N', mainIndependent: 'NO', mainFunc: 'WHOLE_DISASSEMBLE_PALLET_NODE', subStart: 'ND_11013', subEnd: '', subTaskType: 'N2N', subIndependent: 'NO', subFunc: 'WHOLE_PLACE_NODE', subTargetEnd: 'ND_11091' };
+        case 'group_robot_arm': return { type: 'group', tplName: '机械手搬运组', groupType: 'REMOVE_ADD_GOODS', isRobotArmGroup: true, mainStart: 'SL_-WH_HSMD-SA_LK-AL_05-R-02-04-0010-08', mainEnd: 'ND_19016', mainTaskType: 'S2S', mainIndependent: 'YES', mainGoodsNum: '6', mainGoodsLength: '60', mainGoodsWidth: '50', mainGoodsHeight: '10', mainGoodsUnit: 'cm', subStart: 'SL_-WH_HSMD-SA_LK-AL_04-R-01-03-0008-01', subEnd: 'ND_19071', subTaskType: 'S2S', subIndependent: 'YES', subGoodsNum: '6', subGoodsLength: '60', subGoodsWidth: '50', subGoodsHeight: '10', subGoodsUnit: 'cm' };
         default: return { ...base, type: 'single', tplName: '点到点', taskType: 'N2N', startNode: '', endNode: '', funcs: [] };
     }
 }
@@ -538,6 +542,14 @@ function renderSingleCard(item, idx) {
         extraFields = `
             <div class="q-field"><label>CONTAINER_NUM <span style="font-size:10px;color:#d97706;font-weight:400;">(拆子托数量)</span></label><input value="${d.containerNum||'1'}" onchange="updateQField('${item.id}','containerNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
             <div class="q-field"><label>DEVICE_LOCATION_CODE <span style="font-size:10px;color:#d97706;font-weight:400;">(拆叠盘机子托盘高位)</span></label><input value="${d.deviceLocationCode||''}" onchange="updateQField('${item.id}','deviceLocationCode',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>`;
+    }
+    // 机械手搬运模板额外字段
+    const isRobotArmTpl = (item.tpl === 's2n_robot_arm');
+    if (isRobotArmTpl) {
+        extraFields = `
+            <div class="q-field"><label>GOODS_NUM <span style="font-size:10px;color:#d97706;font-weight:400;">(搬运几个箱子)</span></label><input value="${d.goodsNum||'2'}" type="number" min="1" onchange="updateQField('${item.id}','goodsNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
+            <div class="q-field"><label>GOODS_TARGET_END_NODE <span style="font-size:10px;color:#d97706;font-weight:400;">(目的点/决定用哪个机械手，如去分拣线填分拣线点位)</span></label><input value="${d.goodsTargetEndNode||'ND_21046'}" onchange="updateQField('${item.id}','goodsTargetEndNode',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
+            <div class="q-field" style="grid-column:1/-1;"><label>📦 货物尺寸 (mm)</label><div style="display:flex;gap:6px;"><input value="${d.goodsLength||'755'}" onchange="updateQField('${item.id}','goodsLength',this.value)" placeholder="长" style="flex:1;border-color:rgba(245,158,11,0.3);"><input value="${d.goodsWidth||'385'}" onchange="updateQField('${item.id}','goodsWidth',this.value)" placeholder="宽" style="flex:1;border-color:rgba(245,158,11,0.3);"><input value="${d.goodsHeight||'335'}" onchange="updateQField('${item.id}','goodsHeight',this.value)" placeholder="高" style="flex:1;border-color:rgba(245,158,11,0.3);"></div></div>`;
     }
     // 自定义模板的额外字段
     if (item.tpl === '__custom_single__' && d._customTpl && d._customTpl.extraFields) {
@@ -594,6 +606,7 @@ function renderSingleCard(item, idx) {
 function renderGroupCard(item, idx) {
     const d = item.data;
     if (item.tpl === '__custom_group__') return renderCustomGroupCard(item, idx);
+    if (item.tpl === 'group_robot_arm') return renderRobotArmGroupCard(item, idx);
     if (item.tpl === 'group_add' || item.tpl === 'group_add_wait') return renderGroupAddCard(item, idx);
     return renderGroupRemoveAddCard(item, idx);
 }
@@ -688,6 +701,43 @@ function renderGroupRemoveAddCard(item, idx) {
                 <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','subIndependent',this.value)"><option value="NO" ${d.subIndependent==='NO'?'selected':''}>NO</option><option value="YES" ${d.subIndependent==='YES'?'selected':''}>YES</option></select></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>功能</label><select onchange="updateQField('${item.id}','subFunc',this.value)"><option ${d.subFunc==='WHOLE_PLACE_NODE'?'selected':''} value="WHOLE_PLACE_NODE">WHOLE_PLACE_NODE (整体合垛)</option><option ${d.subFunc==='WHOLE_DISASSEMBLE_PALLET_NODE'?'selected':''} value="WHOLE_DISASSEMBLE_PALLET_NODE">WHOLE_DISASSEMBLE_PALLET_NODE (整体拆垛)</option><option ${d.subFunc==='ASSEMBLE_BY_PIECE_NODE'?'selected':''} value="ASSEMBLE_BY_PIECE_NODE">ASSEMBLE_BY_PIECE_NODE (按件码垛)</option><option ${d.subFunc==='NONE'?'selected':''} value="NONE">NONE (无)</option></select></div>
                 <div class="q-field" style="margin-top:6px;padding:6px 8px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.3);border-radius:8px;"><label style="color:#d97706;font-weight:700;">⚠️ TARGET_END_NODE <span style="font-weight:400;font-size:10px;color:#92400e;">(决定去哪台拆合托机)</span></label><input value="${d.subTargetEnd||''}" onchange="updateQField('${item.id}','subTargetEnd',this.value)" placeholder="如 ND_12080" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
+            </div>
+        </div>
+    </div>`;
+}
+
+function renderRobotArmGroupCard(item, idx) {
+    const d = item.data;
+    return `<div class="q-card" id="card_${item.id}">
+        <div class="q-card-head">
+            <div class="q-card-info"><span class="q-card-type group">GROUP</span><span class="q-card-name">${d.tplName}</span></div>
+            <div class="q-card-btns">
+                <button class="q-btn" onclick="previewOneJson('${item.id}')" title="查看 JSON">{ }</button>
+                <button class="q-btn go" onclick="sendOne('${item.id}')" title="单独下发">▶</button>
+                <button class="q-btn del" onclick="removeFromQueue('${item.id}')" title="删除">✕</button>
+            </div>
+        </div>
+        <div class="q-card-body" style="grid-template-columns:1fr 1fr;">
+            <div style="grid-column:1/-1;margin-bottom:4px;">
+                <div class="q-field"><label>组类型</label><input value="${d.groupType}" disabled style="background:rgba(99,102,241,0.04);"></div>
+            </div>
+            <div style="padding:8px;background:rgba(99,102,241,0.03);border-radius:8px;border:1px solid rgba(99,102,241,0.08);">
+                <div style="font-size:11px;font-weight:700;color:var(--color-primary);margin-bottom:6px;">🔵 主任务 <span style="font-weight:400;color:var(--color-text-muted);">— 拆货 (DISASSEMBLE_BY_PIECE)</span></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>起点 <span style="font-size:10px;color:#6366f1;">(货物起点/库位)</span></label><div style="display:flex;gap:4px;"><input value="${d.mainStart}" onchange="updateQField('${item.id}','mainStart',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','mainStart')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>终点 <span style="font-size:10px;color:#6366f1;">(拆完后托盘要去的点)</span></label><div style="display:flex;gap:4px;"><input value="${d.mainEnd}" onchange="updateQField('${item.id}','mainEnd',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','mainEnd')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','mainTaskType',this.value)"><option ${d.mainTaskType==='N2N'?'selected':''}>N2N</option><option ${d.mainTaskType==='S2S'?'selected':''}>S2S</option><option ${d.mainTaskType==='N2S'?'selected':''}>N2S</option><option ${d.mainTaskType==='S2N'?'selected':''}>S2N</option></select></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','mainIndependent',this.value)"><option value="YES" ${d.mainIndependent==='YES'?'selected':''}>YES</option><option value="NO" ${d.mainIndependent==='NO'?'selected':''}>NO</option></select></div>
+                <div class="q-field" style="margin-top:6px;padding:6px 8px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.3);border-radius:8px;"><label style="color:#d97706;font-weight:700;">GOODS_NUM <span style="font-weight:400;font-size:10px;color:#92400e;">(搬运几个货)</span></label><input value="${d.mainGoodsNum||'6'}" type="number" min="1" onchange="updateQField('${item.id}','mainGoodsNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
+                <div class="q-field" style="margin-top:6px;"><label>📦 货物尺寸 <span style="font-size:10px;color:var(--color-text-muted);">(${d.mainGoodsUnit||'cm'})</span></label><div style="display:flex;gap:4px;"><input value="${d.mainGoodsLength||'60'}" onchange="updateQField('${item.id}','mainGoodsLength',this.value)" placeholder="长" style="flex:1;font-size:11px;"><input value="${d.mainGoodsWidth||'50'}" onchange="updateQField('${item.id}','mainGoodsWidth',this.value)" placeholder="宽" style="flex:1;font-size:11px;"><input value="${d.mainGoodsHeight||'10'}" onchange="updateQField('${item.id}','mainGoodsHeight',this.value)" placeholder="高" style="flex:1;font-size:11px;"></div></div>
+            </div>
+            <div style="padding:8px;background:rgba(16,185,129,0.03);border-radius:8px;border:1px solid rgba(16,185,129,0.08);">
+                <div style="font-size:11px;font-weight:700;color:var(--color-success);margin-bottom:6px;">🟢 子任务 <span style="font-weight:400;color:var(--color-text-muted);">— 码货 (ASSEMBLE_BY_PIECE)</span></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>起点 <span style="font-size:10px;color:#059669;">(码货托盘起点/库位)</span></label><div style="display:flex;gap:4px;"><input value="${d.subStart}" onchange="updateQField('${item.id}','subStart',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','subStart')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>终点 <span style="font-size:10px;color:#059669;">(码完后托盘要去的终点)</span></label><div style="display:flex;gap:4px;"><input value="${d.subEnd}" onchange="updateQField('${item.id}','subEnd',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','subEnd')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','subTaskType',this.value)"><option ${d.subTaskType==='N2N'?'selected':''}>N2N</option><option ${d.subTaskType==='S2S'?'selected':''}>S2S</option><option ${d.subTaskType==='N2S'?'selected':''}>N2S</option><option ${d.subTaskType==='S2N'?'selected':''}>S2N</option></select></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','subIndependent',this.value)"><option value="YES" ${d.subIndependent==='YES'?'selected':''}>YES</option><option value="NO" ${d.subIndependent==='NO'?'selected':''}>NO</option></select></div>
+                <div class="q-field" style="margin-top:6px;padding:6px 8px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.3);border-radius:8px;"><label style="color:#d97706;font-weight:700;">GOODS_NUM <span style="font-weight:400;font-size:10px;color:#92400e;">(码几个货)</span></label><input value="${d.subGoodsNum||'6'}" type="number" min="1" onchange="updateQField('${item.id}','subGoodsNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
+                <div class="q-field" style="margin-top:6px;"><label>📦 货物尺寸 <span style="font-size:10px;color:var(--color-text-muted);">(${d.subGoodsUnit||'cm'})</span></label><div style="display:flex;gap:4px;"><input value="${d.subGoodsLength||'60'}" onchange="updateQField('${item.id}','subGoodsLength',this.value)" placeholder="长" style="flex:1;font-size:11px;"><input value="${d.subGoodsWidth||'50'}" onchange="updateQField('${item.id}','subGoodsWidth',this.value)" placeholder="宽" style="flex:1;font-size:11px;"><input value="${d.subGoodsHeight||'10'}" onchange="updateQField('${item.id}','subGoodsHeight',this.value)" placeholder="高" style="flex:1;font-size:11px;"></div></div>
             </div>
         </div>
     </div>`;
@@ -800,7 +850,8 @@ function buildSinglePayload(data) {
     const goodsInfoList = (data.goodsList && data.goodsList.length > 0)
         ? data.goodsList.map(g => ({ ...DEFAULT_GOODS, goodsCode: g.goodsCode }))
         : [{ ...DEFAULT_GOODS }];
-    return {
+
+    const payload = {
         taskNo: genTaskNo(),
         taskSource: data.taskSource || 'WMS',
         taskType: data.taskType,
@@ -809,13 +860,30 @@ function buildSinglePayload(data) {
         independentRun: data.independentRun || '',
         preStartTaskNo: '', preEndTaskNo: '',
         startNode: data.startNode,
-        endNode: data.endNode,
         requiredFunctionList: buildFuncList(data),
-        containerList: [{ ...PALLET_MOTHER }],
         goodsInfoList: goodsInfoList,
         expectedStartTime: '', expectedFinishTime: '',
         remark: data.remark || '输送'
     };
+
+    // 机械手搬运：用 containerInfo (单对象)，不传 endNode
+    if (data.isRobotArm) {
+        payload.containerInfo = { containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' }, weight: { value: '36', unit: 'kg' } };
+        // 按 goodsNum 生成多个 goods，使用用户配置的尺寸
+        const num = parseInt(data.goodsNum) || 2;
+        const gl = data.goodsLength || '755';
+        const gw = data.goodsWidth || '385';
+        const gh = data.goodsHeight || '335';
+        payload.goodsInfoList = [];
+        for (let i = 0; i < num; i++) {
+            payload.goodsInfoList.push({ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: gl, width: gw, height: gh, unit: 'mm' }, weight: { value: '30', unit: 'kg' } });
+        }
+    } else {
+        payload.endNode = data.endNode;
+        payload.containerList = [{ ...PALLET_MOTHER }];
+    }
+
+    return payload;
 }
 
 function buildFuncList(data) {
@@ -823,6 +891,7 @@ function buildFuncList(data) {
     return data.funcs.map(ft => {
         if (ft === 'SHAPE_DETECTION') return { extData: {}, deviceCode: '', functionCode: '', functionName: '', deviceType: 'SHAPE_DETECTOR', functionType: 'SHAPE_DETECTION', rootFunctionType: '' };
         if (ft === 'DISASSEMBLE_SUB_PALLET_NODE') return { functionType: 'DISASSEMBLE_SUB_PALLET_NODE', extData: { CONTAINER_NUM: data.containerNum || '1', DEVICE_LOCATION_CODE: data.deviceLocationCode || '' } };
+        if (ft === 'DISASSEMBLE_BY_PIECE_NODE' && data.isRobotArm) return { functionType: 'DISASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: parseInt(data.goodsNum) || 2, GOODS_TARGET_END_NODE: data.goodsTargetEndNode || '', REQUIRED_FUNCTION_LIST: [{ functionType: 'SCANNER_NODE' }], REPORT_STEP_LIST: ['ARRIVED_NODE'] } };
         if (ft === 'WHOLE_PLACE_NODE') return { functionType: 'WHOLE_PLACE_NODE', extData: { TARGET_END_NODE: data.targetEndNode || '' } };
         return { functionType: ft };
     });
@@ -830,6 +899,51 @@ function buildFuncList(data) {
 
 function buildGroupPayload(data) {
     const taskNo = genTaskNo();
+
+    // group_robot_arm (机械手搬运组)
+    if (data.isRobotArmGroup) {
+        const mainGoodsNum = parseInt(data.mainGoodsNum) || 6;
+        const subGoodsNum = parseInt(data.subGoodsNum) || 6;
+        const mgl = data.mainGoodsLength || '60';
+        const mgw = data.mainGoodsWidth || '50';
+        const mgh = data.mainGoodsHeight || '10';
+        const mgu = data.mainGoodsUnit || 'cm';
+        const sgl = data.subGoodsLength || '60';
+        const sgw = data.subGoodsWidth || '50';
+        const sgh = data.subGoodsHeight || '10';
+        const sgu = data.subGoodsUnit || 'cm';
+        // 主任务 goodsInfoList：按 mainGoodsNum 生成
+        const mainGoodsList = [];
+        for (let i = 0; i < mainGoodsNum; i++) {
+            mainGoodsList.push({ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: mgl, width: mgw, height: mgh, unit: mgu } });
+        }
+        // 子任务 goodsInfoList
+        const subGoodsList = [{ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: sgl, width: sgw, height: sgh, unit: sgu } }];
+        return {
+            groupCode: genGroupCode(),
+            groupType: data.groupType,
+            taskSource: 'WMS',
+            bizPriority: 11,
+            mainTaskList: [{
+                taskNo: taskNo + '_M', taskSource: 'WMS', taskType: data.mainTaskType, bizType: '默认', bizPriority: 0,
+                startNode: data.mainStart, endNode: data.mainEnd,
+                independentRun: data.mainIndependent,
+                requiredFunctionList: [{ functionType: 'DISASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: mainGoodsNum } }],
+                containerInfo: { containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' } },
+                goodsInfoList: mainGoodsList,
+                remark: '主任务'
+            }],
+            subTaskList: [{
+                taskNo: taskNo + '_S', taskSource: 'WMS', taskType: data.subTaskType, bizType: '默认', bizPriority: 0,
+                startNode: data.subStart, endNode: data.subEnd,
+                independentRun: data.subIndependent,
+                requiredFunctionList: [{ functionType: 'ASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: subGoodsNum, REQUIRED_FUNCTION_LIST: [{ functionType: 'SCANNER_NODE' }], REPORT_STEP_LIST: ['ARRIVED_NODE'] } }],
+                containerInfo: { containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' } },
+                goodsInfoList: subGoodsList,
+                remark: '子任务'
+            }]
+        };
+    }
 
     // group_add / group_add_wait (合托任务组) uses different structure
     if (data.tplName === '合托任务组' || data.tplName === '合托任务组(子托等待)') {
@@ -910,9 +1024,138 @@ function buildGroupPayload(data) {
 }
 
 // ============ 发送逻辑 ============
+
+// 功能 key -> 中文名映射
+const FUNC_CN_MAP = {
+    'SHAPE_DETECTION': '外形检测',
+    'SCANNER_NODE': '扫码',
+    'WEIGHING_NODE': '称重',
+    'FILM_WRAPPING_BAGGING_NODE': '缠膜',
+    'DISASSEMBLE_SUB_PALLET_NODE': '拆子托',
+    'WHOLE_DISASSEMBLE_PALLET_NODE': '整体拆垛',
+    'WHOLE_PLACE_NODE': '整体合垛',
+    'DISASSEMBLE_BY_PIECE_NODE': '按件拆垛',
+    'ASSEMBLE_BY_PIECE_NODE': '按件码垛'
+};
+
+// ============ 页面内弹窗工具 ============
+
+/** 页面内 alert 替代（纯提示，无需确认） */
+function showToast(msg, type = 'info') {
+    const colors = { info: '#6366f1', success: '#10b981', error: '#ef4444', warn: '#f59e0b' };
+    const icons = { info: 'ℹ️', success: '✅', error: '❌', warn: '⚠️' };
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:12px 24px;border-radius:12px;font-size:13px;font-weight:600;color:#fff;background:${colors[type]||colors.info};box-shadow:0 8px 24px rgba(0,0,0,0.2);animation:fadeIn .2s ease;display:flex;align-items:center;gap:8px;`;
+    el.textContent = `${icons[type]||''} ${msg}`;
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 2500);
+}
+
+/** 页面内 confirm 替代（返回 Promise<boolean>） */
+function showConfirm(msg, opts = {}) {
+    return new Promise(resolve => {
+        const old = document.getElementById('pageConfirmOverlay');
+        if (old) old.remove();
+        const title = opts.title || '提示';
+        const okText = opts.okText || '确定';
+        const cancelText = opts.cancelText || '取消';
+        const overlay = document.createElement('div');
+        overlay.id = 'pageConfirmOverlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.45);backdrop-filter:blur(4px);z-index:5000;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease;';
+        overlay.innerHTML = `
+            <div style="background:#fff;border-radius:16px;padding:24px 28px;width:380px;max-width:calc(100vw - 40px);box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+                <div style="font-size:15px;font-weight:700;color:var(--color-text);margin-bottom:12px;">${title}</div>
+                <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:18px;white-space:pre-wrap;">${msg}</div>
+                <div style="display:flex;justify-content:flex-end;gap:10px;">
+                    <button id="pageConfirmCancel" style="height:34px;padding:0 18px;font-size:13px;font-weight:600;border:1.5px solid rgba(99,102,241,0.2);background:transparent;color:var(--color-text-secondary);border-radius:10px;cursor:pointer;">${cancelText}</button>
+                    <button id="pageConfirmOk" style="height:34px;padding:0 22px;font-size:13px;font-weight:700;background:var(--gradient-btn);color:#fff;border:none;border-radius:10px;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,0.25);">${okText}</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        document.getElementById('pageConfirmOk').onclick = () => { overlay.remove(); resolve(true); };
+        document.getElementById('pageConfirmCancel').onclick = () => { overlay.remove(); resolve(false); };
+        overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } };
+    });
+}
+
+function confirmBeforeSend(item) {
+    const d = item.data;
+    const isGroup = d.type === 'group';
+
+    // 任务组不弹确认，直接放行
+    if (isGroup) return true;
+
+    // 单任务：只有选了功能点才弹确认
+    const funcs = d.funcs || [];
+    if (funcs.length === 0) return true;
+
+    // 显示自定义确认弹窗，返回 Promise
+    return new Promise(resolve => {
+        showSendConfirmModal(item, resolve);
+    });
+}
+
+function showSendConfirmModal(item, resolve) {
+    const d = item.data;
+    const funcs = d.funcs || [];
+    let funcHtml = funcs.map(f => {
+        const cn = FUNC_CN_MAP[f] || f;
+        return `<span style="display:inline-block;padding:3px 10px;margin:2px 4px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);color:var(--color-primary);">${cn}</span>`;
+    }).join('');
+
+    let extraInfo = '';
+    if (d.goodsNum) extraInfo += `<div style="margin-top:4px;font-size:12px;color:var(--color-text-muted);">GOODS_NUM: <b>${d.goodsNum}</b></div>`;
+    if (d.goodsTargetEndNode) extraInfo += `<div style="font-size:12px;color:var(--color-text-muted);">GOODS_TARGET_END_NODE: <b>${d.goodsTargetEndNode}</b></div>`;
+    if (d.containerNum) extraInfo += `<div style="font-size:12px;color:var(--color-text-muted);">CONTAINER_NUM: <b>${d.containerNum}</b></div>`;
+    if (d.deviceLocationCode) extraInfo += `<div style="font-size:12px;color:var(--color-text-muted);">DEVICE_LOCATION_CODE: <b>${d.deviceLocationCode}</b></div>`;
+
+    // 移除旧弹窗
+    const old = document.getElementById('sendConfirmOverlay');
+    if (old) old.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'sendConfirmOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.45);backdrop-filter:blur(4px);z-index:5000;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease;';
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:16px;padding:24px 28px;width:420px;max-width:calc(100vw - 40px);box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+            <div style="font-size:15px;font-weight:700;color:var(--color-text);margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+                ⚠️ 确认下发任务
+            </div>
+            <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:12px;">
+                <div style="margin-bottom:8px;"><span style="color:var(--color-text-muted);">📋 模板:</span> <b>${d.tplName}</b></div>
+                <div style="margin-bottom:8px;"><span style="color:var(--color-text-muted);">🖥️ 目标:</span> <b style="font-family:var(--font-mono);font-size:12px;">${currentServer}</b></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px 12px;background:rgba(248,250,252,0.8);border:1px solid rgba(99,102,241,0.08);border-radius:10px;">
+                    <div><span style="font-size:11px;color:var(--color-text-muted);">起点</span><div style="font-weight:600;font-family:var(--font-mono);font-size:12px;">${d.startNode || '-'}</div></div>
+                    <div><span style="font-size:11px;color:var(--color-text-muted);">终点</span><div style="font-weight:600;font-family:var(--font-mono);font-size:12px;">${d.endNode || '(无)'}</div></div>
+                </div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <div style="font-size:11px;font-weight:700;color:var(--color-text-muted);margin-bottom:6px;">🔧 已选功能:</div>
+                <div style="display:flex;flex-wrap:wrap;">${funcHtml}</div>
+            </div>
+            ${extraInfo ? `<div style="padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;margin-bottom:14px;">${extraInfo}</div>` : ''}
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+                <button id="sendConfirmCancel" style="height:36px;padding:0 20px;font-size:13px;font-weight:600;border:1.5px solid rgba(99,102,241,0.2);background:transparent;color:var(--color-text-secondary);border-radius:10px;cursor:pointer;">取消</button>
+                <button id="sendConfirmOk" style="height:36px;padding:0 24px;font-size:13px;font-weight:700;background:var(--gradient-btn);color:#fff;border:none;border-radius:10px;cursor:pointer;box-shadow:0 4px 12px rgba(99,102,241,0.25);">确认下发</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    document.getElementById('sendConfirmOk').onclick = () => { overlay.remove(); resolve(true); };
+    document.getElementById('sendConfirmCancel').onclick = () => { overlay.remove(); resolve(false); };
+    overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } };
+}
+
 async function sendOne(id) {
     const item = queue.find(q => q.id === id);
     if (!item) return;
+
+    // 发送前确认提醒
+    const confirmed = await confirmBeforeSend(item);
+    if (!confirmed) return;
+
     const cardEl = document.getElementById('card_' + id);
 
     const isGroup = item.data.type === 'group';
@@ -1193,7 +1436,7 @@ renderQueue();
 let _lastPreviewJson = '';
 
 function previewAllJson() {
-    if (queue.length === 0) { alert('队列为空，请先添加任务'); return; }
+    if (queue.length === 0) { showToast('队列为空，请先添加任务', 'warn'); return; }
     // 每个任务独立展示, 用分隔线隔开
     let parts = [];
     queue.forEach((item, idx) => {
@@ -1533,7 +1776,7 @@ function openRouteAnalysis(itemId, startField, endField) {
     const start = (item.data[startField] || '').trim();
     const end = (item.data[endField] || '').trim();
     if (!start || !end) {
-        alert('请先填写起点和终点');
+        showToast('请先填写起点和终点', 'warn');
         return;
     }
     MP.targetItemId = itemId;
@@ -2588,13 +2831,13 @@ function addCoverageToQueue() {
     });
     renderQueue();
     closeCoverageModal();
-    alert('已生成 ' + added + ' 个点到点任务入队');
+    showToast('已生成 ' + added + ' 个点到点任务入队', 'success');
 }
 
 function copyCoverageSeq() {
     if (!_covData || !_covData.tasks) return;
     const txt = _covData.tasks.map((t, i) => `${i + 1}. ${t.start} -> ${t.end} (${t.hops}段) [${(t.route || []).join(' > ')}]`).join('\n');
-    navigator.clipboard.writeText(txt).then(() => alert('已复制任务列表'));
+    navigator.clipboard.writeText(txt).then(() => showToast('已复制任务列表', 'success'));
 }
 
 // Core algorithm: system uses SHORTEST PATH. Pick the fewest (start,end) tasks
