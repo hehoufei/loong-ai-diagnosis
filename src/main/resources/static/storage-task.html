@@ -805,16 +805,23 @@ function toast(msg, kind = 'info', ttl = 2400) {
 // --------- 复制文本 ---------
 function copyText(text) {
     if (!text) return;
-    navigator.clipboard.writeText(text).then(() => {
-        toast('已复制: ' + text, 'success', 1500);
-    }).catch(() => {
-        // fallback
-        const ta = document.createElement('textarea');
-        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-        document.body.appendChild(ta); ta.select(); document.execCommand('copy');
-        document.body.removeChild(ta);
-        toast('已复制: ' + text, 'success', 1500);
-    });
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            toast('已复制: ' + text, 'success', 1500);
+        }).catch(() => {
+            copyFallback(text);
+        });
+    } else {
+        copyFallback(text);
+    }
+}
+
+function copyFallback(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    toast('已复制: ' + text, 'success', 1500);
 }
 
 // --------- HTML escape ---------

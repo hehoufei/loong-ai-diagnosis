@@ -136,7 +136,8 @@
     .h-item .h-route { flex: 1; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .h-item .h-server { font-size: 10px; color: var(--color-text-muted); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .h-item .h-elapsed { font-size: 10px; color: var(--color-text-muted); width: 50px; text-align: right; flex-shrink: 0; }
-    .h-item .h-taskno { font-size: 10px; color: var(--color-text-muted); font-family: var(--font-mono); max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+    .h-item .h-taskno { font-size: 10px; color: var(--color-text-muted); font-family: var(--font-mono); max-width: 160px; overflow: hidden; text-overflow: ellipsis; cursor: copy; border-radius: 4px; padding: 1px 4px; transition: all .15s; }
+    .h-item .h-taskno:hover { background: rgba(99,102,241,0.1); color: var(--color-primary); }
     .h-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
     .h-dot.ok { background: var(--color-success); }
     .h-dot.fail { background: var(--color-error); }
@@ -362,6 +363,20 @@ const FUNC_OPTIONS = [
 ];
 
 // ============ 工具函数 ============
+function copyToClipboard(text, onSuccess) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(onSuccess).catch(function() { copyFallback(text, onSuccess); });
+    } else {
+        copyFallback(text, onSuccess);
+    }
+}
+function copyFallback(text, onSuccess) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (onSuccess) onSuccess();
+}
 function genId() { return 'q_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); }
 function genTaskNo() { const d = new Date(); const ts = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`; const rand = Math.random().toString(36).slice(2, 8).toUpperCase(); return `QT_${ts}_${rand}`; }
 function genGroupCode() { const d = new Date(); const ts = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`; const rand = Math.random().toString(36).slice(2, 8).toUpperCase(); return `QTG_${ts}_${rand}`; }
@@ -405,7 +420,7 @@ function selectServer(el) {
     document.getElementById('customServer').value = '';
     document.getElementById('customServerName').value = '';
     // 切换服务器后地图缓存失效
-    MP.loaded = false;
+    if (typeof MP !== 'undefined') MP.loaded = false;
 }
 
 function applyCustomServer() {
@@ -443,23 +458,23 @@ function applyCustomServer() {
 }
 
 function removeServer(url, event) {
-    event.stopPropagation();
+    if (event) event.stopPropagation();
     const servers = getAllServers().filter(s => s.url !== url);
     saveAllServers(servers);
     // 如果删除的是当前选中的，切回第一个
     if (currentServer === url) {
-        const firstChip = document.querySelector('.server-bar .server-chip[data-url]');
-        if (firstChip) {
-            selectServer(firstChip);
+        if (servers.length > 0) {
+            currentServer = servers[0].url;
         } else {
             currentServer = '';
         }
+        saveActiveServer(currentServer);
     }
     renderServerChips();
 }
 
 function editServer(url, event) {
-    event.stopPropagation();
+    if (event) event.stopPropagation();
     const servers = getAllServers();
     const server = servers.find(s => s.url === url);
     if (!server) return;
@@ -519,18 +534,35 @@ function renderServerChips(activeUrl) {
         chip.className = 'server-chip';
         chip.dataset.url = s.url;
         chip.title = s.url;
-        chip.innerHTML = `${s.name} <span class="chip-edit" onclick="editServer('${s.url}', event)" title="编辑">✎</span><span class="chip-del" onclick="removeServer('${s.url}', event)" title="删除">✕</span>`;
+        const editBtn = document.createElement('span');
+        editBtn.className = 'chip-edit';
+        editBtn.title = '编辑';
+        editBtn.textContent = '✎';
+        editBtn.onclick = function(e) { e.stopPropagation(); editServer(s.url, e); };
+        const delBtn = document.createElement('span');
+        delBtn.className = 'chip-del';
+        delBtn.title = '删除';
+        delBtn.textContent = '✕';
+        delBtn.onclick = function(e) { e.stopPropagation(); removeServer(s.url, e); };
+        chip.appendChild(document.createTextNode(s.name + ' '));
+        chip.appendChild(editBtn);
+        chip.appendChild(delBtn);
         chip.onclick = function() { selectServer(this); };
         container.appendChild(chip);
     });
     // 设置 active 状态
     const targetUrl = activeUrl || currentServer;
     document.querySelectorAll('.server-chip').forEach(c => c.classList.remove('active'));
-    const activeChip = document.querySelector(`.server-chip[data-url="${targetUrl}"]`);
-    if (activeChip) {
-        activeChip.classList.add('active');
-        currentServer = targetUrl;
-    } else if (servers.length > 0) {
+    // 通过遍历找到匹配的 chip（避免 CSS 选择器中 URL 特殊字符问题）
+    let matched = false;
+    container.querySelectorAll('.server-chip').forEach(c => {
+        if (c.dataset.url === targetUrl) {
+            c.classList.add('active');
+            currentServer = targetUrl;
+            matched = true;
+        }
+    });
+    if (!matched && servers.length > 0) {
         // 如果目标不存在，选中第一个
         const firstChip = container.querySelector('.server-chip');
         if (firstChip) {
@@ -544,14 +576,10 @@ function renderServerChips(activeUrl) {
 // 页面加载时渲染服务器列表
 function initServers() {
     const savedActive = localStorage.getItem(ACTIVE_SERVER_KEY);
-    renderServerChips();
-    // 恢复上次选中的服务器
     if (savedActive) {
-        const chip = document.querySelector(`.server-chip[data-url="${savedActive}"]`);
-        if (chip) {
-            selectServer(chip);
-        }
+        currentServer = savedActive;
     }
+    renderServerChips();
 }
 initServers();
 </script>
@@ -568,14 +596,14 @@ function getTemplateData(tpl) {
         case 'n2n_disassemble_from_mother': return { ...base, type: 'single', tplName: '拆单个(多个)子托盘到母托', taskType: 'N2N', startNode: 'ND_21069', endNode: 'ND_22037', funcs: ['DISASSEMBLE_SUB_PALLET_NODE'], containerNum: '1', deviceLocationCode: 'ND_21071' };
         case 'n2n_disassemble_mother_to': return { ...base, type: 'single', tplName: '拆单个母托盘到某处', taskType: 'N2N', startNode: 'ND_11073', endNode: 'ND_22048', funcs: [], motherHighNodes: true };
         case 's2n_film_wrapping': return { ...base, type: 'single', tplName: '缠膜机任务', taskType: 'S2N', startNode: 'ND_11010', endNode: 'ND_11009', funcs: ['FILM_WRAPPING_BAGGING_NODE'], remark: '缠膜' };
-        case 's2n_robot_arm': return { ...base, type: 'single', tplName: '机械手搬运', taskType: 'S2N', startNode: 'ND_21060', endNode: '', funcs: ['DISASSEMBLE_BY_PIECE_NODE'], remark: '机械手搬运', isRobotArm: true, goodsNum: '2', goodsTargetEndNode: 'ND_21046', goodsLength: '755', goodsWidth: '385', goodsHeight: '335' };
+        case 's2n_robot_arm': return { ...base, type: 'single', tplName: '机械手搬运', taskType: 'S2N', startNode: 'ND_11055', endNode: 'ND_11054', funcs: ['DISASSEMBLE_BY_PIECE_NODE'], remark: '机械手搬运', isRobotArm: true, goodsNum: '2', goodsTargetEndNode: 'ND_11053', goodsLength: '755', goodsWidth: '385', goodsHeight: '335', goodsWeight: '30', containerWeight: '36', robotRequiredFuncList: true, robotReportStepList: true };
         case 'n2s': return { ...base, type: 'single', tplName: '入库任务', taskType: 'N2S', startNode: 'ND_11025', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', funcs: [], remark: '入库' };
         case 's2n': return { ...base, type: 'single', tplName: '出库任务', taskType: 'S2N', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-01-02-0003-03', endNode: 'ND_11025', funcs: [], remark: '出库' };
         case 's2s': return { ...base, type: 'single', tplName: '移库任务', taskType: 'S2S', startNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-L-02-01-0003-03', endNode: 'SL_-WH_001-SA_HSMD_1-AL_L08-R-01-03-0003-04', funcs: [], remark: '移库' };
         case 'group_add': return { type: 'group', tplName: '合托任务组', groupType: 'HALF_ADD_CONTAINER', mainStart: 'ND_22057', mainTaskType: 'N2S', mainIndependent: 'NO', mainFuncs: ['SCANNER_NODE', 'WHOLE_PLACE_NODE'], mainTargetEnd: 'ND_22059', subStart: 'ND_22018', subTaskType: 'N2S', subIndependent: 'NO' };
         case 'group_add_wait': return { type: 'group', tplName: '合托任务组(子托等待)', groupType: 'HALF_ADD_CONTAINER', mainStart: 'ND_22008', mainTaskType: 'N2S', mainIndependent: 'NO', mainFuncs: ['SCANNER_NODE', 'WHOLE_PLACE_NODE'], mainTargetEnd: 'ND_22020', subStart: 'ND_22058', subTaskType: 'N2S', subIndependent: 'NO' };
         case 'group_remove_add': return { type: 'group', tplName: '拆合托任务组', groupType: 'HALF_REMOVE_ADD_CONTAINER', mainStart: 'ND_11066', mainEnd: '', mainTaskType: 'N2N', mainIndependent: 'NO', mainFunc: 'WHOLE_DISASSEMBLE_PALLET_NODE', subStart: 'ND_11013', subEnd: '', subTaskType: 'N2N', subIndependent: 'NO', subFunc: 'WHOLE_PLACE_NODE', subTargetEnd: 'ND_11091' };
-        case 'group_robot_arm': return { type: 'group', tplName: '机械手搬运组', groupType: 'REMOVE_ADD_GOODS', isRobotArmGroup: true, mainStart: 'SL_-WH_HSMD-SA_LK-AL_05-R-02-04-0010-08', mainEnd: 'ND_19016', mainTaskType: 'S2S', mainIndependent: 'YES', mainGoodsNum: '6', mainGoodsLength: '60', mainGoodsWidth: '50', mainGoodsHeight: '10', mainGoodsUnit: 'cm', subStart: 'SL_-WH_HSMD-SA_LK-AL_04-R-01-03-0008-01', subEnd: 'ND_19071', subTaskType: 'S2S', subIndependent: 'YES', subGoodsNum: '6', subGoodsLength: '60', subGoodsWidth: '50', subGoodsHeight: '10', subGoodsUnit: 'cm' };
+        case 'group_robot_arm': return { type: 'group', tplName: '机械手搬运组', groupType: 'REMOVE_ADD_GOODS', isRobotArmGroup: true, mainStart: 'ND_11090', mainEnd: '', mainTaskType: 'S2S', mainIndependent: 'YES', mainGoodsNum: '16', mainGoodsTargetEndNode: 'ND_11055', mainGoodsLength: '64', mainGoodsWidth: '43', mainGoodsHeight: '31', mainGoodsUnit: 'cm', mainGoodsWeight: '22', mainContainerWeight: '22', subStart: 'ND_12035', subEnd: '', subTaskType: 'S2S', subIndependent: 'YES', subGoodsNum: '16', subGoodsLength: '64', subGoodsWidth: '43', subGoodsHeight: '31', subGoodsUnit: 'cm', subGoodsWeight: '22', subContainerWeight: '22', subRequiredFuncList: false, subReportStepList: false };
         default: return { ...base, type: 'single', tplName: '点到点', taskType: 'N2N', startNode: '', endNode: '', funcs: [] };
     }
 }
@@ -633,8 +661,15 @@ function renderSingleCard(item, idx) {
     if (isRobotArmTpl) {
         extraFields = `
             <div class="q-field"><label>GOODS_NUM <span style="font-size:10px;color:#d97706;font-weight:400;">(搬运几个箱子)</span></label><input value="${d.goodsNum||'2'}" type="number" min="1" onchange="updateQField('${item.id}','goodsNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
-            <div class="q-field"><label>GOODS_TARGET_END_NODE <span style="font-size:10px;color:#d97706;font-weight:400;">(目的点/决定用哪个机械手，如去分拣线填分拣线点位)</span></label><input value="${d.goodsTargetEndNode||'ND_21046'}" onchange="updateQField('${item.id}','goodsTargetEndNode',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
-            <div class="q-field" style="grid-column:1/-1;"><label>📦 货物尺寸 (mm)</label><div style="display:flex;gap:6px;"><input value="${d.goodsLength||'755'}" onchange="updateQField('${item.id}','goodsLength',this.value)" placeholder="长" style="flex:1;border-color:rgba(245,158,11,0.3);"><input value="${d.goodsWidth||'385'}" onchange="updateQField('${item.id}','goodsWidth',this.value)" placeholder="宽" style="flex:1;border-color:rgba(245,158,11,0.3);"><input value="${d.goodsHeight||'335'}" onchange="updateQField('${item.id}','goodsHeight',this.value)" placeholder="高" style="flex:1;border-color:rgba(245,158,11,0.3);"></div></div>`;
+            <div class="q-field"><label>GOODS_TARGET_END_NODE <span style="font-size:10px;color:#d97706;font-weight:400;">(目的点/决定用哪个机械手，如去分拣线填分拣线点位)</span></label><input value="${d.goodsTargetEndNode||'ND_11053'}" onchange="updateQField('${item.id}','goodsTargetEndNode',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
+            <div class="q-field" style="grid-column:1/-1;"><label>📦 货物尺寸 (mm)</label><div style="display:flex;gap:6px;"><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">长</span><input value="${d.goodsLength||'755'}" onchange="updateQField('${item.id}','goodsLength',this.value)" style="border-color:rgba(245,158,11,0.3);"></div><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">宽</span><input value="${d.goodsWidth||'385'}" onchange="updateQField('${item.id}','goodsWidth',this.value)" style="border-color:rgba(245,158,11,0.3);"></div><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">高</span><input value="${d.goodsHeight||'335'}" onchange="updateQField('${item.id}','goodsHeight',this.value)" style="border-color:rgba(245,158,11,0.3);"></div></div></div>
+            <div class="q-field"><label>⚖️ 货物重量 (kg)</label><input value="${d.goodsWeight||'30'}" onchange="updateQField('${item.id}','goodsWeight',this.value)" style="border-color:rgba(245,158,11,0.3);"></div>
+            <div class="q-field"><label>⚖️ 容器重量 (kg)</label><input value="${d.containerWeight||'36'}" onchange="updateQField('${item.id}','containerWeight',this.value)" style="border-color:rgba(245,158,11,0.3);"></div>
+            <div class="q-field" style="grid-column:1/-1;padding:6px 8px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.1);border-radius:8px;">
+                <label style="font-size:10px;font-weight:600;color:var(--color-text-muted);display:block;margin-bottom:4px;">可选 extData 参数:</label>
+                <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" ${d.robotRequiredFuncList?'checked':''} onchange="updateQField('${item.id}','robotRequiredFuncList',this.checked);renderQueue()"> REQUIRED_FUNCTION_LIST [SCANNER_NODE] <span style="font-size:10px;color:var(--color-text-muted);">(扫码)</span></label>
+                <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" ${d.robotReportStepList?'checked':''} onchange="updateQField('${item.id}','robotReportStepList',this.checked);renderQueue()"> REPORT_STEP_LIST [ARRIVED_NODE] <span style="font-size:10px;color:var(--color-text-muted);">(到达上报)</span></label>
+            </div>`;
     }
     // 自定义模板的额外字段
     if (item.tpl === '__custom_single__' && d._customTpl && d._customTpl.extraFields) {
@@ -809,20 +844,28 @@ function renderRobotArmGroupCard(item, idx) {
             <div style="padding:8px;background:rgba(99,102,241,0.03);border-radius:8px;border:1px solid rgba(99,102,241,0.08);">
                 <div style="font-size:11px;font-weight:700;color:var(--color-primary);margin-bottom:6px;">🔵 主任务 <span style="font-weight:400;color:var(--color-text-muted);">— 拆货 (DISASSEMBLE_BY_PIECE)</span></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>起点 <span style="font-size:10px;color:#6366f1;">(货物起点/库位)</span></label><div style="display:flex;gap:4px;"><input value="${d.mainStart}" onchange="updateQField('${item.id}','mainStart',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','mainStart')" title="地图选点">🗺️</button></div></div>
-                <div class="q-field" style="margin-bottom:4px;"><label>终点 <span style="font-size:10px;color:#6366f1;">(拆完后托盘要去的点)</span></label><div style="display:flex;gap:4px;"><input value="${d.mainEnd}" onchange="updateQField('${item.id}','mainEnd',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','mainEnd')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>终点 <span style="font-size:10px;color:#6366f1;">(拆完后托盘要去的点, 默认为空)</span></label><div style="display:flex;gap:4px;"><input value="${d.mainEnd}" onchange="updateQField('${item.id}','mainEnd',this.value)" placeholder="默认为空" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','mainEnd')" title="地图选点">🗺️</button></div></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','mainTaskType',this.value)"><option ${d.mainTaskType==='N2N'?'selected':''}>N2N</option><option ${d.mainTaskType==='S2S'?'selected':''}>S2S</option><option ${d.mainTaskType==='N2S'?'selected':''}>N2S</option><option ${d.mainTaskType==='S2N'?'selected':''}>S2N</option></select></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','mainIndependent',this.value)"><option value="YES" ${d.mainIndependent==='YES'?'selected':''}>YES</option><option value="NO" ${d.mainIndependent==='NO'?'selected':''}>NO</option></select></div>
-                <div class="q-field" style="margin-top:6px;padding:6px 8px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.3);border-radius:8px;"><label style="color:#d97706;font-weight:700;">GOODS_NUM <span style="font-weight:400;font-size:10px;color:#92400e;">(搬运几个货)</span></label><input value="${d.mainGoodsNum||'6'}" type="number" min="1" onchange="updateQField('${item.id}','mainGoodsNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
-                <div class="q-field" style="margin-top:6px;"><label>📦 货物尺寸 <span style="font-size:10px;color:var(--color-text-muted);">(${d.mainGoodsUnit||'cm'})</span></label><div style="display:flex;gap:4px;"><input value="${d.mainGoodsLength||'60'}" onchange="updateQField('${item.id}','mainGoodsLength',this.value)" placeholder="长" style="flex:1;font-size:11px;"><input value="${d.mainGoodsWidth||'50'}" onchange="updateQField('${item.id}','mainGoodsWidth',this.value)" placeholder="宽" style="flex:1;font-size:11px;"><input value="${d.mainGoodsHeight||'10'}" onchange="updateQField('${item.id}','mainGoodsHeight',this.value)" placeholder="高" style="flex:1;font-size:11px;"></div></div>
+                <div class="q-field" style="margin-top:6px;padding:6px 8px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.3);border-radius:8px;"><label style="color:#d97706;font-weight:700;">GOODS_NUM <span style="font-weight:400;font-size:10px;color:#92400e;">(搬运几个货)</span></label><input value="${d.mainGoodsNum||'16'}" type="number" min="1" onchange="updateQField('${item.id}','mainGoodsNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
+                <div class="q-field" style="margin-top:6px;padding:6px 8px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.3);border-radius:8px;"><label style="color:#d97706;font-weight:700;">GOODS_TARGET_END_NODE <span style="font-weight:400;font-size:10px;color:#92400e;">(货物目的点/分拣线点位)</span></label><input value="${d.mainGoodsTargetEndNode||'ND_11055'}" onchange="updateQField('${item.id}','mainGoodsTargetEndNode',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
+                <div class="q-field" style="margin-top:6px;"><label>📦 货物尺寸 <span style="font-size:10px;color:var(--color-text-muted);">(${d.mainGoodsUnit||'cm'})</span></label><div style="display:flex;gap:4px;"><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">长</span><input value="${d.mainGoodsLength||'640'}" onchange="updateQField('${item.id}','mainGoodsLength',this.value)" style="font-size:11px;"></div><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">宽</span><input value="${d.mainGoodsWidth||'435'}" onchange="updateQField('${item.id}','mainGoodsWidth',this.value)" style="font-size:11px;"></div><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">高</span><input value="${d.mainGoodsHeight||'310'}" onchange="updateQField('${item.id}','mainGoodsHeight',this.value)" style="font-size:11px;"></div></div></div>
+                <div class="q-field" style="margin-top:4px;"><label>⚖️ 重量 (kg)</label><div style="display:flex;gap:6px;"><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">货物重量</span><input value="${d.mainGoodsWeight||'22'}" onchange="updateQField('${item.id}','mainGoodsWeight',this.value)" style="font-size:11px;"></div><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">容器重量</span><input value="${d.mainContainerWeight||'22'}" onchange="updateQField('${item.id}','mainContainerWeight',this.value)" style="font-size:11px;"></div></div></div>
             </div>
             <div style="padding:8px;background:rgba(16,185,129,0.03);border-radius:8px;border:1px solid rgba(16,185,129,0.08);">
                 <div style="font-size:11px;font-weight:700;color:var(--color-success);margin-bottom:6px;">🟢 子任务 <span style="font-weight:400;color:var(--color-text-muted);">— 码货 (ASSEMBLE_BY_PIECE)</span></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>起点 <span style="font-size:10px;color:#059669;">(码货托盘起点/库位)</span></label><div style="display:flex;gap:4px;"><input value="${d.subStart}" onchange="updateQField('${item.id}','subStart',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','subStart')" title="地图选点">🗺️</button></div></div>
-                <div class="q-field" style="margin-bottom:4px;"><label>终点 <span style="font-size:10px;color:#059669;">(码完后托盘要去的终点)</span></label><div style="display:flex;gap:4px;"><input value="${d.subEnd}" onchange="updateQField('${item.id}','subEnd',this.value)" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','subEnd')" title="地图选点">🗺️</button></div></div>
+                <div class="q-field" style="margin-bottom:4px;"><label>终点 <span style="font-size:10px;color:#059669;">(码完后托盘要去的终点, 默认为空)</span></label><div style="display:flex;gap:4px;"><input value="${d.subEnd}" onchange="updateQField('${item.id}','subEnd',this.value)" placeholder="默认为空" style="flex:1;"><button class="map-pick-btn" onclick="openMapPicker('${item.id}','subEnd')" title="地图选点">🗺️</button></div></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>类型</label><select onchange="updateQField('${item.id}','subTaskType',this.value)"><option ${d.subTaskType==='N2N'?'selected':''}>N2N</option><option ${d.subTaskType==='S2S'?'selected':''}>S2S</option><option ${d.subTaskType==='N2S'?'selected':''}>N2S</option><option ${d.subTaskType==='S2N'?'selected':''}>S2N</option></select></div>
                 <div class="q-field" style="margin-bottom:4px;"><label>独立运行</label><select onchange="updateQField('${item.id}','subIndependent',this.value)"><option value="YES" ${d.subIndependent==='YES'?'selected':''}>YES</option><option value="NO" ${d.subIndependent==='NO'?'selected':''}>NO</option></select></div>
-                <div class="q-field" style="margin-top:6px;padding:6px 8px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.3);border-radius:8px;"><label style="color:#d97706;font-weight:700;">GOODS_NUM <span style="font-weight:400;font-size:10px;color:#92400e;">(码几个货)</span></label><input value="${d.subGoodsNum||'6'}" type="number" min="1" onchange="updateQField('${item.id}','subGoodsNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
-                <div class="q-field" style="margin-top:6px;"><label>📦 货物尺寸 <span style="font-size:10px;color:var(--color-text-muted);">(${d.subGoodsUnit||'cm'})</span></label><div style="display:flex;gap:4px;"><input value="${d.subGoodsLength||'60'}" onchange="updateQField('${item.id}','subGoodsLength',this.value)" placeholder="长" style="flex:1;font-size:11px;"><input value="${d.subGoodsWidth||'50'}" onchange="updateQField('${item.id}','subGoodsWidth',this.value)" placeholder="宽" style="flex:1;font-size:11px;"><input value="${d.subGoodsHeight||'10'}" onchange="updateQField('${item.id}','subGoodsHeight',this.value)" placeholder="高" style="flex:1;font-size:11px;"></div></div>
+                <div class="q-field" style="margin-top:6px;padding:6px 8px;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.3);border-radius:8px;"><label style="color:#d97706;font-weight:700;">GOODS_NUM <span style="font-weight:400;font-size:10px;color:#92400e;">(码几个货)</span></label><input value="${d.subGoodsNum||'16'}" type="number" min="1" onchange="updateQField('${item.id}','subGoodsNum',this.value)" style="border-color:rgba(245,158,11,0.4);font-weight:600;"></div>
+                <div class="q-field" style="margin-top:6px;"><label>📦 货物尺寸 <span style="font-size:10px;color:var(--color-text-muted);">(${d.subGoodsUnit||'cm'})</span></label><div style="display:flex;gap:4px;"><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">长</span><input value="${d.subGoodsLength||'640'}" onchange="updateQField('${item.id}','subGoodsLength',this.value)" style="font-size:11px;"></div><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">宽</span><input value="${d.subGoodsWidth||'435'}" onchange="updateQField('${item.id}','subGoodsWidth',this.value)" style="font-size:11px;"></div><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">高</span><input value="${d.subGoodsHeight||'310'}" onchange="updateQField('${item.id}','subGoodsHeight',this.value)" style="font-size:11px;"></div></div></div>
+                <div class="q-field" style="margin-top:4px;"><label>⚖️ 重量 (kg)</label><div style="display:flex;gap:6px;"><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">货物重量</span><input value="${d.subGoodsWeight||'22'}" onchange="updateQField('${item.id}','subGoodsWeight',this.value)" style="font-size:11px;"></div><div style="flex:1;"><span style="font-size:10px;color:var(--color-text-muted);">容器重量</span><input value="${d.subContainerWeight||'22'}" onchange="updateQField('${item.id}','subContainerWeight',this.value)" style="font-size:11px;"></div></div></div>
+                <div style="margin-top:8px;padding:6px 8px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.1);border-radius:8px;">
+                    <label style="font-size:10px;font-weight:600;color:var(--color-text-muted);display:block;margin-bottom:4px;">可选 extData 参数:</label>
+                    <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" ${d.subRequiredFuncList?'checked':''} onchange="updateQField('${item.id}','subRequiredFuncList',this.checked);renderQueue()"> REQUIRED_FUNCTION_LIST [SCANNER_NODE]</label>
+                    <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:6px;"><input type="checkbox" ${d.subReportStepList?'checked':''} onchange="updateQField('${item.id}','subReportStepList',this.checked);renderQueue()"> REPORT_STEP_LIST [ARRIVED_NODE]</label>
+                </div>
             </div>
         </div>
     </div>`;
@@ -951,17 +994,19 @@ function buildSinglePayload(data) {
         remark: data.remark || '输送'
     };
 
-    // 机械手搬运：用 containerInfo (单对象)，不传 endNode
+    // 机械手搬运：用 containerInfo (单对象)
     if (data.isRobotArm) {
-        payload.containerInfo = { containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' }, weight: { value: '36', unit: 'kg' } };
-        // 按 goodsNum 生成多个 goods，使用用户配置的尺寸
+        payload.endNode = data.endNode || '';
+        payload.containerInfo = { containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' }, weight: { value: data.containerWeight || '36', unit: 'kg' } };
+        // 按 goodsNum 生成多个 goods，使用用户配置的尺寸和重量
         const num = parseInt(data.goodsNum) || 2;
         const gl = data.goodsLength || '755';
         const gw = data.goodsWidth || '385';
         const gh = data.goodsHeight || '335';
+        const gWeight = data.goodsWeight || '30';
         payload.goodsInfoList = [];
         for (let i = 0; i < num; i++) {
-            payload.goodsInfoList.push({ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: gl, width: gw, height: gh, unit: 'mm' }, weight: { value: '30', unit: 'kg' } });
+            payload.goodsInfoList.push({ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: gl, width: gw, height: gh, unit: 'mm' }, weight: { value: gWeight, unit: 'kg' } });
         }
     } else {
         payload.endNode = data.endNode;
@@ -976,10 +1021,26 @@ function buildFuncList(data) {
     return data.funcs.map(ft => {
         if (ft === 'SHAPE_DETECTION') return { extData: {}, deviceCode: '', functionCode: '', functionName: '', deviceType: 'SHAPE_DETECTOR', functionType: 'SHAPE_DETECTION', rootFunctionType: '' };
         if (ft === 'DISASSEMBLE_SUB_PALLET_NODE') return { functionType: 'DISASSEMBLE_SUB_PALLET_NODE', extData: { CONTAINER_NUM: data.containerNum || '1', DEVICE_LOCATION_CODE: data.deviceLocationCode || '' } };
-        if (ft === 'DISASSEMBLE_BY_PIECE_NODE' && data.isRobotArm) return { functionType: 'DISASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: parseInt(data.goodsNum) || 2, GOODS_TARGET_END_NODE: data.goodsTargetEndNode || '', REQUIRED_FUNCTION_LIST: [{ functionType: 'SCANNER_NODE' }], REPORT_STEP_LIST: ['ARRIVED_NODE'] } };
+        if (ft === 'DISASSEMBLE_BY_PIECE_NODE' && data.isRobotArm) {
+            const ext = { GOODS_NUM: parseInt(data.goodsNum) || 2, GOODS_TARGET_END_NODE: data.goodsTargetEndNode || '' };
+            if (data.robotRequiredFuncList) ext.REQUIRED_FUNCTION_LIST = [{ functionType: 'SCANNER_NODE' }];
+            if (data.robotReportStepList) ext.REPORT_STEP_LIST = ['ARRIVED_NODE'];
+            return { functionType: 'DISASSEMBLE_BY_PIECE_NODE', extData: ext };
+        }
         if (ft === 'WHOLE_PLACE_NODE') return { functionType: 'WHOLE_PLACE_NODE', extData: { TARGET_END_NODE: data.targetEndNode || '' } };
         return { functionType: ft };
     });
+}
+
+function buildSubRobotArmExtData(data, goodsNum) {
+    const ext = { GOODS_NUM: goodsNum };
+    if (data.subRequiredFuncList) {
+        ext.REQUIRED_FUNCTION_LIST = [{ functionType: 'SCANNER_NODE' }];
+    }
+    if (data.subReportStepList) {
+        ext.REPORT_STEP_LIST = ['ARRIVED_NODE'];
+    }
+    return ext;
 }
 
 function buildGroupPayload(data) {
@@ -987,23 +1048,30 @@ function buildGroupPayload(data) {
 
     // group_robot_arm (机械手搬运组)
     if (data.isRobotArmGroup) {
-        const mainGoodsNum = parseInt(data.mainGoodsNum) || 6;
-        const subGoodsNum = parseInt(data.subGoodsNum) || 6;
-        const mgl = data.mainGoodsLength || '60';
-        const mgw = data.mainGoodsWidth || '50';
-        const mgh = data.mainGoodsHeight || '10';
+        const mainGoodsNum = parseInt(data.mainGoodsNum) || 16;
+        const subGoodsNum = parseInt(data.subGoodsNum) || 16;
+        const mgl = data.mainGoodsLength || '640';
+        const mgw = data.mainGoodsWidth || '435';
+        const mgh = data.mainGoodsHeight || '310';
         const mgu = data.mainGoodsUnit || 'cm';
-        const sgl = data.subGoodsLength || '60';
-        const sgw = data.subGoodsWidth || '50';
-        const sgh = data.subGoodsHeight || '10';
+        const mgWeight = data.mainGoodsWeight || '22';
+        const mcWeight = data.mainContainerWeight || '22';
+        const sgl = data.subGoodsLength || '640';
+        const sgw = data.subGoodsWidth || '435';
+        const sgh = data.subGoodsHeight || '310';
         const sgu = data.subGoodsUnit || 'cm';
-        // 主任务 goodsInfoList：按 mainGoodsNum 生成
+        const sgWeight = data.subGoodsWeight || '22';
+        const scWeight = data.subContainerWeight || '22';
+        // 主任务 goodsInfoList
         const mainGoodsList = [];
         for (let i = 0; i < mainGoodsNum; i++) {
-            mainGoodsList.push({ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: mgl, width: mgw, height: mgh, unit: mgu } });
+            mainGoodsList.push({ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: mgl, width: mgw, height: mgh, unit: mgu }, weight: { value: mgWeight, unit: 'kg' } });
         }
-        // 子任务 goodsInfoList
-        const subGoodsList = [{ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: sgl, width: sgw, height: sgh, unit: sgu } }];
+        // 子任务 goodsInfoList — 数量等于 subGoodsNum
+        const subGoodsList = [];
+        for (let i = 0; i < subGoodsNum; i++) {
+            subGoodsList.push({ goodsCode: 'Goods_' + Math.random().toString(36).slice(2,10), size: { length: sgl, width: sgw, height: sgh, unit: sgu }, weight: { value: sgWeight, unit: 'kg' } });
+        }
         return {
             groupCode: genGroupCode(),
             groupType: data.groupType,
@@ -1013,8 +1081,8 @@ function buildGroupPayload(data) {
                 taskNo: taskNo + '_M', taskSource: 'WMS', taskType: data.mainTaskType, bizType: '默认', bizPriority: 0,
                 startNode: data.mainStart, endNode: data.mainEnd,
                 independentRun: data.mainIndependent,
-                requiredFunctionList: [{ functionType: 'DISASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: mainGoodsNum } }],
-                containerInfo: { containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' } },
+                requiredFunctionList: [{ functionType: 'DISASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: mainGoodsNum, GOODS_TARGET_END_NODE: data.mainGoodsTargetEndNode || '' } }],
+                containerList: [{ containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' }, weight: { value: mcWeight, unit: 'kg' } }],
                 goodsInfoList: mainGoodsList,
                 remark: '主任务'
             }],
@@ -1022,8 +1090,8 @@ function buildGroupPayload(data) {
                 taskNo: taskNo + '_S', taskSource: 'WMS', taskType: data.subTaskType, bizType: '默认', bizPriority: 0,
                 startNode: data.subStart, endNode: data.subEnd,
                 independentRun: data.subIndependent,
-                requiredFunctionList: [{ functionType: 'ASSEMBLE_BY_PIECE_NODE', extData: { GOODS_NUM: subGoodsNum, REQUIRED_FUNCTION_LIST: [{ functionType: 'SCANNER_NODE' }], REPORT_STEP_LIST: ['ARRIVED_NODE'] } }],
-                containerInfo: { containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' } },
+                requiredFunctionList: [{ functionType: 'ASSEMBLE_BY_PIECE_NODE', extData: buildSubRobotArmExtData(data, subGoodsNum) }],
+                containerList: [{ containerCode: 'Container_' + Math.random().toString(36).slice(2,10), size: { length: '2200', width: '1100', height: '200', unit: 'mm' }, weight: { value: scWeight, unit: 'kg' } }],
                 goodsInfoList: subGoodsList,
                 remark: '子任务'
             }]
@@ -1433,7 +1501,7 @@ function renderHistory() {
             <span class="h-time">${time}</span>
             <span class="h-type">${type}</span>
             <span class="h-route">${from} → ${to}</span>
-            <span class="h-taskno" title="${taskNo}">${taskNo}</span>
+            <span class="h-taskno" title="点击复制: ${taskNo}" onclick="event.stopPropagation();copyToClipboard('${taskNo}',function(){showToast('已复制: ${taskNo}','success')})" style="cursor:copy;">${taskNo}</span>
             <span class="h-server" title="${h.server || ''}">${server}</span>
             <span class="h-elapsed">${elapsed}</span>
             <span class="h-dot ${ok?'ok':'fail'}"></span>
@@ -1553,10 +1621,9 @@ function closeJsonModal() {
 }
 
 function copyJson() {
-    navigator.clipboard.writeText(_lastPreviewJson).then(() => {
-        const btn = event.target;
-        btn.textContent = '✅ 已复制';
-        setTimeout(() => { btn.textContent = '📋 复制'; }, 1500);
+    copyToClipboard(_lastPreviewJson, function() {
+        const btn = document.querySelector('.json-modal-btn');
+        if (btn) { btn.textContent = '✅ 已复制'; setTimeout(() => { btn.textContent = '📋 复制'; }, 1500); }
     });
 }
 
@@ -2922,7 +2989,7 @@ function addCoverageToQueue() {
 function copyCoverageSeq() {
     if (!_covData || !_covData.tasks) return;
     const txt = _covData.tasks.map((t, i) => `${i + 1}. ${t.start} -> ${t.end} (${t.hops}段) [${(t.route || []).join(' > ')}]`).join('\n');
-    navigator.clipboard.writeText(txt).then(() => showToast('已复制任务列表', 'success'));
+    copyToClipboard(txt, function() { showToast('已复制任务列表', 'success'); });
 }
 
 // Core algorithm: system uses SHORTEST PATH. Pick the fewest (start,end) tasks
