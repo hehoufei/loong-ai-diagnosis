@@ -830,7 +830,20 @@ public class StorageTaskRunner {
                     List<String> visited = state.getVisitedCodes();
                     if (valid != null && visited != null && !valid.isEmpty()
                             && visited.size() >= valid.size()) {
-                        log.info("所有库位已访问完毕 ({}/{}), 自动停止",
+                        String hold = state.getCurrentHoldPosition();
+                        if (hold != null && !hold.isBlank()) {
+                            // 全部库位已访问, 但货物还在库位里 (最后访问发生在入库/移库步骤),
+                            // 不能直接结束, 需要先把货出到出口再 FINISHED.
+                            // 强制跳到出库步骤: planNextStep 会生成 S2N (hold -> outboundEndNode).
+                            int outboundStep = 1 + config.getShuffleTimesPerRound();
+                            state.setCurrentStepInRound(outboundStep);
+                            state.setCurrentTask(null);
+                            saveState();
+                            log.info("所有库位已访问完毕 ({}/{}), 货物仍在库位 {}, 先出库到出口 {} 再结束",
+                                    visited.size(), valid.size(), hold, config.getOutboundEndNode());
+                            continue;
+                        }
+                        log.info("所有库位已访问完毕 ({}/{}), 货物已在出口, 自动停止",
                                 visited.size(), valid.size());
                         state.setStatus(Status.FINISHED);
                         state.setErrorMessage(null);
@@ -1114,7 +1127,19 @@ public class StorageTaskRunner {
         if (n <= 1) return cur;
 
         if (!config.isCrossColumnMove()) {
-            // 原有逻辑: 纯顺序取下一个
+            // 顺序模式: 优先取下一个未访问的库位, 加速覆盖
+            List<String> visited = state.getVisitedCodes();
+            if (visited != null && !visited.isEmpty()) {
+                for (int offset = 1; offset < n; offset++) {
+                    int next = (curIdx + offset) % n;
+                    String candidate = codes.get(next);
+                    if (candidate.equals(cur)) continue;
+                    if (!visited.contains(candidate)) {
+                        return candidate;
+                    }
+                }
+            }
+            // 全部已访问 或 visited 为空, 退化为取下一个
             int next = (curIdx + 1) % n;
             if (codes.get(next).equals(cur)) {
                 next = (next + 1) % n;
