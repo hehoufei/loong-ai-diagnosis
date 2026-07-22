@@ -1,0 +1,23 @@
+[ {
+  "deviceId" : "19D82448",
+  "deviceName" : "测试01",
+  "deviceType" : "CONVEYOR_LINE",
+  "ip" : "192.168.59.199",
+  "port" : 10001,
+  "rack" : 0,
+  "slot" : 0,
+  "protocol" : "AIMS_V3",
+  "connectionType" : "SiemensS7",
+  "controllerType" : "S7_1500"
+}, {
+  "deviceId" : "AE927661",
+  "deviceName" : "恒申2F输送线03",
+  "deviceType" : "CONVEYOR_LINE",
+  "ip" : "10.15.58.80",
+  "port" : 102,
+  "rack" : 0,
+  "slot" : 0,
+  "protocol" : "AIMS_V3",
+  "connectionType" : "SiemensS7",
+  "controllerType" : "S7_1500"
+} ]

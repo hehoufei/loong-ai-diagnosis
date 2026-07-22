@@ -137,6 +137,8 @@
             <artifactId>jsch</artifactId>
             <version>0.1.55</version>
         </dependency>
+
+        <!-- 青龙调试工具：S7 通信采用 moka7 协议核心（源码内嵌，纯 Java Socket，零外部依赖） -->
     </dependencies>
 
     <build>

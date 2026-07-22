@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>青龙调试工具</title>
+<link rel="stylesheet" href="common.css">
+<style>
+html, body { height: 100%; margin: 0; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+
+/* ===== 顶栏 ===== */
+.ql-topbar { display: flex; align-items: center; gap: 16px; height: 48px; padding: 0 20px; }
+.ql-logo { font-size: 15px; font-weight: 800; background: linear-gradient(135deg,#059669,#10b981); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.ql-topbar .spacer { flex: 1; }
+.ql-home-link { color: var(--color-text-muted); text-decoration: none; font-size: 12.5px; }
+.ql-home-link:hover { color: var(--color-primary); }
+.ql-conn-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; padding: 3px 9px; border-radius: 20px; background: rgba(99,102,241,0.06); color: var(--color-text-muted); }
+.ql-conn-badge.online { background: rgba(16,185,129,0.10); color: #059669; }
+.ql-conn-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ===== 主体 ===== */
+.ql-main { flex: 1; display: flex; min-height: 0; }
+
+/* ===== 侧栏 ===== */
+.ql-sider { width: 220px; flex-shrink: 0; overflow-y: auto; background: rgba(255,255,255,0.5); backdrop-filter: blur(12px); border-right: 1px solid rgba(0,0,0,0.04); padding: 10px 8px; font-size: 13px; }
+.ql-sider .ql-search input { width: 100%; padding: 7px 10px; font-size: 12px; margin-bottom: 8px; }
+.ql-sider .ql-btns { display: flex; gap: 4px; margin-bottom: 8px; }
+.ql-sider .ql-btns button { flex: 1; font-size: 11px; padding: 5px 0; }
+.ql-group-title { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-weight: 700; font-size: 12px; color: var(--color-text-secondary); cursor: pointer; border-radius: 6px; }
+.ql-group-title:hover { background: rgba(0,0,0,0.02); }
+.ql-group-title .arrow { font-size: 9px; transition: transform .2s; }
+.ql-group.collapsed .arrow { transform: rotate(-90deg); }
+.ql-group.collapsed .ql-group-items { display: none; }
+.ql-device { display: flex; align-items: center; gap: 6px; padding: 7px 10px 7px 24px; border-radius: 6px; cursor: pointer; color: var(--color-text-secondary); font-size: 12.5px; }
+.ql-device:hover { background: rgba(16,185,129,0.05); }
+.ql-device.active { background: rgba(16,185,129,0.10); color: #059669; font-weight: 600; }
+.ql-device .dev-dot { width: 5px; height: 5px; border-radius: 50%; background: #ccc; }
+.ql-device .dev-dot.on { background: #10b981; }
+
+/* ===== 右侧面板（上下分割）===== */
+.ql-content { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.ql-content-top { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.ql-content-bottom { flex-shrink: 0; border-top: 1px solid rgba(0,0,0,0.06); padding: 12px 20px; background: rgba(255,255,255,0.7); backdrop-filter: blur(8px); max-height: 180px; overflow-y: auto; }
+
+/* ===== 设备头 ===== */
+.ql-dev-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.ql-dev-title { font-size: 16px; font-weight: 700; margin: 0; }
+.ql-dev-meta { font-size: 11px; color: var(--color-text-muted); display: flex; gap: 10px; }
+.ql-dev-actions { margin-left: auto; display: flex; gap: 8px; }
+.ql-dev-actions .glass-btn { padding: 7px 14px; font-size: 12.5px; }
+.btn-connect { background: linear-gradient(135deg,#10b981,#059669); }
+.btn-disconnect { background: linear-gradient(135deg,#f87171,#ef4444); }
+
+/* ===== 能力条（紧凑 mini tag）===== */
+.ql-cap-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.ql-cap { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 6px; font-size: 11px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.10); }
+.ql-cap .k { color: var(--color-text-muted); }
+.ql-cap .v { font-weight: 700; color: #059669; font-family: var(--font-mono); }
+
+/* ===== Tab 栏 ===== */
+.ql-tabs { display: flex; gap: 2px; border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 10px; flex-wrap: wrap; }
+.ql-tab { padding: 6px 10px; cursor: pointer; font-size: 12px; color: var(--color-text-muted); border-bottom: 2px solid transparent; transition: all .12s; }
+.ql-tab:hover { color: var(--color-text); }
+.ql-tab.active { color: #059669; border-bottom-color: #059669; font-weight: 600; }
+
+/* ===== 数据表 ===== */
+.ql-table-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ql-table-toolbar input { width: 180px; padding: 6px 10px; font-size: 12px; }
+.ql-table-toolbar .count { font-size: 11px; color: var(--color-text-muted); margin-left: auto; }
+.ql-table-wrap { overflow: auto; max-height: calc(100vh - 340px); border: 1px solid rgba(0,0,0,0.05); border-radius: 8px; }
+.ql-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ql-table-wrap th { position: sticky; top: 0; z-index: 2; background: #f8fafb; padding: 7px 10px; text-align: left; font-size: 11.5px; font-weight: 600; color: var(--color-text-secondary); border-bottom: 1px solid rgba(0,0,0,0.06); white-space: nowrap; }
+.ql-table-wrap td { padding: 6px 10px; border-bottom: 1px solid rgba(0,0,0,0.03); color: var(--color-text); font-family: var(--font-mono); font-size: 12px; }
+.ql-table-wrap tr:nth-child(even) td { background: rgba(0,0,0,0.015); }
+.ql-table-wrap tr:hover td { background: rgba(16,185,129,0.04); }
+/* 状态色 */
+.ql-table-wrap td.s-alarm { color: #dc2626; font-weight: 600; }
+.ql-table-wrap td.s-ok { color: #059669; }
+.ql-table-wrap td.s-warn { color: #d97706; }
+.ql-table-wrap td.s-muted { color: #9ca3af; }
+
+/* ===== 下发操作区 ===== */
+.ql-ops-title { font-size: 12px; font-weight: 700; color: var(--color-text-secondary); margin-bottom: 8px; }
+.ql-ops-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.ql-ops-row + .ql-ops-row { margin-top: 10px; }
+.ql-ops-item { display: flex; flex-direction: column; gap: 2px; }
+.ql-ops-item label { font-size: 10.5px; color: var(--color-text-muted); }
+.ql-ops-item input { width: 90px; padding: 6px 8px; font-size: 12px; }
+.ql-ops-item input[type="text"] { width: 160px; }
+.ql-ops-item .glass-btn { padding: 7px 12px; font-size: 12px; }
+
+/* ===== 状态卡片（堆垛机）===== */
+.ql-section-title { font-size: 12.5px; font-weight: 700; color: var(--color-text); margin: 12px 0 6px; display: flex; align-items: center; gap: 8px; }
+.ql-refresh-time { font-size: 10.5px; color: var(--color-text-muted); font-weight: 400; }
+.ql-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.ql-field { display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.04); border-radius: 8px; padding: 8px 10px; }
+.ql-field .k { font-size: 11.5px; color: var(--color-text-secondary); }
+.ql-field .v { font-size: 12.5px; font-weight: 600; color: var(--color-text); font-family: var(--font-mono); }
+.ql-field.alarm { border-color: rgba(239,68,68,0.25); background: rgba(239,68,68,0.03); }
+.ql-field.alarm .v { color: #dc2626; }
+.ql-field.success .v { color: #059669; }
+.ql-field.warn .v { color: #d97706; }
+
+/* ===== Toast ===== */
+.ql-toast { position: fixed; top: 60px; right: 20px; z-index: 2000; padding: 10px 16px; border-radius: 8px; font-size: 12.5px; color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,0.12); opacity: 0; transform: translateY(-8px); transition: opacity .2s, transform .2s; pointer-events: none; }
+.ql-toast.show { opacity: 1; transform: translateY(0); }
+.ql-toast.ok { background: linear-gradient(135deg,#10b981,#059669); }
+.ql-toast.err { background: linear-gradient(135deg,#ef4444,#dc2626); }
+
+/* ===== 确认弹窗 ===== */
+.ql-confirm-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.35); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1500; }
+.ql-confirm-box { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 16px 48px rgba(0,0,0,.15); max-width: 380px; width: 90%; text-align: center; }
+.ql-confirm-box h3 { margin: 0 0 6px; font-size: 15px; }
+.ql-confirm-box p { margin: 0 0 16px; font-size: 13px; color: var(--color-text-secondary); }
+.ql-confirm-btns { display: flex; justify-content: center; gap: 10px; }
+
+/* ===== 设备管理弹窗 ===== */
+.ql-modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.4); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 1500; }
+.ql-modal { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.18); max-width: 520px; width: 92%; max-height: 80vh; overflow-y: auto; position: relative; }
+.ql-modal h3 { margin: 0 0 16px; font-size: 16px; }
+.ql-modal-close { position: absolute; top: 14px; right: 18px; font-size: 18px; cursor: pointer; color: var(--color-text-muted); }
+.ql-modal-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ql-modal-form .full { grid-column: 1 / -1; }
+.ql-modal-form label { font-size: 11px; color: var(--color-text-muted); margin-bottom: 3px; display: block; }
+.ql-modal-form input, .ql-modal-form select { width: 100%; padding: 8px 10px; font-size: 13px; }
+.ql-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.ql-dev-list-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid rgba(0,0,0,0.04); }
+.ql-dev-list-item .info { flex: 1; }
+.ql-dev-list-item .info .name { font-weight: 600; font-size: 13px; }
+.ql-dev-list-item .info .meta { font-size: 11px; color: var(--color-text-muted); }
+.ql-dev-list-item .ops a { font-size: 12px; cursor: pointer; text-decoration: none; margin-left: 8px; }
+.ql-dev-list-item .ops .edit { color: var(--color-primary); }
+.ql-dev-list-item .ops .del { color: var(--color-error); }
+
+/* ===== 输送线拓扑地图 ===== */
+.ql-map-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:2px 0 8px; }
+.ql-map-toolgroup { display:flex; align-items:center; gap:5px; padding-right:10px; border-right:1px solid rgba(148,163,184,.28); }
+.ql-map-toolgroup:last-of-type { border-right:0; padding-right:0; }
+.ql-map-toolbar .glass-btn-outline { height:30px; padding:0 10px; border-color:rgba(100,116,139,.28); color:#334155; font-size:12px; }
+.ql-map-toolbar .glass-btn-outline:hover { border-color:#0f766e; color:#0f766e; background:#f0fdfa; }
+.ql-map-toolbar .ql-map-action.is-active { color:#fff; border-color:#0f766e; background:#0f766e; box-shadow:0 2px 7px rgba(15,118,110,.25); }
+.ql-map-toolbar .ql-map-delete { color:#b91c1c; border-color:rgba(220,38,38,.35); }
+.ql-map-toolbar .ql-map-delete:hover:not(:disabled) { color:#fff; border-color:#dc2626; background:#dc2626; }
+.ql-map-toolbar button:disabled { cursor:not-allowed; opacity:.4; }
+.ql-map-live { margin-left:auto; color:#64748b; font:600 11px var(--font-mono); white-space:nowrap; }
+.ql-map-live.online { color:#047857; }
+.ql-map-subbar { display:flex; align-items:center; gap:12px; margin-bottom:8px; padding:7px 10px; border:1px solid #dce6ee; border-radius:8px; background:#f8fafc; }
+.ql-map-guide { color:#64748b; font-size:11px; }
+.ql-map-legend { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-left:auto; }
+.ql-legend-item { display:flex; align-items:center; gap:4px; color:#475569; font-size:10.5px; white-space:nowrap; }
+.ql-legend-dot { width:8px; height:8px; border-radius:50%; box-shadow:0 0 0 2px rgba(255,255,255,.9),0 0 0 3px rgba(15,23,42,.1); }
+.ql-legend-idle { background:#0f766e; }
+.ql-legend-load { background:#16a34a; }
+.ql-legend-task { background:#d97706; }
+.ql-legend-alarm { background:#dc2626; }
+.ql-map-stage { position:relative; height:calc(100vh - 336px); min-height:330px; overflow:hidden; border:1px solid #cbd8e4; border-radius:11px; background:#eef3f8; box-shadow:inset 0 1px 0 rgba(255,255,255,.8), 0 3px 12px rgba(15,23,42,.04); }
+#cv_mapcanvas { width:100%; height:100%; }
+.ql-map-empty { position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; color:#475569; text-align:center; font-size:13px; font-weight:600; background:linear-gradient(135deg,rgba(248,250,252,.92),rgba(238,243,248,.92)); pointer-events:none; }
+.ql-map-empty small { color:#94a3b8; font-size:11px; font-weight:400; }
+.ql-map-empty[hidden] { display:none; }
+@media (max-width: 900px) { .ql-map-live { width:100%; margin-left:0; } .ql-map-subbar { align-items:flex-start; flex-direction:column; } .ql-map-legend { margin-left:0; } }
+
+/* ===== 堆垛机 Tab ===== */
+.ql-panel-card { margin-top: 12px; }
+
+/* ===== 响应式 ===== */
+@media (max-width: 900px) { .ql-sider { width: 180px; } }
+@media (max-width: 640px) { .ql-sider { display: none; } }
+</style>
+
+<style>
+/* ===== 2026 操作台视觉重构 ===== */
+:root {
+    --ql-ink: #10231f;
+    --ql-muted: #64736f;
+    --ql-line: #dfe8e4;
+    --ql-panel: #ffffff;
+    --ql-bg: #f3f7f5;
+    --ql-brand: #087f67;
+    --ql-brand-dark: #075e50;
+    --ql-brand-soft: #e6f5f0;
+    --ql-danger: #d84b4b;
+}
+* { box-sizing: border-box; }
+body {
+    color: var(--ql-ink);
+    background:
+        radial-gradient(circle at 78% -10%, rgba(30, 166, 130, .08), transparent 32%),
+        var(--ql-bg);
+    font-family: "Inter", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.ql-topbar {
+    height: 64px;
+    padding: 0 24px;
+    gap: 18px;
+    background: rgba(255,255,255,.94);
+    border-bottom: 1px solid var(--ql-line);
+    box-shadow: 0 1px 0 rgba(16,35,31,.02);
+    backdrop-filter: blur(16px);
+}
+.ql-brand-mark {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 17px;
+    background: linear-gradient(145deg, #0aa77f, #076a59);
+    box-shadow: 0 7px 16px rgba(8,127,103,.22);
+}
+.ql-brand-copy { display: flex; flex-direction: column; gap: 1px; }
+.ql-logo {
+    color: var(--ql-ink);
+    font-size: 15px;
+    line-height: 1.2;
+    font-weight: 760;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+}
+.ql-brand-sub { color: #82908c; font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
+.ql-top-divider { width: 1px; height: 24px; background: var(--ql-line); }
+.ql-conn-badge {
+    gap: 7px;
+    min-height: 30px;
+    padding: 5px 11px;
+    border: 1px solid #e0e7e5;
+    background: #f8faf9;
+    color: #7b8985;
+    font-size: 11.5px;
+}
+.ql-conn-badge.online { border-color: #bde5d8; background: #ebf8f4; color: #087f67; }
+.ql-conn-badge .dot { width: 7px; height: 7px; box-shadow: 0 0 0 3px currentColor; opacity: .7; }
+.ql-clock { color: #7a8783; font: 11px var(--font-mono); }
+.ql-home-link {
+    padding: 7px 10px;
+    border-radius: 8px;
+    color: #52615d;
+    font-size: 12px;
+}
+.ql-home-link:hover { color: var(--ql-brand); background: var(--ql-brand-soft); }
+
+.ql-main { min-height: 0; }
+.ql-sider {
+    width: 272px;
+    padding: 20px 14px;
+    background: #f9fbfa;
+    border-right: 1px solid var(--ql-line);
+    backdrop-filter: none;
+}
+.ql-sider-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 12px; }
+.ql-sider-title { color: #253d36; font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+.ql-sider-total { color: #87948f; font: 10px var(--font-mono); }
+.ql-search { position: relative; }
+.ql-search::before {
+    content: "⌕";
+    position: absolute;
+    z-index: 1;
+    left: 12px;
+    top: 9px;
+    color: #7c8d87;
+    font-size: 17px;
+    line-height: 1;
+}
+.ql-sider .ql-search input {
+    height: 38px;
+    margin-bottom: 10px;
+    padding: 8px 12px 8px 34px;
+    border: 1px solid #dbe5e1;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: none;
+}
+.ql-sider .ql-search input:focus { border-color: #6fc0a9; box-shadow: 0 0 0 3px rgba(8,127,103,.1); }
+.ql-sider .ql-btns { gap: 8px; margin-bottom: 18px; }
+.ql-sider .ql-btns button {
+    min-height: 34px;
+    padding: 6px 10px;
+    border-color: #d5e1dd;
+    border-radius: 9px;
+    color: #4c5e58;
+    background: #fff;
+    font-size: 11.5px;
+    font-weight: 650;
+}
+.ql-sider .ql-btns button:first-child { color: #fff; border-color: var(--ql-brand); background: var(--ql-brand); }
+.ql-group + .ql-group { margin-top: 10px; }
+.ql-group-title {
+    min-height: 34px;
+    padding: 7px 9px;
+    color: #5b6c66;
+    font-size: 11.5px;
+    letter-spacing: .02em;
+}
+.ql-group-title:hover { background: #eef4f1; }
+.ql-group-title .arrow { color: #97a49f; }
+.ql-device {
+    position: relative;
+    min-height: 42px;
+    margin: 3px 0;
+    padding: 9px 10px 9px 34px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: #52625d;
+    font-size: 12.5px;
+}
+.ql-device:hover { background: #eef6f3; }
+.ql-device.active {
+    border-color: #cbe7de;
+    background: #e6f5f0;
+    color: #076b59;
+    box-shadow: 0 3px 10px rgba(8,127,103,.06);
+}
+.ql-device.active::after {
+    content: "›";
+    position: absolute;
+    right: 12px;
+    top: 8px;
+    color: #55a991;
+    font-size: 18px;
+}
+.ql-device .dev-dot { width: 7px; height: 7px; background: #b7c1be; box-shadow: 0 0 0 3px #edf1f0; }
+.ql-device .dev-dot.on { background: #12a879; box-shadow: 0 0 0 3px #d9f2ea; }
+
+.ql-content { background: transparent; }
+.ql-content-top { padding: 20px 24px 14px; }
+.ql-dev-header {
+    min-height: 82px;
+    margin-bottom: 14px;
+    padding: 16px 18px;
+    border: 1px solid var(--ql-line);
+    border-radius: 14px;
+    background: rgba(255,255,255,.92);
+    box-shadow: 0 8px 24px rgba(22,55,46,.055);
+}
+.ql-dev-identity { display: flex; align-items: center; gap: 13px; }
+.ql-dev-icon {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    border-radius: 12px;
+    color: var(--ql-brand);
+    background: var(--ql-brand-soft);
+    font-size: 20px;
+}
+.ql-dev-title-line { display: flex; align-items: center; gap: 9px; }
+.ql-dev-title { color: #17342c; font-size: 18px; font-weight: 760; letter-spacing: -.02em; }
+.ql-dev-state {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: #f1f4f3;
+    color: #75817d;
+    font-size: 10px;
+    font-weight: 650;
+}
+.ql-dev-state.online { color: #08745f; background: #def3ec; }
+.ql-dev-meta { margin-top: 5px; gap: 7px; color: #71807b; font-size: 11px; }
+.ql-dev-meta span { padding-right: 8px; border-right: 1px solid #e4ebe8; }
+.ql-dev-meta span:last-child { border-right: 0; }
+.ql-dev-actions { gap: 8px; }
+.ql-dev-actions .glass-btn,
+.ql-dev-actions .glass-btn-outline { min-height: 36px; padding: 8px 14px; border-radius: 9px; font-weight: 650; box-shadow: none; }
+.ql-task-toggle { border-color: #d9e4e0; color: #42564f; background: #fff; }
+.btn-connect { border: 0; background: var(--ql-brand); box-shadow: 0 5px 12px rgba(8,127,103,.18); }
+.btn-connect:hover { background: var(--ql-brand-dark); }
+.btn-disconnect { border: 0; background: #f8e8e8; color: #b53c3c; box-shadow: none; }
+.btn-disconnect:hover { background: #f3dada; }
+
+.ql-cap-bar { gap: 8px; margin: 0 0 12px; }
+.ql-cap { min-height: 30px; padding: 5px 10px; border-color: #dce9e4; border-radius: 8px; background: #fff; }
+.ql-cap .v { color: var(--ql-brand); }
+.ql-tabs {
+    gap: 5px;
+    margin-bottom: 12px;
+    padding: 5px;
+    border: 1px solid var(--ql-line);
+    border-radius: 11px;
+    background: rgba(255,255,255,.72);
+    flex-wrap: nowrap;
+    overflow-x: auto;
+}
+.ql-tab {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 8px;
+    color: #667570;
+    font-size: 11.5px;
+}
+.ql-tab:hover { color: #17342c; background: #eef4f1; }
+.ql-tab.active { color: #fff; border: 0; background: var(--ql-brand); box-shadow: 0 3px 8px rgba(8,127,103,.18); }
+.ql-table-toolbar { min-height: 42px; margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--ql-line); background: #fff; }
+.ql-table-toolbar::before { content: "筛选"; color: #6d7b77; font-size: 11px; font-weight: 650; }
+.ql-table-toolbar input { width: 240px; height: 32px; border-color: #dbe4e1; border-radius: 8px; background: #f8faf9; box-shadow: none; }
+.ql-table-toolbar .count { padding: 4px 8px; border-radius: 999px; background: #f0f4f2; color: #697873; }
+.ql-table-wrap {
+    max-height: calc(100vh - 400px);
+    border: 1px solid var(--ql-line);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 8px 22px rgba(22,55,46,.045);
+}
+.ql-table-toolbar + .ql-table-wrap { border-top-left-radius: 0; border-top-right-radius: 0; }
+.ql-table-wrap th { height: 40px; padding: 9px 12px; background: #f4f7f6; color: #53645e; font-size: 11px; letter-spacing: .02em; }
+.ql-table-wrap td { height: 40px; padding: 8px 12px; border-bottom-color: #edf2f0; font-size: 11.5px; }
+.ql-table-wrap tr:nth-child(even) td { background: #fbfcfc; }
+.ql-table-wrap tr:hover td { background: #edf8f4; }
+
+.ql-content-bottom {
+    max-height: 260px;
+    padding: 14px 24px 18px;
+    border-top: 1px solid var(--ql-line);
+    background: rgba(247,250,249,.96);
+    box-shadow: 0 -10px 28px rgba(22,55,46,.045);
+    transition: max-height .2s ease, padding .2s ease;
+}
+.ql-content-bottom.is-collapsed { max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; border-top-color: transparent; }
+.ql-content-bottom > div:first-child { display: grid !important; grid-template-columns: minmax(0,1.35fr) minmax(360px,1fr); gap: 14px !important; }
+.ql-content-bottom > div:first-child > div {
+    min-width: 0 !important;
+    padding: 13px 14px 14px;
+    border: 1px solid var(--ql-line);
+    border-radius: 12px;
+    background: #fff;
+}
+.ql-ops-title { margin-bottom: 10px; color: #28433b; font-size: 12px; font-weight: 750; }
+.ql-ops-row { gap: 8px; }
+.ql-ops-item { gap: 4px; }
+.ql-ops-item label { color: #71807b; font-size: 10px; font-weight: 600; }
+.ql-ops-item input { height: 34px; width: 78px; padding: 7px 9px; border-color: #d9e4e0; border-radius: 8px; background: #fbfcfc; box-shadow: none; }
+.ql-ops-item input:focus { border-color: #70bda8; box-shadow: 0 0 0 3px rgba(8,127,103,.09); }
+.ql-ops-item .glass-btn { min-height: 34px; border-radius: 8px; }
+
+.ql-field { min-height: 46px; border-color: var(--ql-line); background: #fff; }
+.ql-panel-card { padding: 14px; border: 1px solid var(--ql-line); border-radius: 12px; background: #fff; box-shadow: 0 8px 22px rgba(22,55,46,.04); }
+.ql-map-stage { border-color: #cddbd6; border-radius: 12px; background: #edf3f1; }
+.ql-map-head {
+    display: flex; align-items: center; gap: 14px; min-height: 54px; padding: 10px 12px;
+    border: 1px solid var(--ql-line); border-radius: 12px 12px 0 0; background: #fff;
+}
+.ql-map-heading { display: flex; min-width: 180px; flex-direction: column; gap: 2px; }
+.ql-map-heading strong { color: #223d35; font-size: 13px; }
+.ql-map-heading span { color: #84918d; font-size: 10px; }
+.ql-map-search { display: flex; align-items: center; gap: 6px; }
+.ql-map-search input { width: 190px; height: 32px; padding: 6px 10px; border-radius: 8px; box-shadow: none; }
+.ql-map-search button { height: 32px; padding: 0 11px; border-radius: 8px; font-size: 11px; }
+.ql-map-toolbar {
+    min-height: 46px; margin: 0; padding: 7px 10px; border: 1px solid var(--ql-line);
+    border-top: 0; background: #f8faf9;
+}
+.ql-map-toolgroup { gap: 6px; padding-right: 10px; border-right-color: #dce5e1; }
+.ql-map-toolbar .glass-btn-outline {
+    height: 31px; padding: 0 11px; border-color: #d7e2de; border-radius: 8px;
+    background: #fff; color: #4d6059; font-size: 11px; font-weight: 650;
+}
+.ql-map-toolbar .ql-map-action.is-active { border-color: var(--ql-brand); background: var(--ql-brand); box-shadow: 0 3px 8px rgba(8,127,103,.18); }
+.ql-map-file-tools { margin-left: auto; }
+.ql-map-live { margin-left: auto; padding: 6px 9px; border-radius: 999px; background: #f1f5f3; font-size: 10px; }
+.ql-map-live.online { background: #e8f6f1; }
+.ql-map-workspace {
+    display: grid; grid-template-columns: minmax(0,1fr) 228px; height: calc(100vh - 390px); min-height: 440px;
+    border: 1px solid #ccd9d4; border-top: 0; border-radius: 0 0 12px 12px; overflow: hidden; background: #fff;
+}
+.ql-map-workspace .ql-map-stage { height: 100%; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
+.ql-map-inspector { padding: 14px; border-left: 1px solid var(--ql-line); background: #fbfcfc; overflow-y: auto; }
+.ql-map-inspector-title { margin-bottom: 9px; color: #687771; font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.ql-map-selection {
+    display: flex; min-height: 108px; padding: 15px 12px; align-items: center; justify-content: center;
+    flex-direction: column; gap: 5px; border: 1px dashed #cedbd6; border-radius: 11px;
+    color: #77857f; background: #fff; text-align: center;
+}
+.ql-map-selection.has-selection { align-items: flex-start; border-style: solid; border-color: #bfe0d5; background: #eef8f4; text-align: left; }
+.ql-map-selection-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--ql-brand); background: var(--ql-brand-soft); font-size: 15px; }
+.ql-map-selection b { color: #344b43; font: 650 11.5px var(--font-mono); word-break: break-all; }
+.ql-map-selection small, .ql-map-selection em { color: #81908a; font-size: 10px; font-style: normal; }
+.ql-map-delete-selected { width: 100%; height: 32px; margin-top: 8px; border-radius: 8px; font-size: 11px; }
+.ql-map-inspector-divider { height: 1px; margin: 15px 0; background: #e3ebe8; }
+.ql-map-inspector .ql-map-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 0; }
+.ql-map-inspector .ql-legend-item { font-size: 10.5px; }
+.ql-map-tips { display: flex; flex-direction: column; gap: 7px; color: #7b8984; font-size: 10px; }
+.ql-map-tips b { margin-bottom: 2px; color: #53655e; font-size: 10px; }
+.ql-map-tips span::before { content: "·"; margin-right: 6px; color: var(--ql-brand); }
+.ql-map-zoom {
+    position: absolute; z-index: 5; right: 14px; bottom: 14px; display: flex; align-items: center; padding: 4px;
+    border: 1px solid #d5e0dc; border-radius: 10px; background: rgba(255,255,255,.96); box-shadow: 0 8px 22px rgba(16,35,31,.13);
+}
+.ql-map-zoom button { width: 30px; height: 29px; padding: 0; border: 0; border-radius: 7px; color: #3d524b; background: transparent; cursor: pointer; font-size: 16px; }
+.ql-map-zoom button:hover { color: var(--ql-brand); background: var(--ql-brand-soft); }
+.ql-map-zoom span { width: 50px; color: #5f706a; font: 10px var(--font-mono); text-align: center; }
+.ql-map-zoom button.fit { width: 38px; margin-left: 3px; border-left: 1px solid #e0e8e5; border-radius: 0 7px 7px 0; font-size: 10px; font-weight: 650; }
+.ql-map-empty { gap: 9px; color: #3f554e; background: rgba(246,250,248,.94); pointer-events: auto; }
+.ql-map-empty b { font-size: 13px; }
+.ql-map-empty .glass-btn { margin-top: 5px; padding: 8px 13px; font-size: 11px; pointer-events: auto; }
+.ql-confirm-box, .ql-modal { border: 1px solid #e0e8e5; border-radius: 15px; }
+.ql-toast { top: 76px; border-radius: 10px; }
+.ql-empty-state { max-width: 360px; text-align: center; }
+.ql-empty-icon { display: grid; place-items: center; width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 16px; color: var(--ql-brand); background: var(--ql-brand-soft); font-size: 24px; }
+.ql-empty-title { margin-bottom: 6px; color: #2b403a; font-size: 14px; font-weight: 700; }
+.ql-empty-desc { color: #7a8984; font-size: 12px; line-height: 1.7; }
+
+@media (max-width: 1100px) {
+    .ql-sider { width: 226px; }
+    .ql-content-bottom > div:first-child { grid-template-columns: 1fr !important; }
+    .ql-content-bottom { max-height: 360px; }
+    .ql-map-workspace { grid-template-columns: minmax(0,1fr) 190px; }
+}
+@media (max-width: 760px) {
+    body { overflow: auto; }
+    .ql-topbar { height: 58px; padding: 0 14px; }
+    .ql-brand-sub, .ql-clock, .ql-top-divider { display: none; }
+    .ql-main { min-height: calc(100vh - 58px); }
+    .ql-sider { display: none; }
+    .ql-content { overflow: visible; }
+    .ql-content-top { padding: 12px; overflow: visible; }
+    .ql-dev-header { align-items: flex-start; flex-direction: column; }
+    .ql-dev-actions { width: 100%; margin: 4px 0 0; }
+    .ql-dev-actions button { flex: 1; }
+    .ql-content-bottom { position: static; max-height: none; padding: 12px; }
+    .ql-table-wrap { max-height: 55vh; }
+    .ql-map-head { align-items: stretch; flex-direction: column; }
+    .ql-map-search input { flex: 1; width: auto; }
+    .ql-map-live { width: auto; margin-left: 0; }
+    .ql-map-toolbar { overflow-x: auto; flex-wrap: nowrap; }
+    .ql-map-workspace { display: block; height: 62vh; min-height: 420px; }
+    .ql-map-inspector { display: none; }
+}
+
+/* ===== 与全站 glass / indigo 设计系统对齐 ===== */
+:root {
+    --ql-ink: var(--color-text);
+    --ql-muted: var(--color-text-muted);
+    --ql-line: rgba(99,102,241,.12);
+    --ql-panel: rgba(255,255,255,.62);
+    --ql-bg: transparent;
+    --ql-brand: var(--color-primary);
+    --ql-brand-dark: var(--color-primary-dark);
+    --ql-brand-soft: rgba(99,102,241,.09);
+}
+body { background: var(--bg-gradient); background-attachment: fixed; color: var(--color-text); }
+.ql-topbar {
+    height: 56px; padding: 0 28px; background: rgba(255,255,255,.72);
+    border-bottom-color: rgba(99,102,241,.10); box-shadow: 0 1px 0 rgba(255,255,255,.6) inset;
+}
+.ql-brand-mark {
+    display: block; width: auto; height: auto; border-radius: 0; color: var(--color-primary);
+    background: none; box-shadow: none; font-size: 20px; font-weight: 800;
+}
+.ql-logo { color: var(--color-primary); font-size: 16px; font-weight: 700; }
+.ql-brand-sub { display: none; }
+.ql-top-divider { background: rgba(99,102,241,.12); }
+.ql-home-link { color: var(--color-primary); border: 1.5px solid rgba(99,102,241,.25); border-radius: var(--radius-tag); }
+.ql-home-link:hover { color: var(--color-primary-dark); background: rgba(99,102,241,.08); }
+.ql-conn-badge { border-color: rgba(99,102,241,.14); background: rgba(255,255,255,.55); }
+.ql-conn-badge.online { border-color: rgba(16,185,129,.20); background: rgba(16,185,129,.10); color: var(--color-success); }
+.ql-sider {
+    background: rgba(255,255,255,.46); border-right-color: rgba(99,102,241,.10);
+    backdrop-filter: blur(18px) saturate(140%);
+}
+.ql-sider-title { color: var(--color-text); }
+.ql-sider .ql-search input, .ql-map-search input {
+    border-color: rgba(99,102,241,.16); background: rgba(255,255,255,.65);
+}
+.ql-sider .ql-search input:focus, .ql-map-search input:focus {
+    border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+}
+.ql-sider .ql-btns button { border-color: rgba(99,102,241,.24); color: var(--color-primary); background: rgba(255,255,255,.58); }
+.ql-sider .ql-btns button:first-child { border-color: transparent; background: var(--gradient-btn); box-shadow: 0 4px 14px rgba(99,102,241,.20); }
+.ql-group-title { color: var(--color-text-secondary); }
+.ql-group-title:hover, .ql-device:hover { background: rgba(99,102,241,.055); }
+.ql-device.active {
+    border-color: rgba(99,102,241,.20); background: linear-gradient(135deg,rgba(99,102,241,.11),rgba(139,92,246,.08));
+    color: var(--color-primary); box-shadow: 0 3px 10px rgba(99,102,241,.08);
+}
+.ql-device.active::after { color: var(--color-primary-light); }
+.ql-content { background: transparent; }
+.ql-dev-header, .ql-panel-card, .ql-content-bottom > div:first-child > div,
+.ql-table-wrap, .ql-map-head, .ql-map-inspector {
+    border-color: rgba(99,102,241,.10); background: rgba(255,255,255,.62);
+    backdrop-filter: blur(18px) saturate(140%); box-shadow: var(--glass-shadow);
+}
+.ql-dev-title { color: var(--color-text); }
+.ql-dev-icon, .ql-empty-icon, .ql-map-selection-icon { color: var(--color-primary); background: rgba(99,102,241,.10); }
+.ql-dev-meta span { border-right-color: rgba(99,102,241,.10); }
+.ql-task-toggle { border-color: rgba(99,102,241,.22); color: var(--color-primary); background: rgba(255,255,255,.58); }
+.btn-connect { background: var(--gradient-btn); box-shadow: 0 4px 14px rgba(99,102,241,.22); }
+.btn-connect:hover { background: var(--gradient-btn-hover); }
+.btn-disconnect { background: rgba(239,68,68,.09); color: var(--color-error); }
+.ql-cap { border-color: rgba(99,102,241,.12); background: rgba(255,255,255,.60); }
+.ql-cap .v { color: var(--color-primary); }
+.ql-tabs { border-color: rgba(99,102,241,.10); background: rgba(255,255,255,.52); }
+.ql-tab:hover { color: var(--color-primary); background: rgba(99,102,241,.07); }
+.ql-tab.active { background: var(--gradient-btn); box-shadow: 0 3px 10px rgba(99,102,241,.20); }
+.ql-table-toolbar { border-bottom-color: rgba(99,102,241,.10); background: rgba(255,255,255,.66); }
+.ql-table-toolbar input { border-color: rgba(99,102,241,.14); background: rgba(255,255,255,.62); }
+.ql-table-toolbar .count { background: rgba(99,102,241,.07); color: var(--color-primary); }
+.ql-table-wrap th { background: rgba(99,102,241,.055); color: var(--color-text-secondary); }
+.ql-table-wrap td { border-bottom-color: rgba(99,102,241,.06); }
+.ql-table-wrap tr:nth-child(even) td { background: rgba(99,102,241,.018); }
+.ql-table-wrap tr:hover td { background: rgba(99,102,241,.06); }
+.ql-content-bottom { border-top-color: rgba(99,102,241,.10); background: rgba(247,247,255,.78); box-shadow: 0 -8px 28px rgba(99,102,241,.045); }
+.ql-ops-title, .ql-map-heading strong, .ql-empty-title { color: var(--color-text); }
+.ql-ops-item input { border-color: rgba(99,102,241,.14); background: rgba(255,255,255,.68); }
+.ql-ops-item input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(99,102,241,.10); }
+.ql-field { border-color: rgba(99,102,241,.10); background: rgba(255,255,255,.58); }
+.ql-map-toolbar { border-color: rgba(99,102,241,.10); background: rgba(255,255,255,.45); }
+.ql-map-toolbar .glass-btn-outline { border-color: rgba(99,102,241,.20); background: rgba(255,255,255,.62); color: var(--color-text-secondary); }
+.ql-map-toolbar .glass-btn-outline:hover { border-color: var(--color-primary); color: var(--color-primary); background: rgba(99,102,241,.08); }
+.ql-map-toolbar .ql-map-action.is-active { border-color: transparent; background: var(--gradient-btn); box-shadow: 0 3px 10px rgba(99,102,241,.22); }
+.ql-map-live { background: rgba(99,102,241,.07); color: var(--color-text-muted); }
+.ql-map-live.online { background: rgba(16,185,129,.10); color: var(--color-success); }
+.ql-map-workspace { border-color: rgba(99,102,241,.12); background: rgba(255,255,255,.45); box-shadow: var(--glass-shadow); }
+.ql-map-inspector { border-left-color: rgba(99,102,241,.10); box-shadow: none; }
+.ql-map-selection { border-color: rgba(99,102,241,.20); background: rgba(255,255,255,.55); }
+.ql-map-selection.has-selection { border-color: rgba(99,102,241,.24); background: rgba(99,102,241,.07); }
+.ql-map-selection b { color: var(--color-text-secondary); }
+.ql-map-inspector-divider { background: rgba(99,102,241,.10); }
+.ql-map-tips span::before { color: var(--color-primary); }
+.ql-map-zoom { border-color: rgba(99,102,241,.18); background: rgba(255,255,255,.88); box-shadow: 0 8px 24px rgba(99,102,241,.14); }
+.ql-map-zoom button:hover { color: var(--color-primary); background: rgba(99,102,241,.09); }
+.ql-map-zoom button.fit { border-left-color: rgba(99,102,241,.12); }
+.ql-map-empty { color: var(--color-text-secondary); background: rgba(245,246,255,.93); }
+.ql-modal, .ql-confirm-box { border-color: rgba(99,102,241,.12); background: rgba(255,255,255,.96); }
+.ql-toast.ok { background: var(--gradient-btn); }
+
+/* ===== 地图优先：复用快捷任务的数字孪生视觉 ===== */
+.ql-map-head {
+    border-color: rgba(56,189,248,.16);
+    background: linear-gradient(180deg,rgba(15,23,42,.98),rgba(11,18,36,.96));
+    box-shadow: 0 5px 20px rgba(5,8,18,.28);
+}
+.ql-map-heading strong { color: #e0f2fe; text-shadow: 0 0 12px rgba(56,189,248,.25); }
+.ql-map-heading span { color: rgba(148,163,184,.62); }
+.ql-map-search input {
+    border-color: rgba(56,189,248,.24); background: rgba(15,23,42,.72); color: #e0f2fe;
+}
+.ql-map-search input::placeholder { color: rgba(148,163,184,.48); }
+.ql-map-search input:focus { border-color: rgba(56,189,248,.65); background: rgba(15,23,42,.92); box-shadow: 0 0 0 3px rgba(56,189,248,.10); }
+.ql-map-search button { border-color: rgba(56,189,248,.28); background: rgba(56,189,248,.08); color: #bae6fd; }
+.ql-map-toolbar {
+    border-color: rgba(56,189,248,.14); background: rgba(10,16,32,.96);
+}
+.ql-map-toolbar .glass-btn-outline {
+    border-color: rgba(56,189,248,.20); background: rgba(15,23,42,.78); color: rgba(186,230,253,.78);
+}
+.ql-map-toolbar .glass-btn-outline:hover { border-color: rgba(56,189,248,.58); background: rgba(56,189,248,.12); color: #e0f2fe; }
+.ql-map-toolbar .ql-map-action.is-active {
+    border-color: transparent; background: linear-gradient(135deg,#0891b2,#4f46e5); box-shadow: 0 3px 14px rgba(56,189,248,.25);
+}
+.ql-map-toolbar .ql-map-delete { border-color: rgba(239,68,68,.25); color: #fca5a5; }
+.ql-map-live { background: rgba(56,189,248,.08); color: rgba(186,230,253,.68); }
+.ql-map-live.online { background: rgba(16,185,129,.14); color: #6ee7b7; }
+.ql-map-workspace {
+    height: calc(100vh - 330px); min-height: 540px; border-color: rgba(56,189,248,.15);
+    background: #090f20; box-shadow: 0 14px 38px rgba(5,8,18,.24);
+}
+.ql-map-inspector {
+    border-left-color: rgba(56,189,248,.14); background: linear-gradient(180deg,#0d1529,#0a1020); color: #cbd5e1;
+    backdrop-filter: none;
+}
+.ql-map-inspector-title { color: rgba(186,230,253,.58); }
+.ql-map-selection { border-color: rgba(56,189,248,.22); background: rgba(15,23,42,.72); color: #94a3b8; }
+.ql-map-selection.has-selection { border-color: rgba(56,189,248,.38); background: rgba(14,116,144,.10); }
+.ql-map-selection-icon { color: #67e8f9; background: rgba(34,211,238,.12); }
+.ql-map-selection b { color: #e0f2fe; }
+.ql-map-selection small, .ql-map-selection em { color: rgba(148,163,184,.72); }
+.ql-map-state-grid { display: grid; width: 100%; grid-template-columns: 1fr 1fr; gap: 6px; margin: 7px 0 5px; }
+.ql-map-state-grid span { padding: 5px 4px; border: 1px solid rgba(100,116,139,.25); border-radius: 7px; color: #94a3b8; background: rgba(100,116,139,.08); font-size: 9px; text-align: center; }
+.ql-map-state-grid .is-occupied { border-color: rgba(16,185,129,.40); color: #6ee7b7; background: rgba(16,185,129,.13); }
+.ql-map-state-grid .task-state { grid-column: 1 / -1; }
+.ql-map-state-grid .is-task { border-color: rgba(245,158,11,.50); color: #fde68a; background: rgba(245,158,11,.16); box-shadow: 0 0 12px rgba(245,158,11,.10); }
+.ql-map-state-grid .is-alarm { border-color: rgba(251,79,100,.52); color: #fecdd3; background: rgba(251,79,100,.18); box-shadow: 0 0 12px rgba(251,79,100,.12); }
+.ql-map-state-grid .is-normal { border-color: rgba(34,197,94,.28); color: #86efac; background: rgba(34,197,94,.08); }
+.ql-map-delete-selected { border-color: rgba(239,68,68,.28); background: rgba(239,68,68,.07); color: #fca5a5; }
+.ql-map-inspector-divider { background: rgba(56,189,248,.11); }
+.ql-map-inspector .ql-legend-item { color: rgba(203,213,225,.76); }
+.ql-map-tips, .ql-map-tips b { color: rgba(148,163,184,.68); }
+.ql-map-tips span::before { color: #38bdf8; }
+.ql-map-zoom { border-color: rgba(56,189,248,.20); background: rgba(10,16,32,.92); box-shadow: 0 10px 28px rgba(0,0,0,.35); }
+.ql-map-zoom button { color: #bae6fd; }
+.ql-map-zoom button:hover { color: #fff; background: rgba(56,189,248,.14); }
+.ql-map-zoom span { color: #7dd3fc; }
+.ql-map-zoom button.fit { border-left-color: rgba(56,189,248,.16); }
+.ql-map-empty { color: #cbd5e1; background: rgba(8,14,29,.94); }
+.ql-map-empty small { color: #64748b; }
+.ql-map-pick-notice {
+    padding: 6px 11px; border: 1px solid rgba(250,204,21,.38); border-radius: 999px;
+    color: #fde68a; background: rgba(250,204,21,.10); font-size: 10px; font-weight: 700;
+    animation: qlPickPulse 1.5s ease-in-out infinite;
+}
+.ql-map-pick-notice[hidden] { display: none; }
+@keyframes qlPickPulse { 50% { box-shadow: 0 0 0 5px rgba(250,204,21,.06); } }
+.ql-point-input { display: flex; align-items: center; gap: 5px; }
+.ql-point-input input { width: 86px; }
+.ql-point-input button {
+    height: 34px; padding: 0 9px; border: 1px solid rgba(99,102,241,.24); border-radius: 8px;
+    color: var(--color-primary); background: rgba(99,102,241,.07); cursor: pointer; font-size: 10px; font-weight: 700; white-space: nowrap;
+}
+.ql-point-input button:hover { border-color: var(--color-primary); background: rgba(99,102,241,.13); }
+.ql-trace-item { flex: 1 1 220px; min-width: 190px; }
+.ql-trace-item input { width: 100%; min-width: 190px; color: var(--color-primary-dark); background: rgba(99,102,241,.045); font-family: var(--font-mono); }
+.ql-route-picker {
+    margin-top: 10px; padding: 9px 10px; border: 1px solid rgba(99,102,241,.13); border-radius: 9px;
+    background: rgba(99,102,241,.035);
+}
+.ql-route-picker[hidden] { display: none; }
+.ql-route-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ql-route-picker-head span { color: var(--color-text-secondary); font-size: 10.5px; font-weight: 700; }
+.ql-route-picker-head select { width: 150px; height: 30px; padding: 4px 8px; border-radius: 7px; font-size: 10.5px; }
+.ql-route-preview { margin-top: 7px; padding: 6px 8px; border-radius: 7px; color: #5255c9; background: rgba(255,255,255,.58); font: 10px/1.55 var(--font-mono); word-break: break-all; }
+@media (min-width: 1101px) { .ql-content-bottom:not(.is-collapsed) { max-height: 330px; } }
+@media (max-width: 1100px) { .ql-map-workspace { height: calc(100vh - 350px); min-height: 500px; } }
+</style>
+
+<script>if (sessionStorage.getItem('wcs_logged_in') !== 'true') window.location.replace('login.html');</script>
+
+<div class="glass-topbar ql-topbar">
+    <div class="ql-brand-mark" aria-hidden="true">🐉</div>
+    <div class="ql-brand-copy">
+        <div class="ql-logo">青龙调试工作台</div>
+        <div class="ql-brand-sub">Device Control Center</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="ql-conn-badge" id="connBadge"><span class="dot"></span><span id="connBadgeText">未连接</span></span>
+    <span class="ql-clock" id="clock"></span>
+    <span class="ql-top-divider" aria-hidden="true"></span>
+    <a href="home.html" class="ql-home-link">返回首页</a>
+</div>
+
+<div class="ql-main">
+    <aside class="ql-sider" id="deviceTree">
+        <div class="ql-sider-head"><span class="ql-sider-title">设备列表</span><span class="ql-sider-total" id="deviceTotal">0 台</span></div>
+        <div class="ql-search"><input class="glass-input" aria-label="搜索设备" type="text" placeholder="搜索设备名称或编号" id="devSearch" oninput="filterDevices()"></div>
+        <div class="ql-btns">
+            <button class="glass-btn-outline" onclick="openDeviceDialog()">＋ 添加</button>
+            <button class="glass-btn-outline" onclick="openDeviceManager()">⚙ 管理</button>
+        </div>
+        <div id="deviceTreeContent"><div class="empty-hint" style="font-size:12px;">加载中…</div></div>
+    </aside>
+
+    <div class="ql-content" id="deviceContent">
+        <div class="ql-content-top" style="display:flex;align-items:center;justify-content:center;">
+            <div class="ql-empty-state"><div class="ql-empty-icon">⌁</div><div class="ql-empty-title">选择一台设备开始调试</div><div class="ql-empty-desc">从左侧设备列表进入实时状态、任务下发和布局配置。</div></div>
+        </div>
+    </div>
+</div>
+
+<div class="ql-toast" id="toast"></div>
+<div id="confirmRoot"></div>
+
+<script>
+const API = '/api/v1/ql-tool';
+const state = { devices: [], current: null, settings: { pollIntervalMs: 1000 }, pollTimer: null, opsPanelOpen: false };
+
+function toast(msg, ok = true) {
+    const t = document.getElementById('toast');
+    t.textContent = (ok ? '✓ ' : '✕ ') + msg;
+    t.className = 'ql-toast show ' + (ok ? 'ok' : 'err');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.className = 'ql-toast'; }, 2600);
+}
+async function api(path, opts) {
+    const res = await fetch(API + path, opts);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.message || '请求失败');
+    return json.data;
+}
+function qlConfirm(title, desc) {
+    return new Promise(resolve => {
+        const root = document.getElementById('confirmRoot');
+        root.innerHTML = `<div class="ql-confirm-overlay" onclick="this.parentElement.innerHTML=''"><div class="ql-confirm-box" onclick="event.stopPropagation()"><h3>${title}</h3><p>${desc}</p><div class="ql-confirm-btns"><button class="glass-btn-outline" id="cfmNo">取消</button><button class="glass-btn btn-connect" id="cfmYes">确认</button></div></div></div>`;
+        root.querySelector('#cfmNo').onclick = () => { root.innerHTML = ''; resolve(false); };
+        root.querySelector('#cfmYes').onclick = () => { root.innerHTML = ''; resolve(true); };
+    });
+}
+
+// ===== 设备树 =====
+async function loadDeviceTree() {
+    try {
+        const groups = await api('/devices');
+        state.devices = groups.flatMap(g => g.devices);
+        const total = document.getElementById('deviceTotal');
+        if (total) total.textContent = state.devices.length + ' 台';
+        renderTree(groups);
+    } catch (e) { document.getElementById('deviceTreeContent').innerHTML = `<div class="empty-hint">${e.message}</div>`; }
+}
+function renderTree(groups) {
+    const ico = { STACKER_CRANE: '📦', CONVEYOR_LINE: '🛤️' };
+    document.getElementById('deviceTreeContent').innerHTML = groups.map(g => `
+        <div class="ql-group"><div class="ql-group-title" onclick="this.parentElement.classList.toggle('collapsed')"><span class="arrow">▼</span>${ico[g.groupType]||'🔧'} ${g.groupName} <span style="margin-left:auto;font-size:10px;opacity:.5;">${g.devices.length}</span></div>
+        <div class="ql-group-items">${g.devices.map(d => `<div class="ql-device" data-id="${d.deviceId}" data-name="${d.deviceName}" onclick="selectDevice('${d.deviceId}')"><span class="dev-dot ${d.connected?'on':''}"></span>${d.deviceName}</div>`).join('')}</div></div>`).join('') || '<div class="empty-hint">暂无设备</div>';
+}
+function filterDevices() {
+    const q = document.getElementById('devSearch').value.trim().toLowerCase();
+    document.querySelectorAll('.ql-device').forEach(el => { el.style.display = (!q || (el.dataset.name||'').toLowerCase().includes(q) || (el.dataset.id||'').toLowerCase().includes(q)) ? '' : 'none'; });
+}
+function selectDevice(deviceId) {
+    state.current = state.devices.find(d => d.deviceId === deviceId);
+    document.querySelectorAll('.ql-device').forEach(e => e.classList.toggle('active', e.dataset.id === deviceId));
+    stopPolling(); renderPanel(state.current); updateConnBadge();
+}
+function updateConnBadge() {
+    const b = document.getElementById('connBadge'), t = document.getElementById('connBadgeText');
+    if (!state.current) { b.className='ql-conn-badge'; t.textContent='未连接'; return; }
+    b.className = 'ql-conn-badge' + (state.current.connected ? ' online' : '');
+    t.textContent = state.current.deviceName + (state.current.connected ? ' 已连接' : ' 未连接');
+}
+
+// ===== 面板 =====
+window.qlPanels = window.qlPanels || {};
+function renderDeviceHeader(d) {
+    const online = !!d.connected;
+    return `<div class="ql-dev-header"><div class="ql-dev-identity"><div class="ql-dev-icon">${d.deviceType==='STACKER_CRANE'?'▦':'⌁'}</div><div><div class="ql-dev-title-line"><h2 class="ql-dev-title">${d.deviceName}</h2><span class="ql-dev-state ${online?'online':''}" id="deviceStateText">${online?'在线':'离线'}</span></div><div class="ql-dev-meta"><span>${d.connectionType||'S7'}</span><span>${d.protocol||'-'}</span><span>${d.ip}:${d.port}</span></div></div></div><div class="ql-dev-actions"><button class="glass-btn-outline ql-task-toggle" id="taskToggle" onclick="toggleOpsPanel()">收起任务面板</button><button class="glass-btn btn-connect" id="btnConnect" onclick="doConnect()">连接设备</button><button class="glass-btn btn-disconnect" id="btnDisconnect" onclick="doDisconnect()">断开</button></div></div>`;
+}
+function renderPanel(d) {
+    const content = document.getElementById('deviceContent');
+    const handler = window.qlPanels[d.deviceType];
+    if (!handler) { content.innerHTML = `<div class="ql-content-top"><div class="empty-hint">该设备类型面板即将上线</div></div>`; return; }
+    const { top, bottom } = handler.render(d);
+    content.innerHTML = `<div class="ql-content-top">${renderDeviceHeader(d)}${top}</div>${bottom ? `<div class="ql-content-bottom ${state.opsPanelOpen===false?'is-collapsed':''}">${bottom}</div>` : ''}`;
+    updateTaskToggle();
+    updateConnState(d.connected);
+    if (handler.init) handler.init(d);
+    if (d.connected && handler.onConnected) handler.onConnected(d);
+}
+function updateConnState(connected) {
+    const c = document.getElementById('btnConnect'), dc = document.getElementById('btnDisconnect');
+    if (c) c.disabled = connected; if (dc) dc.disabled = !connected;
+    const ds = document.getElementById('deviceStateText');
+    if (ds) { ds.textContent = connected ? '在线' : '离线'; ds.classList.toggle('online', connected); }
+    if (state.current) { const dot = document.querySelector(`.ql-device[data-id="${state.current.deviceId}"] .dev-dot`); if(dot) dot.classList.toggle('on', connected); }
+}
+function updateTaskToggle() {
+    const btn = document.getElementById('taskToggle');
+    if (btn) btn.textContent = state.opsPanelOpen===false ? '展开任务面板' : '收起任务面板';
+}
+function toggleOpsPanel() {
+    state.opsPanelOpen = state.opsPanelOpen===false;
+    const panel = document.querySelector('.ql-content-bottom');
+    if (panel) panel.classList.toggle('is-collapsed', state.opsPanelOpen===false);
+    updateTaskToggle();
+}
+async function doConnect() {
+    if (!state.current) return;
+    try { const item = await api(`/${state.current.deviceId}/connect`, {method:'POST'}); state.current.connected = item.connected; updateConnState(true); updateConnBadge(); toast('已连接'); const h = window.qlPanels[state.current.deviceType]; if(h&&h.onConnected) h.onConnected(state.current); } catch(e){ toast('连接失败：'+e.message, false); }
+}
+async function doDisconnect() {
+    if (!state.current) return;
+    const current = state.current;
+    const ok = await qlConfirm('断开连接', `确认断开“${current.deviceName}”？`);
+    if (!ok) return;
+
+    // Stop producing read requests before asking the backend to retire the session.
+    stopPolling();
+    current.connected = false;
+    updateConnState(false);
+    updateConnBadge();
+    const button = document.getElementById('btnDisconnect');
+    if (button) button.textContent = '正在断开…';
+    try {
+        await api(`/${current.deviceId}/disconnect`, {method:'POST'});
+        toast('已断开');
+    } catch (e) {
+        toast('断开请求失败：' + e.message, false);
+    } finally {
+        if (button) button.textContent = '断开';
+    }
+}
+async function doDisconnectLegacy() {
+    if (!state.current) return;
+    const ok = await qlConfirm('断开连接','确认断开「'+state.current.deviceName+'」？'); if(!ok) return;
+    try { await api(`/${state.current.deviceId}/disconnect`, {method:'POST'}); state.current.connected=false; updateConnState(false); updateConnBadge(); stopPolling(); toast('已断开'); } catch(e){ toast(e.message, false); }
+}
+
+// ===== 轮询 =====
+function startPolling(fn) { stopPolling(); state.pollStopped=false; state.pollFn=fn; pollTick(); }
+async function pollTick() { if(state.pollStopped||!state.pollFn) return; if(document.hidden) return; try{await state.pollFn();}catch(e){} if(state.pollStopped||!state.pollFn||document.hidden) return; state.pollTimer=setTimeout(pollTick, state.settings.pollIntervalMs||1000); }
+function stopPolling() { state.pollStopped=true; state.pollFn=null; if(state.pollTimer){clearTimeout(state.pollTimer);state.pollTimer=null;} }
+document.addEventListener('visibilitychange', () => { if(document.hidden){if(state.pollTimer){clearTimeout(state.pollTimer);state.pollTimer=null;}}else if(!state.pollStopped&&state.pollFn&&!state.pollTimer){pollTick();} });
+
+// ===== 设备管理 =====
+function openDeviceDialog(ed) {
+    const isEdit = !!ed; const d = ed || {};
+    const root = document.getElementById('confirmRoot');
+    root.innerHTML = `<div class="ql-modal-overlay" onclick="closeDeviceDialog()"><div class="ql-modal" onclick="event.stopPropagation()"><span class="ql-modal-close" onclick="closeDeviceDialog()">&times;</span><h3>${isEdit?'编辑设备':'添加设备'}</h3><div class="ql-modal-form">
+        <div class="full"><label>设备名称 *</label><input class="glass-input" id="dm_name" value="${d.deviceName||''}" placeholder="恒申堆垛机001"></div>
+        <div><label>设备类型 *</label><select class="glass-input" id="dm_type"><option value="STACKER_CRANE" ${d.deviceType==='STACKER_CRANE'?'selected':''}>堆垛机</option><option value="CONVEYOR_LINE" ${d.deviceType==='CONVEYOR_LINE'?'selected':''}>输送线</option></select></div>
+        <div><label>协议</label><select class="glass-input" id="dm_protocol"><option value="AIMS_V3" ${d.protocol==='AIMS_V3'?'selected':''}>AIMS_V3</option><option value="AIMS_V2" ${d.protocol==='AIMS_V2'?'selected':''}>AIMS_V2</option></select></div>
+        <div><label>IP *</label><input class="glass-input" id="dm_ip" value="${d.ip||''}" placeholder="10.15.57.17"></div>
+        <div><label>端口</label><input class="glass-input" type="number" id="dm_port" value="${d.port||102}"></div>
+        <div><label>Rack</label><input class="glass-input" type="number" id="dm_rack" value="${d.rack??0}"></div>
+        <div><label>Slot</label><input class="glass-input" type="number" id="dm_slot" value="${d.slot??0}"></div>
+        <div><label>设备ID${isEdit?' (不可改)':' (可留空)'}</label><input class="glass-input" id="dm_id" value="${d.deviceId||''}" ${isEdit?'disabled':''}></div>
+        <div><label>通信类型</label><select class="glass-input" id="dm_conn"><option value="SiemensS7" ${d.connectionType==='SiemensS7'?'selected':''}>SiemensS7</option><option value="ModbusTCP" ${d.connectionType==='ModbusTCP'?'selected':''}>ModbusTCP</option></select></div>
+    </div><div class="ql-modal-actions"><button class="glass-btn-outline" onclick="closeDeviceDialog()">取消</button><button class="glass-btn btn-connect" onclick="submitDeviceForm('${isEdit?d.deviceId:''}')">${isEdit?'保存':'添加'}</button></div></div></div>`;
+}
+function closeDeviceDialog() { document.getElementById('confirmRoot').innerHTML = ''; }
+async function submitDeviceForm(editId) {
+    const name=document.getElementById('dm_name').value.trim(), type=document.getElementById('dm_type').value, ip=document.getElementById('dm_ip').value.trim(), port=parseInt(document.getElementById('dm_port').value)||102, rack=parseInt(document.getElementById('dm_rack').value)||0, slot=parseInt(document.getElementById('dm_slot').value)||0, protocol=document.getElementById('dm_protocol').value, connectionType=document.getElementById('dm_conn').value, deviceId=document.getElementById('dm_id').value.trim();
+    if(!name){toast('请输入设备名称',false);return;} if(!ip){toast('请输入 IP',false);return;}
+    const body={deviceName:name,deviceType:type,ip,port,rack,slot,protocol,connectionType}; if(deviceId&&!editId) body.deviceId=deviceId;
+    const editingCurrent = !!(editId && state.current && state.current.deviceId === editId);
+    const wasConnected = editingCurrent && state.current.connected;
+    if (editingCurrent) stopPolling();
+    try {
+        const item = editId
+            ? await api(`/devices/${editId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+            : await api('/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        closeDeviceDialog();
+        await loadDeviceTree();
+        if (editingCurrent) {
+            state.current = state.devices.find(d => d.deviceId === editId) || item;
+            renderPanel(state.current);
+            updateConnBadge();
+        }
+        toast(editId ? '设备已更新，请重新连接' : '设备已添加');
+    } catch(e) {
+        if (wasConnected && state.current) {
+            const handler = window.qlPanels[state.current.deviceType];
+            if (handler && handler.onConnected) handler.onConnected(state.current);
+        }
+        toast(e.message,false);
+    }
+}
+async function submitDeviceFormLegacy(editId) {
+    const name=document.getElementById('dm_name').value.trim(), type=document.getElementById('dm_type').value, ip=document.getElementById('dm_ip').value.trim(), port=parseInt(document.getElementById('dm_port').value)||102, rack=parseInt(document.getElementById('dm_rack').value)||0, slot=parseInt(document.getElementById('dm_slot').value)||0, protocol=document.getElementById('dm_protocol').value, connectionType=document.getElementById('dm_conn').value, deviceId=document.getElementById('dm_id').value.trim();
+    if(!name){toast('请输入设备名称',false);return;} if(!ip){toast('请输入IP',false);return;}
+    const body={deviceName:name,deviceType:type,ip,port,rack,slot,protocol,connectionType}; if(deviceId&&!editId) body.deviceId=deviceId;
+    try { if(editId){await api(`/devices/${editId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('已更新');}else{await api('/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('已添加');} closeDeviceDialog(); await loadDeviceTree(); } catch(e){toast(e.message,false);}
+}
+function openDeviceManager() {
+    const root = document.getElementById('confirmRoot');
+    const list = state.devices.map(d=>`<div class="ql-dev-list-item"><div class="info"><div class="name">${d.deviceName}</div><div class="meta">${d.deviceTypeLabel} · ${d.ip}:${d.port}</div></div><div class="ops"><a class="edit" onclick="editDeviceFromList('${d.deviceId}')">编辑</a><a class="del" onclick="deleteDeviceFromList('${d.deviceId}','${d.deviceName}')">删除</a></div></div>`).join('');
+    root.innerHTML = `<div class="ql-modal-overlay" onclick="closeDeviceDialog()"><div class="ql-modal" onclick="event.stopPropagation()"><span class="ql-modal-close" onclick="closeDeviceDialog()">&times;</span><h3>设备管理</h3>${list||'<div class="empty-hint">暂无</div>'}<div class="ql-modal-actions"><button class="glass-btn btn-connect" onclick="closeDeviceDialog();openDeviceDialog();">＋ 添加</button></div></div></div>`;
+}
+function editDeviceFromList(id){const d=state.devices.find(x=>x.deviceId===id);if(d){closeDeviceDialog();openDeviceDialog(d);}}
+async function deleteDeviceFromList(id,name){closeDeviceDialog();const ok=await qlConfirm('删除设备','永久删除「'+name+'」？');if(!ok){openDeviceManager();return;}try{await api(`/devices/${id}`,{method:'DELETE'});toast('已删除');if(state.current&&state.current.deviceId===id){state.current=null;stopPolling();document.getElementById('deviceContent').innerHTML='<div class="ql-content-top" style="display:flex;align-items:center;justify-content:center;"><div class="empty-hint">🐉 请选择设备</div></div>';}await loadDeviceTree();}catch(e){toast(e.message,false);}}
+
+// ===== 时钟 + 启动 =====
+setInterval(()=>{const el=document.getElementById('clock');if(el)el.textContent=new Date().toLocaleString('zh-CN');},1000);
+(async()=>{ try{state.settings=await api('/settings');}catch(e){} await loadDeviceTree(); })();
+</script>
+
+<script src="xlsx.full.min.js"></script>
+<script src="ql-tool-map.js?_=20260722b"></script>
+<script src="ql-tool-crane.js?_=20260716c"></script>
+<script src="ql-tool-conveyor.js?_=20260722a"></script>
+</body>
+</html>

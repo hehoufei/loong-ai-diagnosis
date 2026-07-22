@@ -136,6 +136,23 @@ body {
     color: #d97706;
 }
 
+/* 青龙调试工具 card（绿色系，呼应"青龙"） */
+.card-qltool .card-icon {
+    background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(5,150,105,0.12));
+    color: #059669;
+}
+.card-qltool::before {
+    background: linear-gradient(90deg, #10b981, #059669);
+}
+.card-qltool .card-tag {
+    background: rgba(16,185,129,0.06);
+    border-color: rgba(16,185,129,0.12);
+}
+.card-qltool .card-arrow {
+    background: rgba(16,185,129,0.08);
+    color: #059669;
+}
+
 .card-title {
     font-size: 20px;
     font-weight: 700;
@@ -226,6 +243,130 @@ body {
     }
 }
 </style>
+<style>
+/* ===== 首页门户布局优化 ===== */
+body { min-height: 100vh; }
+.home-shell {
+    width: min(1480px, calc(100% - 56px));
+    margin: 0 auto;
+    flex: 1;
+}
+.home-header {
+    padding: 46px 4px 30px;
+    text-align: left;
+}
+.home-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    color: var(--color-primary);
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+}
+.home-eyebrow::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: linear-gradient(135deg,var(--color-primary),var(--color-secondary));
+    box-shadow: 0 0 0 5px rgba(99,102,241,.09);
+}
+.home-hero-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
+.home-header h1 {
+    margin: 0 0 9px;
+    font-size: clamp(30px,3vw,42px);
+    line-height: 1.15;
+    letter-spacing: -.04em;
+}
+.home-header p { max-width: 680px; margin: 0; color: var(--color-text-secondary); font-size: 14px; }
+.home-meta { display: flex; gap: 8px; padding-bottom: 3px; }
+.home-meta span {
+    padding: 6px 11px;
+    border: 1px solid rgba(99,102,241,.12);
+    border-radius: var(--radius-tag);
+    color: var(--color-text-muted);
+    background: rgba(255,255,255,.48);
+    font-size: 11px;
+    white-space: nowrap;
+}
+.home-section-head { display: flex; align-items: baseline; gap: 10px; margin: 0 4px 14px; }
+.home-section-head strong { color: var(--color-text); font-size: 15px; }
+.home-section-head span { color: var(--color-text-muted); font-size: 11px; }
+.cards-container {
+    display: grid;
+    grid-template-columns: repeat(4,minmax(0,1fr));
+    align-items: stretch;
+    justify-content: initial;
+    gap: 18px;
+    padding: 0 0 38px;
+}
+.feature-card {
+    width: auto;
+    min-width: 0;
+    min-height: 312px;
+    padding: 24px 22px 22px;
+    align-items: flex-start;
+    text-align: left;
+    border: 1px solid rgba(99,102,241,.10);
+    background: rgba(255,255,255,.60);
+    box-shadow: 0 8px 30px rgba(99,102,241,.055), 0 1px 0 rgba(255,255,255,.75) inset;
+}
+.feature-card::before { height: 3px; opacity: .72; }
+.feature-card::after {
+    content: '';
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    right: -70px;
+    top: -75px;
+    border-radius: 50%;
+    background: rgba(99,102,241,.045);
+    pointer-events: none;
+}
+.feature-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(99,102,241,.18);
+    background: rgba(255,255,255,.73);
+    box-shadow: 0 16px 38px rgba(99,102,241,.10), 0 1px 0 rgba(255,255,255,.8) inset;
+}
+.card-icon {
+    width: 54px;
+    height: 54px;
+    margin-bottom: 18px;
+    border-radius: 15px;
+    font-size: 27px;
+}
+.card-title { margin-bottom: 9px; font-size: 18px; letter-spacing: -.02em; }
+.card-desc { min-height: 66px; margin-bottom: 18px; color: var(--color-text-secondary); font-size: 12.5px; line-height: 1.75; }
+.card-tags { max-width: calc(100% - 40px); justify-content: flex-start; gap: 6px; }
+.card-tag { padding: 3px 9px; font-size: 10.5px; }
+.card-arrow {
+    right: 20px;
+    bottom: 20px;
+    width: 30px;
+    height: 30px;
+    opacity: 1;
+    transform: none;
+    font-size: 14px;
+}
+.feature-card:hover .card-arrow { transform: translateX(2px); }
+.home-footer { padding: 14px 20px 20px; }
+@media (max-width: 1200px) {
+    .cards-container { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .feature-card { min-height: 272px; }
+}
+@media (max-width: 720px) {
+    .home-shell { width: min(100% - 28px,520px); }
+    .home-header { padding: 30px 2px 22px; }
+    .home-hero-row { align-items: flex-start; flex-direction: column; gap: 16px; }
+    .home-meta { flex-wrap: wrap; }
+    .cards-container { grid-template-columns: 1fr; gap: 14px; padding-bottom: 24px; }
+    .feature-card { width: 100%; max-width: none; min-height: 260px; }
+}
+</style>
 </head>
 <body>
 <script>
@@ -235,14 +376,20 @@ if (sessionStorage.getItem('wcs_logged_in') !== 'true') {
 }
 </script>
 
+<main class="home-shell">
 <div class="home-header">
-    <h1>🤖 WCS 智能诊断平台</h1>
-    <p>集成 AI 诊断分析与立库自动化测试，助力仓储调度系统高效运维</p>
+    <div class="home-eyebrow">WCS Operations Console</div>
+    <div class="home-hero-row">
+        <div><h1>WCS 智能诊断平台</h1><p>面向仓储调度的诊断、测试与现场调试工具集，让问题定位和任务验证更直接。</p></div>
+        <div class="home-meta"><span>4 个工作台</span><span>统一运维入口</span></div>
+    </div>
 </div>
+
+<div class="home-section-head"><strong>选择工作台</strong><span>根据当前任务进入对应工具</span></div>
 
 <div class="cards-container">
     <!-- AI 诊断 -->
-    <div class="feature-card card-ai" onclick="showAiGate()">
+    <div class="feature-card card-ai" role="button" tabindex="0" onclick="showAiGate()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();showAiGate();}">
         <div class="card-icon">🧠</div>
         <div class="card-title">AI 智能诊断</div>
         <div class="card-desc">
@@ -288,7 +435,24 @@ if (sessionStorage.getItem('wcs_logged_in') !== 'true') {
         </div>
         <div class="card-arrow">→</div>
     </a>
+
+    <!-- 青龙调试工具 -->
+    <a href="ql-tool.html" class="feature-card card-qltool">
+        <div class="card-icon">🐉</div>
+        <div class="card-title">青龙调试工具</div>
+        <div class="card-desc">
+            工业设备现场调试：连接堆垛机、输送线，实时查看设备状态、下发与清理任务，校验协议一致性
+        </div>
+        <div class="card-tags">
+            <span class="card-tag">堆垛机</span>
+            <span class="card-tag">输送线</span>
+            <span class="card-tag">状态监控</span>
+            <span class="card-tag">任务下发</span>
+        </div>
+        <div class="card-arrow">→</div>
+    </a>
 </div>
+</main>
 
 <div class="home-footer">
     WCS 智能诊断平台 · Loong AI Diagnosis v1.0

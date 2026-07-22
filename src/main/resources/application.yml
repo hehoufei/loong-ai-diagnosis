@@ -302,3 +302,28 @@ rule-engine:
           - "使用AI大模型进行深度分析"
           - "手动检查任务各阶段数据"
           - "如为新场景，考虑新增专项诊断规则"
+
+# ===== 青龙调试工具（独立模块，不影响现有配置）=====
+ql-tool:
+  poll-interval-ms: 1000        # 前端状态轮询间隔
+  connect-timeout-ms: 3000
+  read-timeout-ms: 5000         # 单次 S7 读写请求超时（防 PLC 无响应导致挂起）
+  devices:
+    - device-id: HS-DDJ-007
+      device-name: 恒申堆垛机007
+      device-type: STACKER_CRANE
+      ip: 10.15.57.17
+      port: 102
+      rack: 0
+      slot: 1
+      protocol: 科大智联V3
+      connection-type: 西门子S7
+    - device-id: HS-2F-CVR-03
+      device-name: 恒申2F输送线03
+      device-type: CONVEYOR_LINE
+      ip: 192.168.53.222
+      port: 20005
+      rack: 0
+      slot: 1
+      protocol: 科大智联V3
+      connection-type: 西门子S7
