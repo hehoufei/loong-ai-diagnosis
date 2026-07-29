@@ -1138,7 +1138,75 @@ body { background: var(--bg-gradient); background-attachment: fixed; color: var(
 .crane-command-deck .crane-clear-task { background:linear-gradient(145deg,rgba(69,10,10,.34),rgba(8,16,32,.82)); }
 .crane-command-deck .crane-clear-copy b { color:#fecaca; }
 .crane-command-deck .crane-clear-copy small { color:rgba(252,165,165,.64); }
-.crane-detail-panel { align-self:start; }
+.crane-detail-panel { align-self:stretch; }
+/* 右面板与巷道视图等高：结果行均分高度、报警条落底，避免下方留白 */
+.crane-detail-panel .crane-result-block .crane-data-item { flex:1; min-height:44px; }
+
+/* ===== 重点强化：克制版。用状态圆点 + 文字色分级，常态安静，异常才抢眼 ===== */
+/* 数值温和放大到 13px，主状态 15px，拉开层级但不喧闹 */
+.crane-machine-status .crane-data-item { min-height:52px; padding:8px 12px; gap:5px; }
+.crane-machine-status .crane-data-item .k { font-size:8.5px; letter-spacing:.04em; color:rgba(148,163,184,.6); }
+.crane-machine-status .crane-data-item .v { font-size:13px; font-weight:700; transition:color .25s ease; }
+
+/* 主状态（工作模式）：数值前置一个发光圆点表达"活着"，字号略大 */
+.crane-machine-status .crane-primary-state .v {
+    position:relative; padding-left:15px; font-size:15px;
+}
+.crane-machine-status .crane-primary-state .v::before {
+    content:""; position:absolute; left:0; top:50%; width:8px; height:8px; transform:translateY(-50%);
+    border-radius:50%; background:#64748b; box-shadow:0 0 0 3px rgba(100,116,139,.14);
+}
+.crane-machine-status .crane-primary-state { box-shadow:inset 3px 0 0 rgba(100,116,139,.5); }
+
+/* 运行：绿点缓慢呼吸，文字轻微染绿，不铺满格 */
+.crane-machine-status .crane-primary-state.success { box-shadow:inset 3px 0 0 var(--crane-green); }
+.crane-machine-status .crane-primary-state.success .v { color:#6ee7b7; }
+.crane-machine-status .crane-primary-state.success .v::before {
+    background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.16),0 0 10px rgba(34,197,94,.6);
+    animation:craneDotBreath 2.4s ease-in-out infinite;
+}
+/* 待机：黄点静止 */
+.crane-machine-status .crane-primary-state.warn { box-shadow:inset 3px 0 0 var(--crane-amber); }
+.crane-machine-status .crane-primary-state.warn .v { color:#fbbf24; }
+.crane-machine-status .crane-primary-state.warn .v::before { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.16); }
+
+/* 其它字段仅文字染色，保持安静 */
+.crane-machine-status .crane-data-item.success .v { color:#6ee7b7; }
+.crane-machine-status .crane-data-item.warn .v { color:#fbbf24; }
+
+/* 报警是唯一的"异常态"，给它全部的强调预算：填充 + 红点脉冲 */
+.crane-machine-status .crane-primary-state.alarm .v::before {
+    background:#ef4444; box-shadow:0 0 0 3px rgba(239,68,68,.2),0 0 10px rgba(239,68,68,.7);
+    animation:craneDotAlarm 1s ease-in-out infinite;
+}
+.crane-machine-status .crane-data-item.alarm {
+    background:linear-gradient(180deg,rgba(120,20,30,.5),rgba(60,12,18,.85));
+}
+.crane-machine-status .crane-data-item.alarm .v { color:#ff8080; }
+.crane-machine-status .crane-primary-state.alarm,
+.crane-machine-status .crane-alarm-state.alarm { box-shadow:inset 3px 0 0 var(--crane-red); }
+
+/* 设备大状态：只有报警时才让外缘发红呼吸；运行只给一条极淡的绿边 */
+.crane-console.is-running { border-color:rgba(34,197,94,.2); }
+.crane-console.has-alarm {
+    border-color:rgba(239,68,68,.45);
+    box-shadow:0 0 0 1px rgba(239,68,68,.2),0 0 22px rgba(239,68,68,.12),var(--glass-shadow);
+    animation:craneConsoleAlarm 1.6s ease-in-out infinite;
+}
+.crane-console.has-alarm .crane-console-head { background:linear-gradient(90deg,rgba(239,68,68,.1),rgba(239,68,68,.02)); }
+
+@keyframes craneDotBreath {
+    0%,100% { box-shadow:0 0 0 3px rgba(34,197,94,.16),0 0 8px rgba(34,197,94,.5); }
+    50% { box-shadow:0 0 0 4px rgba(34,197,94,.22),0 0 14px rgba(34,197,94,.85); }
+}
+@keyframes craneDotAlarm {
+    0%,100% { box-shadow:0 0 0 3px rgba(239,68,68,.2),0 0 8px rgba(239,68,68,.6); opacity:1; }
+    50% { box-shadow:0 0 0 5px rgba(239,68,68,.3),0 0 16px rgba(239,68,68,.95); opacity:.75; }
+}
+@keyframes craneConsoleAlarm {
+    0%,100% { box-shadow:0 0 0 1px rgba(239,68,68,.2),0 0 22px rgba(239,68,68,.1),var(--glass-shadow); }
+    50% { box-shadow:0 0 0 1px rgba(239,68,68,.38),0 0 34px rgba(239,68,68,.24),var(--glass-shadow); }
+}
 @keyframes craneLivePulse { 50% { box-shadow:0 0 0 7px rgba(34,197,94,.04),0 0 14px rgba(34,197,94,.35); } }
 @keyframes craneAlarmPulse { 50% { transform:scale(.92); opacity:.72; } }
 @keyframes craneForkMove { 50% { transform:scaleX(1.18); } }
@@ -1166,7 +1234,10 @@ body { background: var(--bg-gradient); background-attachment: fixed; color: var(
 }
 @media (prefers-reduced-motion:reduce) {
     .crane-live-mark i,.crane-alarm-banner.active .crane-alarm-icon,.crane-fork-beam.active i,
-    .crane-machine-view::after,.crane-machine-view .crane-mast,.crane-machine-view .crane-carriage { animation:none; }
+    .crane-machine-view::after,.crane-machine-view .crane-mast,.crane-machine-view .crane-carriage,
+    .crane-machine-status .crane-primary-state.success .v::before,
+    .crane-machine-status .crane-primary-state.alarm .v::before,
+    .crane-console.has-alarm { animation:none; }
 }
 @media (max-width:1200px) {
     .crane-status-ribbon { grid-template-columns:repeat(3,1fr); }
