@@ -9,6 +9,7 @@ import lombok.Data;
 public class DeviceItem {
     private String deviceId;
     private String deviceName;
+    private String siteName;
     private String deviceType;
     private String deviceTypeLabel;
     private String ip;

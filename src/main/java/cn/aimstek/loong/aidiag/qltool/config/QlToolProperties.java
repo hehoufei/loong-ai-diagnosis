@@ -33,6 +33,8 @@ public class QlToolProperties {
         private String deviceId;
         /** 设备显示名 */
         private String deviceName;
+        /** 所属现场，用于按项目/客户隔离设备列表 */
+        private String siteName = "恒申美达";
         /** 设备类型：STACKER_CRANE / CONVEYOR_LINE */
         private String deviceType;
         /** 通信 IP */

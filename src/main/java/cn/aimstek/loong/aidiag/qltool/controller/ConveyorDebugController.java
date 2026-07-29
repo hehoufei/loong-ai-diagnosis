@@ -6,6 +6,8 @@ import cn.aimstek.loong.aidiag.qltool.device.conveyor.ConveyorConnector;
 import cn.aimstek.loong.aidiag.qltool.dto.conveyor.ConveyorDtos.Capacities;
 import cn.aimstek.loong.aidiag.qltool.dto.conveyor.ConveyorTaskRequests.*;
 import cn.aimstek.loong.aidiag.qltool.service.DeviceSessionManager;
+import cn.aimstek.loong.aidiag.qltool.service.QlToolDataStore;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +25,7 @@ import java.util.function.Function;
 public class ConveyorDebugController {
 
     private final DeviceSessionManager manager;
+    private final QlToolDataStore dataStore;
 
     /** 每设备复用连接器实例，使能力(容量)缓存生效，减少 PLC 读取 */
     private final java.util.concurrent.ConcurrentHashMap<String, ConveyorConnector> connectors =
@@ -91,13 +94,84 @@ public class ConveyorDebugController {
     }
 
     @DeleteMapping("/{deviceId}/trans-task/{taskNo}")
-    public Response<Void> removeTransTask(@PathVariable String deviceId, @PathVariable long taskNo) {
-        return write(deviceId, c -> c.removeTransTask(taskNo));
+    public Response<Void> removeTransTask(@PathVariable String deviceId,
+                                          @PathVariable long taskNo,
+                                          @RequestParam(defaultValue = "TRANSPORT_TASK") String source,
+                                          @RequestParam(required = false) String pointCode) {
+        return writeTaskOperation(deviceId, taskNo, pointCode, source, "REMOVE",
+                c -> c.removeTransTask(taskNo));
     }
 
     @DeleteMapping("/{deviceId}/trans-task/{taskNo}/clear")
-    public Response<Void> clearTransTask(@PathVariable String deviceId, @PathVariable long taskNo) {
-        return write(deviceId, c -> c.clearTransTask(taskNo));
+    public Response<Void> clearTransTask(@PathVariable String deviceId,
+                                         @PathVariable long taskNo,
+                                         @RequestParam(defaultValue = "TRANSPORT_TASK") String source,
+                                         @RequestParam(required = false) String pointCode) {
+        return writeTaskOperation(deviceId, taskNo, pointCode, source, "CLEAR",
+                c -> c.clearTransTask(taskNo));
+    }
+
+    // ===== 布局与删除审计（不要求设备在线）=====
+    @GetMapping("/{deviceId}/layout")
+    public Response<?> layout(@PathVariable String deviceId) {
+        try {
+            manager.getDeviceItem(deviceId);
+            return BaseResponse.success(dataStore.loadLayout(deviceId));
+        } catch (IllegalArgumentException e) {
+            return BaseResponse.failure("NOT_FOUND", e.getMessage());
+        } catch (Exception e) {
+            return BaseResponse.failure("READ_ERROR", e.getMessage());
+        }
+    }
+
+    @PutMapping("/{deviceId}/layout")
+    public Response<Void> saveLayout(@PathVariable String deviceId, @RequestBody JsonNode layout) {
+        try {
+            manager.getDeviceItem(deviceId);
+            dataStore.saveLayout(deviceId, layout);
+            return BaseResponse.success(null);
+        } catch (IllegalArgumentException e) {
+            return BaseResponse.failure("INVALID_LAYOUT", e.getMessage());
+        } catch (Exception e) {
+            return BaseResponse.failure("WRITE_ERROR", e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{deviceId}/layout")
+    public Response<Void> clearLayout(@PathVariable String deviceId) {
+        try {
+            manager.getDeviceItem(deviceId);
+            dataStore.clearLayout(deviceId);
+            return BaseResponse.success(null);
+        } catch (IllegalArgumentException e) {
+            return BaseResponse.failure("NOT_FOUND", e.getMessage());
+        } catch (Exception e) {
+            return BaseResponse.failure("WRITE_ERROR", e.getMessage());
+        }
+    }
+
+    @GetMapping("/{deviceId}/delete-history")
+    public Response<?> deleteHistory(@PathVariable String deviceId) {
+        try {
+            manager.getDeviceItem(deviceId);
+            return BaseResponse.success(dataStore.loadDeleteHistory(deviceId));
+        } catch (IllegalArgumentException e) {
+            return BaseResponse.failure("NOT_FOUND", e.getMessage());
+        } catch (Exception e) {
+            return BaseResponse.failure("READ_ERROR", e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{deviceId}/delete-history")
+    public Response<Integer> clearDeleteHistory(@PathVariable String deviceId) {
+        try {
+            manager.getDeviceItem(deviceId);
+            return BaseResponse.success(dataStore.clearDeleteHistory(deviceId));
+        } catch (IllegalArgumentException e) {
+            return BaseResponse.failure("NOT_FOUND", e.getMessage());
+        } catch (Exception e) {
+            return BaseResponse.failure("WRITE_ERROR", e.getMessage());
+        }
     }
 
     @PostMapping("/{deviceId}/stand-task")
@@ -134,6 +208,26 @@ public class ConveyorDebugController {
             return BaseResponse.failure("INVALID_STATE", e.getMessage());
         } catch (Exception e) {
             log.warn("[青龙调试工具] 输送线 {} 下发失败: {}", deviceId, e.getMessage());
+            return BaseResponse.failure("WRITE_ERROR", e.getMessage());
+        }
+    }
+
+    private Response<Void> writeTaskOperation(String deviceId, long taskNo, String pointCode,
+                                              String source, String actionName, ConveyorAction action) {
+        try {
+            action.run(connector(deviceId));
+            String message = "REMOVE".equals(actionName) ? "删除指令已写入 PLC" : "任务槽和轨迹槽已清理";
+            dataStore.appendDeleteRecord(deviceId, taskNo, pointCode, source, actionName, true, message);
+            return BaseResponse.success(null);
+        } catch (IllegalArgumentException e) {
+            dataStore.appendDeleteRecord(deviceId, taskNo, pointCode, source, actionName, false, e.getMessage());
+            return BaseResponse.failure("NOT_FOUND", e.getMessage());
+        } catch (IllegalStateException e) {
+            dataStore.appendDeleteRecord(deviceId, taskNo, pointCode, source, actionName, false, e.getMessage());
+            return BaseResponse.failure("INVALID_STATE", e.getMessage());
+        } catch (Exception e) {
+            dataStore.appendDeleteRecord(deviceId, taskNo, pointCode, source, actionName, false, e.getMessage());
+            log.warn("[青龙调试工具] 输送线 {} 任务 {} {} 失败: {}", deviceId, taskNo, actionName, e.getMessage());
             return BaseResponse.failure("WRITE_ERROR", e.getMessage());
         }
     }

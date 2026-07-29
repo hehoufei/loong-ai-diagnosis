@@ -97,6 +97,26 @@
     .q-field label { font-size: 10px; color: var(--color-text-muted); }
     .q-field input, .q-field select { height: 28px; padding: 0 8px; font-size: 12px; border: 1px solid rgba(99,102,241,0.1); border-radius: 6px; background: rgba(255,255,255,0.6); outline: none; }
     .q-field input:focus, .q-field select:focus { border-color: var(--color-primary); }
+    .qt-point-suggest {
+        position: fixed; z-index: 3600; display: none; overflow: hidden;
+        border: 1px solid rgba(99,102,241,.20); border-radius: 10px;
+        background: rgba(255,255,255,.98); box-shadow: 0 14px 34px rgba(15,23,42,.18);
+        backdrop-filter: blur(16px);
+    }
+    .qt-point-suggest.show { display: block; }
+    .qt-point-suggest-item {
+        display: flex; min-height: 38px; padding: 7px 10px; align-items: center; gap: 9px;
+        border-bottom: 1px solid rgba(99,102,241,.07); cursor: pointer;
+    }
+    .qt-point-suggest-item:last-child { border-bottom: 0; }
+    .qt-point-suggest-item:hover, .qt-point-suggest-item.active { background: rgba(99,102,241,.09); }
+    .qt-point-suggest-code { flex: 1; color: #3730a3; font: 700 11.5px var(--font-mono); }
+    .qt-point-suggest-meta { color: #94a3b8; font-size: 9.5px; white-space: nowrap; }
+    .qt-point-suggest-empty { padding: 10px 12px; color: #94a3b8; font-size: 10.5px; }
+    .qt-point-suggest-source {
+        padding: 6px 10px; color: #94a3b8; background: rgba(248,250,252,.95);
+        border-top: 1px solid rgba(99,102,241,.07); font-size: 9px;
+    }
     .q-card-funcs { grid-column: 1/-1; display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
     .qf-tag { padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 600; border: 1px solid rgba(99,102,241,0.12); background: rgba(255,255,255,0.5); color: var(--color-text-muted); cursor: pointer; transition: var(--transition); user-select: none; }
     .qf-tag:hover { border-color: rgba(99,102,241,0.25); }
@@ -640,6 +660,7 @@ function renderQueue() {
     const cards = queue.map((item, idx) => item.data.type === 'group' ? renderGroupCard(item, idx) : renderSingleCard(item, idx));
     // 保留 emptyHint
     container.innerHTML = `<div class="queue-empty" id="emptyHint" style="display:${queue.length===0?'block':'none'}">👈 点击左侧模板添加任务到队列<br><span style="font-size:12px;margin-top:6px;display:inline-block;">可添加多个任务，组合下发</span></div>` + cards.join('');
+    bindPointSuggestInputs();
 }
 
 function renderSingleCard(item, idx) {
@@ -908,6 +929,249 @@ function updateQField(id, field, value) {
     const item = queue.find(q => q.id === id);
     if (item) item.data[field] = value;
 }
+
+// ============ 点位输入联想（与地图选点共用 queryViewDetail 数据） ============
+const QT_POINT_CACHE = new Map();
+let qtPointSuggestPopup = null;
+let qtPointSuggestInput = null;
+let qtPointSuggestItems = [];
+let qtPointSuggestActive = -1;
+
+function isPointField(field) {
+    if (!field) return false;
+    const value = String(field);
+    return /node/i.test(value)
+        || /(start|end)$/i.test(value)
+        || /locationCode$/i.test(value);
+}
+
+function bindPointSuggestInputs() {
+    closePointSuggest();
+    document.querySelectorAll('#queueContainer input[onchange]').forEach(input => {
+        const handler = input.getAttribute('onchange') || '';
+        const match = handler.match(/updateQField\('([^']+)','([^']+)'/);
+        if (!match || !isPointField(match[2]) || input.type === 'number' || input.type === 'checkbox') return;
+        input.autocomplete = 'off';
+        input.dataset.pointItemId = match[1];
+        input.dataset.pointField = match[2];
+        input.addEventListener('focus', () => showPointSuggest(input));
+        input.addEventListener('input', () => {
+            updateQField(match[1], match[2], input.value);
+            showPointSuggest(input);
+        });
+        input.addEventListener('keydown', pointSuggestKeydown);
+    });
+}
+
+function getPointSuggestPopup() {
+    if (qtPointSuggestPopup) return qtPointSuggestPopup;
+    qtPointSuggestPopup = document.createElement('div');
+    qtPointSuggestPopup.className = 'qt-point-suggest';
+    document.body.appendChild(qtPointSuggestPopup);
+    return qtPointSuggestPopup;
+}
+
+function unwrapMapResponse(value) {
+    let data = value;
+    if (data && Object.prototype.hasOwnProperty.call(data, 'data')) data = data.data;
+    if (typeof data === 'string') data = JSON.parse(data);
+    if (data && Object.prototype.hasOwnProperty.call(data, 'data')) data = data.data;
+    return data;
+}
+
+async function loadPointCandidates() {
+    const server = String(currentServer || '').replace(/\/+$/, '');
+    if (!server) return [];
+    const cached = QT_POINT_CACHE.get(server);
+    if (cached) return cached;
+
+    const loading = (async () => {
+        let viewList;
+        try {
+            const listResponse = await fetch(server + '/api/map/config/queryViewList');
+            if (!listResponse.ok) throw new Error(`HTTP ${listResponse.status}`);
+            const views = unwrapMapResponse(await listResponse.json());
+            viewList = Array.isArray(views) && views.length
+                ? views
+                : [{ viewCode: '1', viewName: '1楼' }, { viewCode: '2', viewName: '2楼' }];
+        } catch (error) {
+            // 与地图选点保持一致：旧版本服务器没有视图列表接口时，尝试默认楼层。
+            viewList = [{ viewCode: '1', viewName: '1楼' }, { viewCode: '2', viewName: '2楼' }];
+        }
+        const detailResults = await Promise.allSettled(viewList.map(async view => {
+            const response = await fetch(server + '/api/map/config/queryViewDetail', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ viewCode: view.viewCode })
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const detail = unwrapMapResponse(await response.json()) || {};
+            return { view, nodes: detail.nodeList || [] };
+        }));
+        const details = detailResults
+            .filter(result => result.status === 'fulfilled')
+            .map(result => result.value);
+        if (!details.length) throw new Error('未能读取任何地图视图');
+
+        const unique = new Map();
+        details.forEach(({ view, nodes }) => {
+            nodes.forEach(node => {
+                if (!node || !node.nodeCode) return;
+                const code = String(node.nodeCode);
+                if (!unique.has(code)) {
+                    unique.set(code, {
+                        code,
+                        num: node.nodeNum == null ? '' : String(node.nodeNum),
+                        name: node.nodeName || node.name || '',
+                        viewName: view.viewName || ((view.floor || view.viewCode) + '楼')
+                    });
+                }
+            });
+        });
+        return Array.from(unique.values()).sort((a, b) => a.code.localeCompare(b.code));
+    })();
+
+    QT_POINT_CACHE.set(server, loading);
+    try {
+        const items = await loading;
+        QT_POINT_CACHE.set(server, Promise.resolve(items));
+        return items;
+    } catch (e) {
+        QT_POINT_CACHE.delete(server);
+        throw e;
+    }
+}
+
+async function showPointSuggest(input) {
+    qtPointSuggestInput = input;
+    const popup = getPointSuggestPopup();
+    positionPointSuggest(input);
+    popup.innerHTML = '<div class="qt-point-suggest-empty">正在加载地图点位…</div>';
+    popup.classList.add('show');
+
+    try {
+        const all = await loadPointCandidates();
+        if (qtPointSuggestInput !== input || !document.body.contains(input)) return;
+        const query = String(input.value || '').trim().toUpperCase();
+        if (!query) {
+            qtPointSuggestItems = all.slice(0, 12);
+        } else {
+            qtPointSuggestItems = all.map(item => {
+                const code = item.code.toUpperCase();
+                const plain = code.replace(/^ND_/, '');
+                let rank = 99;
+                if (code === query || plain === query) rank = 0;
+                else if (code.startsWith(query)) rank = 1;
+                else if (plain.startsWith(query)) rank = 2;
+                else if (code.includes(query)) rank = 3;
+                else if (item.num && item.num.toUpperCase().includes(query)) rank = 4;
+                else if (item.name && String(item.name).toUpperCase().includes(query)) rank = 5;
+                return { item, rank };
+            }).filter(entry => entry.rank < 99)
+                .sort((a, b) => a.rank - b.rank || a.item.code.localeCompare(b.item.code))
+                .slice(0, 12)
+                .map(entry => entry.item);
+        }
+        qtPointSuggestActive = -1;
+        renderPointSuggest();
+    } catch (e) {
+        if (qtPointSuggestInput === input) {
+            popup.innerHTML = `<div class="qt-point-suggest-empty">地图点位加载失败：${escapePointText(e.message || '未知错误')}</div>`;
+        }
+    }
+}
+
+function renderPointSuggest() {
+    const popup = getPointSuggestPopup();
+    popup.innerHTML = '';
+    if (!qtPointSuggestItems.length) {
+        const empty = document.createElement('div');
+        empty.className = 'qt-point-suggest-empty';
+        empty.textContent = '没有匹配的地图点位';
+        popup.appendChild(empty);
+        return;
+    }
+    qtPointSuggestItems.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'qt-point-suggest-item' + (index === qtPointSuggestActive ? ' active' : '');
+        const code = document.createElement('span');
+        code.className = 'qt-point-suggest-code';
+        code.textContent = item.code;
+        const meta = document.createElement('span');
+        meta.className = 'qt-point-suggest-meta';
+        meta.textContent = [item.viewName, item.num ? '电气 ' + item.num : '', item.name].filter(Boolean).join(' · ');
+        row.append(code, meta);
+        row.onmousedown = event => {
+            event.preventDefault();
+            selectPointSuggestion(item);
+        };
+        popup.appendChild(row);
+    });
+    const source = document.createElement('div');
+    source.className = 'qt-point-suggest-source';
+    source.textContent = '数据来源：当前目标服务器的地图点位（与“地图选点”一致）';
+    popup.appendChild(source);
+}
+
+function selectPointSuggestion(item) {
+    const input = qtPointSuggestInput;
+    if (!input || !item) return;
+    input.value = item.code;
+    updateQField(input.dataset.pointItemId, input.dataset.pointField, item.code);
+    closePointSuggest();
+    input.focus();
+}
+
+function pointSuggestKeydown(event) {
+    if (!qtPointSuggestPopup || !qtPointSuggestPopup.classList.contains('show')) return;
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        qtPointSuggestActive = Math.min(qtPointSuggestActive + 1, qtPointSuggestItems.length - 1);
+        renderPointSuggest();
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        qtPointSuggestActive = Math.max(qtPointSuggestActive - 1, 0);
+        renderPointSuggest();
+    } else if (event.key === 'Enter' && qtPointSuggestActive >= 0) {
+        event.preventDefault();
+        selectPointSuggestion(qtPointSuggestItems[qtPointSuggestActive]);
+    } else if (event.key === 'Escape') {
+        closePointSuggest();
+    }
+}
+
+function positionPointSuggest(input) {
+    const popup = getPointSuggestPopup();
+    const rect = input.getBoundingClientRect();
+    popup.style.left = Math.max(8, rect.left) + 'px';
+    popup.style.top = Math.min(window.innerHeight - 260, rect.bottom + 4) + 'px';
+    popup.style.width = Math.max(240, rect.width) + 'px';
+}
+
+function closePointSuggest() {
+    if (qtPointSuggestPopup) qtPointSuggestPopup.classList.remove('show');
+    qtPointSuggestInput = null;
+    qtPointSuggestItems = [];
+    qtPointSuggestActive = -1;
+}
+
+function escapePointText(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+}
+
+document.addEventListener('mousedown', event => {
+    if (qtPointSuggestPopup && !qtPointSuggestPopup.contains(event.target)
+            && event.target !== qtPointSuggestInput) closePointSuggest();
+});
+window.addEventListener('resize', () => {
+    if (qtPointSuggestInput) positionPointSuggest(qtPointSuggestInput);
+});
+window.addEventListener('scroll', () => {
+    if (qtPointSuggestInput) positionPointSuggest(qtPointSuggestInput);
+}, true);
+
 function updateQExtraField(id, key, value) {
     const item = queue.find(q => q.id === id);
     if (item) {

@@ -273,6 +273,35 @@ body {
     box-shadow: none;
 }
 .ql-sider .ql-search input:focus { border-color: #6fc0a9; box-shadow: 0 0 0 3px rgba(8,127,103,.1); }
+.ql-site-block { margin: 2px 0 14px; }
+.ql-site-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.ql-site-label { color: #8a9692; font-size: 9.5px; font-weight: 750; letter-spacing: .12em; }
+.ql-site-manage {
+    padding: 2px 5px; border: 0; color: #7467eb; background: transparent;
+    font-size: 10px; font-weight: 700; cursor: pointer;
+}
+.ql-site-tabs { display: flex; gap: 7px; overflow-x: auto; padding: 2px 1px 6px; scrollbar-width: thin; }
+.ql-site-tab {
+    min-width: 142px; padding: 10px 12px; border: 1px solid #dce1fb; border-radius: 11px;
+    color: #596662; background: rgba(255,255,255,.82); text-align: left; cursor: pointer;
+    box-shadow: 0 3px 10px rgba(74,66,190,.04); flex: 0 0 auto;
+}
+.ql-site-tab strong { display: block; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.ql-site-tab small { display: block; margin-top: 4px; color: #9aa4a1; font-size: 9px; }
+.ql-site-tab.active {
+    border-color: #7770f5; color: #fff;
+    background: linear-gradient(135deg,#625df2,#8858ee);
+    box-shadow: 0 7px 16px rgba(99,91,238,.20);
+}
+.ql-site-tab.active small { color: rgba(255,255,255,.78); }
+.ql-site-add {
+    min-width: 38px; display: grid; place-items: center; padding: 0; font-size: 18px;
+    color: #7165ee; border-style: dashed; background: #f8f7ff;
+}
+.ql-site-list-row { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid #eef0f5; }
+.ql-site-list-row input { flex: 1; min-width: 0; }
+.ql-site-list-row .site-count { min-width: 58px; color: #8b9692; font-size: 10px; }
+.ql-site-list-row button { padding: 6px 9px; font-size: 10px; }
 .ql-sider .ql-btns { gap: 8px; margin-bottom: 18px; }
 .ql-sider .ql-btns button {
     min-height: 34px;
@@ -297,14 +326,21 @@ body {
 .ql-group-title .arrow { color: #97a49f; }
 .ql-device {
     position: relative;
-    min-height: 42px;
+    min-height: 52px;
     margin: 3px 0;
-    padding: 9px 10px 9px 34px;
+    padding: 8px 32px 8px 34px;
     border: 1px solid transparent;
     border-radius: 10px;
     color: #52625d;
     font-size: 12.5px;
 }
+.ql-device-copy { min-width: 0; display: flex; flex: 1; flex-direction: column; gap: 3px; }
+.ql-device-name { overflow: hidden; color: inherit; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
+.ql-device-address {
+    overflow: hidden; color: #93a19d; font: 9.5px/1.2 var(--font-mono);
+    letter-spacing: .01em; text-overflow: ellipsis; white-space: nowrap;
+}
+.ql-device.active .ql-device-address { color: #599b89; }
 .ql-device:hover { background: #eef6f3; }
 .ql-device.active {
     border-color: #cbe7de;
@@ -642,6 +678,11 @@ body { background: var(--bg-gradient); background-attachment: fixed; color: var(
 .ql-map-toolbar {
     border-color: rgba(56,189,248,.14); background: rgba(10,16,32,.96);
 }
+.ql-map-direct-hint {
+    display:flex; align-items:center; gap:9px; min-height:32px; padding:0 4px;
+    color:rgba(186,230,253,.72); font-size:12px; white-space:nowrap;
+}
+.ql-map-direct-hint span { color:rgba(56,189,248,.42); }
 .ql-map-toolbar .glass-btn-outline {
     border-color: rgba(56,189,248,.20); background: rgba(15,23,42,.78); color: rgba(186,230,253,.78);
 }
@@ -671,6 +712,15 @@ body { background: var(--bg-gradient); background-attachment: fixed; color: var(
 .ql-map-state-grid .is-occupied { border-color: rgba(16,185,129,.40); color: #6ee7b7; background: rgba(16,185,129,.13); }
 .ql-map-state-grid .task-state { grid-column: 1 / -1; }
 .ql-map-state-grid .is-task { border-color: rgba(245,158,11,.50); color: #fde68a; background: rgba(245,158,11,.16); box-shadow: 0 0 12px rgba(245,158,11,.10); }
+.ql-map-task-delete {
+    display: flex; grid-column: 1 / -1; width: 100%; min-height: 30px; padding: 0; align-items: center; justify-content: space-between;
+    overflow: hidden; border: 1px solid rgba(245,158,11,.50); border-radius: 7px; color: #fde68a;
+    background: rgba(245,158,11,.16); box-shadow: 0 0 12px rgba(245,158,11,.10); cursor: pointer; font-size: 9px;
+}
+.ql-map-task-delete span { flex: 1; padding: 6px 8px; color: inherit; background: transparent; border: 0; border-radius: 0; }
+.ql-map-task-delete b { align-self: stretch; display: grid; min-width: 43px; place-items: center; color: #fecdd3; background: rgba(239,68,68,.18); font: 700 9px var(--font-sans); }
+.ql-map-task-delete:hover { border-color: rgba(251,113,133,.82); box-shadow: 0 0 16px rgba(239,68,68,.18); }
+.ql-map-task-delete:hover b { color: #fff1f2; background: rgba(239,68,68,.34); }
 .ql-map-state-grid .is-alarm { border-color: rgba(251,79,100,.52); color: #fecdd3; background: rgba(251,79,100,.18); box-shadow: 0 0 12px rgba(251,79,100,.12); }
 .ql-map-state-grid .is-normal { border-color: rgba(34,197,94,.28); color: #86efac; background: rgba(34,197,94,.08); }
 .ql-map-delete-selected { border-color: rgba(239,68,68,.28); background: rgba(239,68,68,.07); color: #fca5a5; }
@@ -710,6 +760,444 @@ body { background: var(--bg-gradient); background-attachment: fixed; color: var(
 .ql-route-picker-head span { color: var(--color-text-secondary); font-size: 10.5px; font-weight: 700; }
 .ql-route-picker-head select { width: 150px; height: 30px; padding: 4px 8px; border-radius: 7px; font-size: 10.5px; }
 .ql-route-preview { margin-top: 7px; padding: 6px 8px; border-radius: 7px; color: #5255c9; background: rgba(255,255,255,.58); font: 10px/1.55 var(--font-mono); word-break: break-all; }
+
+/* ===== 堆垛机数字化操作台 ===== */
+.crane-console {
+    --crane-cyan:#38bdf8; --crane-blue:#6366f1; --crane-green:#22c55e;
+    --crane-amber:#f59e0b; --crane-red:#ef4444; --crane-dark:#091225;
+    overflow:hidden; border:1px solid rgba(99,102,241,.13); border-radius:16px;
+    background:rgba(255,255,255,.66); box-shadow:var(--glass-shadow); backdrop-filter:blur(18px) saturate(140%);
+}
+.crane-console-head {
+    display:flex; min-height:58px; padding:12px 16px; align-items:center; justify-content:space-between; gap:16px;
+    border-bottom:1px solid rgba(99,102,241,.09); background:linear-gradient(90deg,rgba(99,102,241,.055),rgba(56,189,248,.025));
+}
+.crane-console-title { display:flex; align-items:center; gap:11px; }
+.crane-console-title > div { display:flex; flex-direction:column; gap:2px; }
+.crane-console-title b { color:var(--color-text); font-size:14px; font-weight:750; }
+.crane-console-title small { color:var(--color-text-muted); font:9px var(--font-mono); letter-spacing:.12em; }
+.crane-live-mark {
+    display:grid; width:34px; height:34px; place-items:center; border-radius:10px;
+    color:var(--crane-cyan); background:linear-gradient(145deg,rgba(56,189,248,.14),rgba(99,102,241,.12));
+}
+.crane-live-mark i { width:9px; height:9px; border:2px solid currentColor; border-radius:50%; box-shadow:0 0 0 5px rgba(56,189,248,.08); }
+.crane-console.is-running .crane-live-mark { color:var(--crane-green); }
+.crane-console.is-running .crane-live-mark i { animation:craneLivePulse 1.8s ease-in-out infinite; }
+.crane-console-refresh { display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+.crane-console-refresh span { color:var(--color-text-muted); font-size:9px; }
+.crane-console-refresh b { color:var(--color-text-secondary); font:10px var(--font-mono); }
+.crane-status-ribbon {
+    display:grid; grid-template-columns:repeat(6,minmax(110px,1fr)); gap:1px;
+    border-bottom:1px solid rgba(99,102,241,.09); background:rgba(99,102,241,.08);
+}
+.crane-data-item {
+    display:flex; min-width:0; align-items:center; justify-content:space-between; gap:8px;
+    background:rgba(255,255,255,.76); color:var(--color-text-secondary);
+}
+.crane-data-item .k { color:var(--color-text-muted); font-size:10px; white-space:nowrap; }
+.crane-data-item .v { overflow:hidden; color:var(--color-text); font:650 11px var(--font-mono); text-overflow:ellipsis; white-space:nowrap; }
+.crane-status-ribbon .crane-data-item { min-height:54px; padding:9px 13px; flex-direction:column; align-items:flex-start; justify-content:center; }
+.crane-status-ribbon .crane-data-item .v { font-size:12px; }
+.crane-data-item.success .v { color:#059669; }
+.crane-data-item.warn .v { color:#d97706; }
+.crane-data-item.alarm .v { color:#dc2626; }
+.crane-status-ribbon .crane-primary-state { box-shadow:inset 3px 0 0 var(--crane-blue); }
+.crane-status-ribbon .crane-primary-state.success { box-shadow:inset 3px 0 0 var(--crane-green); }
+.crane-status-ribbon .crane-primary-state.warn { box-shadow:inset 3px 0 0 var(--crane-amber); }
+.crane-status-ribbon .crane-primary-state.alarm,
+.crane-status-ribbon .crane-alarm-state.alarm { background:rgba(254,242,242,.92); box-shadow:inset 3px 0 0 var(--crane-red); }
+.crane-machine-status {
+    border-bottom-color:rgba(56,189,248,.13); background:rgba(56,189,248,.09);
+}
+.crane-machine-status .crane-data-item {
+    min-height:48px; padding:8px 11px; border-right:1px solid rgba(56,189,248,.08);
+    background:linear-gradient(180deg,rgba(15,31,56,.96),rgba(10,22,42,.96));
+}
+.crane-machine-status .crane-data-item:last-child { border-right:0; }
+.crane-machine-status .crane-data-item .k { color:rgba(148,163,184,.72); font-size:8.5px; }
+.crane-machine-status .crane-data-item .v { color:#e0f2fe; font-size:10.5px; }
+.crane-machine-status .crane-data-item.success .v { color:#6ee7b7; }
+.crane-machine-status .crane-data-item.warn .v { color:#fde68a; }
+.crane-machine-status .crane-data-item.alarm .v { color:#fca5a5; }
+.crane-machine-status .crane-primary-state { box-shadow:inset 3px 0 0 var(--crane-blue); }
+.crane-machine-status .crane-primary-state.success { box-shadow:inset 3px 0 0 var(--crane-green); }
+.crane-machine-status .crane-primary-state.warn { box-shadow:inset 3px 0 0 var(--crane-amber); }
+.crane-machine-status .crane-primary-state.alarm,
+.crane-machine-status .crane-alarm-state.alarm {
+    background:linear-gradient(180deg,rgba(69,19,29,.88),rgba(35,16,28,.96));
+    box-shadow:inset 3px 0 0 var(--crane-red);
+}
+.crane-console-body { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(240px,.58fr); gap:12px; padding:12px; }
+.crane-machine-panel, .crane-detail-panel {
+    min-width:0; overflow:hidden; border:1px solid rgba(56,189,248,.17); border-radius:13px;
+    background:linear-gradient(160deg,#0d1830,#081020); box-shadow:0 12px 28px rgba(8,16,32,.18);
+}
+.crane-panel-heading {
+    display:flex; min-height:49px; padding:10px 13px; align-items:center; justify-content:space-between; gap:12px;
+    border-bottom:1px solid rgba(56,189,248,.13); background:rgba(15,23,42,.56);
+}
+.crane-panel-heading > div:first-child { display:flex; flex-direction:column; gap:2px; }
+.crane-panel-heading b { color:#e0f2fe; font-size:11.5px; }
+.crane-panel-heading small { color:rgba(148,163,184,.62); font-size:9px; }
+.crane-axis-values { display:flex; align-items:center; gap:7px; }
+.crane-axis-values span {
+    display:flex; padding:5px 8px; align-items:center; gap:4px; border:1px solid rgba(56,189,248,.15); border-radius:7px;
+    color:#94a3b8; background:rgba(56,189,248,.055); font-size:9px; white-space:nowrap;
+}
+.crane-axis-values span > i { width:5px; height:5px; border-radius:50%; background:#475569; transition:background .2s,box-shadow .2s; }
+.crane-axis-values span > em { padding-left:3px; color:#64748b; font:7px var(--font-mono); font-style:normal; }
+.crane-axis-values span.active { border-color:rgba(34,211,238,.42); background:rgba(6,182,212,.12); }
+.crane-axis-values span.active > i { background:#22d3ee; box-shadow:0 0 8px #22d3ee; animation:craneLivePulse .8s ease-out; }
+.crane-axis-values span.active > em { color:#a5f3fc; }
+.crane-axis-values b { margin-left:4px; color:#7dd3fc; font:650 10px var(--font-mono); }
+.crane-machine-layout { display:grid; min-height:276px; grid-template-columns:190px minmax(280px,1fr) 190px; }
+.crane-machine-view {
+    position:relative; height:100%; min-height:276px; overflow:hidden; border-right:1px solid rgba(56,189,248,.10); border-left:1px solid rgba(56,189,248,.10); background:
+        radial-gradient(circle at 50% 48%,rgba(56,189,248,.10),transparent 25%),
+        radial-gradient(circle at 50% 100%,rgba(99,102,241,.13),transparent 35%),
+        linear-gradient(rgba(56,189,248,.035) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(56,189,248,.035) 1px,transparent 1px);
+    background-size:auto,auto,24px 24px,24px 24px;
+}
+.crane-rail { position:absolute; left:4%; right:4%; height:3px; border-radius:3px; background:linear-gradient(90deg,transparent,#334b69 7%,#38bdf8 50%,#334b69 93%,transparent); }
+.crane-rail::after { content:""; position:absolute; inset:-4px 0; background:linear-gradient(90deg,transparent,rgba(56,189,248,.15),transparent); filter:blur(5px); }
+.crane-rail-top { top:18px; }
+.crane-rail-bottom { bottom:18px; }
+.crane-rack {
+    position:absolute; top:38px; bottom:38px; width:32%; padding:24px 22px 7px 7px;
+    border:1px solid rgba(100,116,139,.24); border-radius:6px; background:rgba(15,23,42,.30);
+    transition:border-color .2s,background .2s,box-shadow .2s;
+}
+.crane-rack-left { left:4%; }
+.crane-rack-right { right:4%; }
+.crane-rack.is-current-side { border-color:rgba(56,189,248,.45); background:rgba(8,47,73,.24); box-shadow:0 0 18px rgba(56,189,248,.10),inset 0 0 18px rgba(56,189,248,.04); }
+.crane-rack-title { position:absolute; top:5px; left:8px; right:7px; display:flex; align-items:center; justify-content:space-between; gap:5px; }
+.crane-rack-title span { color:#cbd5e1; font-size:8px; font-weight:650; }
+.crane-rack-title b { color:#64748b; font:7px var(--font-mono); }
+.crane-rack.is-current-side .crane-rack-title b { color:#67e8f9; }
+.crane-rack-columns { position:absolute; top:23px; left:7px; right:22px; display:grid; grid-template-columns:repeat(4,1fr); }
+.crane-rack-columns span { overflow:hidden; color:#64748b; font:6.5px var(--font-mono); text-align:center; text-overflow:clip; white-space:nowrap; }
+.crane-rack-grid { display:grid; width:100%; height:100%; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(5,1fr); gap:4px; }
+.crane-rack-grid i {
+    position:relative; display:grid; min-width:0; place-items:center; border:1px solid rgba(56,189,248,.14); border-radius:3px;
+    background:linear-gradient(145deg,rgba(56,189,248,.035),rgba(99,102,241,.035)); transition:border-color .2s,background .2s,box-shadow .2s;
+}
+.crane-rack-grid i:nth-child(4n+2), .crane-rack-grid i:nth-child(4n+3) { background:rgba(148,163,184,.025); }
+.crane-rack-grid i span { color:transparent; font:650 6.5px var(--font-mono); }
+.crane-rack-grid i.is-current-position {
+    border-color:#22d3ee; background:linear-gradient(145deg,rgba(6,182,212,.34),rgba(59,130,246,.22));
+    box-shadow:0 0 0 1px rgba(103,232,249,.18) inset,0 0 12px rgba(34,211,238,.34);
+}
+.crane-rack-grid i.is-current-position::before { content:""; width:7px; height:7px; border:2px solid #cffafe; border-radius:50%; background:#06b6d4; box-shadow:0 0 8px #22d3ee; }
+.crane-rack-grid i.is-current-position span { position:absolute; right:2px; bottom:1px; color:#cffafe; }
+.crane-rack-levels { position:absolute; top:31px; right:3px; bottom:7px; display:grid; width:17px; grid-template-rows:repeat(5,1fr); }
+.crane-rack-levels span { display:flex; align-items:center; justify-content:center; color:#64748b; font:6px var(--font-mono); writing-mode:vertical-rl; }
+.crane-aisle-label {
+    position:absolute; left:50%; top:24px; padding:3px 8px; transform:translateX(-50%);
+    border:1px solid rgba(56,189,248,.16); border-radius:999px; color:rgba(186,230,253,.58);
+    background:rgba(8,16,32,.82); font:9px var(--font-mono); letter-spacing:.12em;
+}
+.crane-motion-overlay {
+    position:absolute; z-index:5; top:44px; left:50%; display:flex; max-width:66%; padding:5px 9px; align-items:center; gap:6px;
+    transform:translate(-50%,-8px); border:1px solid rgba(34,211,238,.30); border-radius:999px;
+    color:#cffafe; background:rgba(8,47,73,.92); box-shadow:0 0 18px rgba(34,211,238,.14);
+    opacity:0; pointer-events:none; transition:opacity .18s,transform .18s;
+}
+.crane-motion-overlay i { width:7px; height:7px; flex:0 0 auto; border-radius:50%; background:#22d3ee; box-shadow:0 0 9px #22d3ee; }
+.crane-motion-overlay b { overflow:hidden; font:650 8px var(--font-mono); text-overflow:ellipsis; white-space:nowrap; }
+.crane-machine-view.is-traveling .crane-motion-overlay,
+.crane-machine-view.is-lifting .crane-motion-overlay,
+.crane-machine-view.motion-pending .crane-motion-overlay { transform:translate(-50%,0); opacity:1; }
+.crane-machine-view.motion-pending .crane-motion-overlay { border-color:rgba(245,158,11,.36); color:#fef3c7; background:rgba(69,42,13,.94); }
+.crane-machine-view.motion-pending .crane-motion-overlay i { background:#f59e0b; box-shadow:0 0 9px #f59e0b; animation:craneLivePulse 1s ease-out; }
+.crane-machine-view.is-traveling::after {
+    content:""; position:absolute; z-index:4; top:18px; left:5%; width:18%; height:3px;
+    border-radius:3px; background:linear-gradient(90deg,transparent,#67e8f9,transparent); filter:drop-shadow(0 0 5px #22d3ee);
+    animation:craneTravelSweep 1.35s ease-out both;
+}
+.crane-machine-view.motion-reverse::after { animation-name:craneTravelSweepReverse; }
+.crane-machine-view.is-traveling .crane-mast { animation:craneMastForward 1.2s ease-out both; }
+.crane-machine-view.is-traveling.motion-reverse .crane-mast { animation-name:craneMastReverse; }
+.crane-machine-view.is-lifting .crane-carriage { animation:craneCarriageUp 1.2s ease-out both; }
+.crane-machine-view.is-lifting.motion-down .crane-carriage { animation-name:craneCarriageDown; }
+.crane-mast { position:absolute; top:20px; bottom:20px; left:50%; width:116px; transform:translateX(-50%); }
+.crane-mast-line {
+    position:absolute; top:0; bottom:0; left:50%; width:7px; transform:translateX(-50%);
+    border:1px solid rgba(125,211,252,.48); border-radius:3px;
+    background:linear-gradient(90deg,#17233c,#38bdf8 46%,#1e3a5f 54%,#111c34);
+    box-shadow:0 0 14px rgba(56,189,248,.16);
+}
+.crane-mast-line::before, .crane-mast-line::after {
+    content:""; position:absolute; left:50%; width:18px; height:4px; transform:translateX(-50%);
+    border-radius:3px; background:#60a5fa; box-shadow:0 0 10px rgba(96,165,250,.35);
+}
+.crane-mast-line::before { top:0; } .crane-mast-line::after { bottom:0; }
+.crane-carriage {
+    position:absolute; top:50%; left:50%; width:108px; height:98px; transform:translate(-50%,-50%);
+    border:1px solid rgba(125,211,252,.66); border-radius:10px;
+    background:linear-gradient(145deg,rgba(30,58,95,.96),rgba(15,23,42,.98));
+    box-shadow:0 0 0 1px rgba(56,189,248,.10) inset,0 0 22px rgba(56,189,248,.20);
+}
+.crane-carriage-head {
+    display:flex; height:28px; padding:0 8px; align-items:center; justify-content:space-between;
+    border-bottom:1px solid rgba(56,189,248,.17); color:#94a3b8; font-size:8.5px;
+}
+.crane-carriage-head b { color:#e0f2fe; font:650 9px var(--font-mono); }
+.crane-load-unit {
+    position:absolute; left:50%; top:51%; display:grid; width:36px; height:31px; place-items:center;
+    transform:translate(-50%,-50%); border:1px dashed rgba(148,163,184,.35); border-radius:5px;
+    color:#64748b; background:rgba(15,23,42,.9); font:7px var(--font-mono);
+}
+.crane-load-unit.has-load { border-style:solid; border-color:rgba(34,197,94,.75); color:#bbf7d0; background:rgba(34,197,94,.23); box-shadow:0 0 15px rgba(34,197,94,.23); }
+.crane-fork-beam { position:absolute; left:50%; width:82px; height:12px; transform:translateX(-50%); color:#64748b; }
+.crane-fork-beam-one { top:36px; } .crane-fork-beam-two { bottom:8px; }
+.crane-fork-beam i { position:absolute; left:0; right:0; top:5px; height:2px; border-radius:2px; background:#52647d; }
+.crane-fork-beam span { position:absolute; right:2px; top:-5px; font:7px var(--font-mono); }
+.crane-fork-beam.active { color:#fde68a; }
+.crane-fork-beam.active i { background:linear-gradient(90deg,#f59e0b,#fde68a,#f59e0b); box-shadow:0 0 10px rgba(245,158,11,.48); animation:craneForkMove 1.4s ease-in-out infinite; }
+.crane-coordinate-readout, .crane-task-tag {
+    position:absolute; bottom:28px; display:flex; min-width:84px; padding:6px 8px; align-items:center; justify-content:space-between; gap:9px;
+    border:1px solid rgba(56,189,248,.18); border-radius:7px; color:#94a3b8; background:rgba(8,16,32,.86); font-size:8.5px;
+}
+.crane-coordinate-readout { left:38%; min-width:132px; transform:translateX(-100%); }
+.crane-coordinate-readout > span { display:flex; align-items:baseline; gap:3px; }
+.crane-coordinate-readout small { color:#64748b; font-size:7px; }
+.crane-coordinate-readout b { color:#67e8f9; font:650 9px var(--font-mono); }
+.crane-task-tag { right:38%; transform:translateX(100%); }
+.crane-task-tag b { color:#e0f2fe; font:650 9px var(--font-mono); }
+.crane-carriage::after {
+    content:attr(data-position); position:absolute; left:50%; top:100%; width:max-content; max-width:150px; padding-top:5px; transform:translateX(-50%);
+    color:#7dd3fc; font:7px var(--font-mono); opacity:.75;
+}
+.crane-detail-panel { display:flex; flex-direction:column; }
+.crane-result-block { display:flex; padding:7px 12px; flex:1; flex-direction:column; }
+.crane-result-block .crane-data-item { min-height:39px; padding:7px 0; border-bottom:1px solid rgba(56,189,248,.10); background:transparent; }
+.crane-result-block .crane-data-item:last-child { border-bottom:0; }
+.crane-result-block .crane-data-item .k { color:rgba(148,163,184,.68); }
+.crane-result-block .crane-data-item .v { color:#e0f2fe; }
+.crane-result-block .crane-data-item.success .v { color:#6ee7b7; }
+.crane-result-block .crane-data-item.warn .v { color:#fde68a; }
+.crane-result-block .crane-data-item.alarm .v { color:#fca5a5; }
+.crane-alarm-banner {
+    display:flex; min-height:58px; margin:0 12px 12px; padding:10px; align-items:center; gap:9px;
+    border:1px solid rgba(34,197,94,.18); border-radius:9px; background:rgba(34,197,94,.055);
+}
+.crane-alarm-icon { display:grid; width:27px; height:27px; flex:0 0 auto; place-items:center; border-radius:8px; color:#6ee7b7; background:rgba(34,197,94,.13); font-weight:800; }
+.crane-alarm-banner div { display:flex; min-width:0; flex-direction:column; gap:2px; }
+.crane-alarm-banner small { color:#64748b; font-size:8.5px; }
+.crane-alarm-banner b { overflow:hidden; color:#86efac; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.crane-alarm-banner.active { border-color:rgba(239,68,68,.38); background:rgba(239,68,68,.10); box-shadow:0 0 20px rgba(239,68,68,.08); }
+.crane-alarm-banner.active .crane-alarm-icon { color:#fecaca; background:rgba(239,68,68,.20); animation:craneAlarmPulse 1.1s ease-in-out infinite; }
+.crane-alarm-banner.active b { color:#fecaca; }
+.crane-fork-monitor { min-width:0; background:linear-gradient(180deg,rgba(12,25,48,.94),rgba(8,16,32,.97)); transition:background .2s; }
+.crane-fork-monitor.has-load { background:linear-gradient(180deg,rgba(8,47,45,.80),rgba(8,24,35,.97)); }
+.crane-fork-monitor.is-active { background:linear-gradient(180deg,rgba(62,42,13,.72),rgba(19,24,38,.98)); }
+.crane-fork-monitor-title { display:flex; min-height:44px; padding:9px 10px; align-items:center; gap:6px; border-bottom:1px solid rgba(56,189,248,.10); }
+.crane-fork-monitor-title span { padding:3px 5px; border-radius:4px; color:#7dd3fc; background:rgba(56,189,248,.10); font:650 7.5px var(--font-mono); }
+.crane-fork-monitor-title b { color:#e0f2fe; font-size:10.5px; }
+.crane-fork-monitor-title em { margin-left:auto; overflow:hidden; color:#64748b; font-size:8px; font-style:normal; text-overflow:ellipsis; white-space:nowrap; }
+.crane-fork-monitor.has-load .crane-fork-monitor-title em { color:#6ee7b7; }
+.crane-fork-monitor.is-active .crane-fork-monitor-title em { color:#fde68a; }
+.crane-fork-monitor-data { display:flex; padding:5px 10px; flex-direction:column; }
+.crane-fork-monitor-data .crane-data-item { min-height:36px; padding:6px 0; border-bottom:1px solid rgba(56,189,248,.08); background:transparent; }
+.crane-fork-monitor-data .crane-data-item:last-child { border-bottom:0; }
+.crane-fork-monitor-data .crane-data-item .k { color:rgba(148,163,184,.66); font-size:8.5px; }
+.crane-fork-monitor-data .crane-data-item .v { color:#dbeafe; font-size:9.5px; }
+.crane-fork-monitor-data .crane-data-item.success .v { color:#6ee7b7; }
+.crane-fork-monitor-data .crane-data-item.warn .v { color:#fde68a; }
+.crane-fork-monitor-data .crane-data-item.alarm .v { color:#fca5a5; }
+.crane-forks { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:0 12px 12px; }
+.crane-fork-card {
+    overflow:hidden; border:1px solid rgba(99,102,241,.11); border-radius:12px;
+    background:rgba(255,255,255,.70); transition:border-color .2s,box-shadow .2s;
+}
+.crane-fork-card.has-load { border-color:rgba(34,197,94,.28); box-shadow:0 7px 20px rgba(34,197,94,.07); }
+.crane-fork-card.is-active { border-color:rgba(245,158,11,.32); box-shadow:0 7px 20px rgba(245,158,11,.08); }
+.crane-fork-title { display:flex; min-height:39px; padding:8px 11px; align-items:center; gap:8px; border-bottom:1px solid rgba(99,102,241,.08); }
+.crane-fork-title span { padding:3px 6px; border-radius:5px; color:var(--color-primary); background:rgba(99,102,241,.08); font:650 8px var(--font-mono); }
+.crane-fork-title b { color:var(--color-text); font-size:11px; }
+.crane-fork-title em { margin-left:auto; color:var(--color-text-muted); font-size:9px; font-style:normal; }
+.crane-fork-card.has-load .crane-fork-title em { color:#059669; }
+.crane-fork-card.is-active .crane-fork-title em { color:#d97706; }
+.crane-fork-data { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; background:rgba(99,102,241,.065); }
+.crane-fork-data .crane-data-item { min-height:43px; padding:7px 9px; flex-direction:column; align-items:flex-start; justify-content:center; }
+.ql-content-bottom > .crane-task-console {
+    display:block !important; padding:0 !important; border:0 !important; border-radius:0 !important;
+    background:transparent !important; box-shadow:none !important;
+}
+.crane-task-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:10px; }
+.crane-task-head > div:first-child { display:flex; flex-direction:column; gap:2px; }
+.crane-task-head b { color:var(--color-text); font-size:12px; }
+.crane-task-head span { color:var(--color-text-muted); font-size:9.5px; }
+.crane-task-head .ql-tabs { margin:0; }
+.crane-task-console #c_form {
+    padding:11px 12px; border:1px solid rgba(99,102,241,.10); border-radius:11px; background:rgba(255,255,255,.62);
+}
+.crane-command-panel { padding:12px; border-top:1px solid rgba(99,102,241,.10); background:rgba(248,250,255,.58); }
+.crane-command-panel .crane-task-head { margin-bottom:9px; }
+.crane-command-panel .ql-tabs { margin:0; }
+.crane-command-panel .crane-clear-tab { color:#dc2626; }
+.crane-command-panel .crane-clear-tab.active { color:#fff; background:linear-gradient(135deg,#ef4444,#dc2626); box-shadow:0 3px 10px rgba(239,68,68,.18); }
+.crane-command-form {
+    min-height:188px; overflow:hidden; border:1px solid rgba(99,102,241,.11); border-radius:12px;
+    background:rgba(255,255,255,.74);
+}
+.crane-task-layout { display:grid; min-height:188px; grid-template-columns:minmax(0,1.55fr) minmax(310px,.68fr); }
+.crane-task-route { padding:14px 16px; border-right:1px solid rgba(99,102,241,.10); }
+.crane-task-type { display:flex; margin-bottom:12px; align-items:center; justify-content:space-between; gap:12px; }
+.crane-task-type span { color:var(--color-text-muted); font-size:9.5px; }
+.crane-task-type b { color:var(--color-primary); font-size:11.5px; }
+.crane-position-flow { display:grid; grid-template-columns:minmax(0,1fr) 72px minmax(0,1fr); align-items:center; gap:10px; }
+.crane-position-flow.single { grid-template-columns:minmax(280px,520px); justify-content:center; }
+.crane-position-block {
+    min-width:0; overflow:hidden; border:1px solid rgba(99,102,241,.13); border-radius:11px;
+    background:linear-gradient(145deg,rgba(99,102,241,.045),rgba(255,255,255,.72));
+}
+.crane-position-block.pickup { border-left:3px solid #10b981; }
+.crane-position-block.dropoff { border-left:3px solid #f43f5e; }
+.crane-position-block.target { border-left:3px solid #38bdf8; }
+.crane-position-title { display:flex; min-height:38px; padding:8px 10px; align-items:center; justify-content:space-between; gap:8px; border-bottom:1px solid rgba(99,102,241,.08); }
+.crane-position-title span { color:var(--color-text); font-size:11px; font-weight:700; }
+.crane-position-title small { color:var(--color-text-muted); font-size:8.5px; }
+.crane-position-fields { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:10px; }
+.crane-number-field { display:flex; min-width:0; flex-direction:column; gap:4px; }
+.crane-number-field > span { color:var(--color-text-muted); font-size:9px; font-weight:600; }
+.crane-number-field > div { position:relative; min-width:0; }
+.crane-number-field input {
+    width:100%; height:38px; min-width:0; padding:7px 30px 7px 10px; border-color:rgba(99,102,241,.15);
+    border-radius:8px; color:var(--color-text); background:rgba(255,255,255,.85); box-shadow:none; font:650 12px var(--font-mono);
+}
+.crane-number-field input:focus { border-color:var(--color-primary); box-shadow:0 0 0 3px rgba(99,102,241,.10); }
+.crane-number-field em { position:absolute; right:9px; top:50%; transform:translateY(-50%); color:#9ca3af; font-size:9px; font-style:normal; pointer-events:none; }
+.crane-route-arrow { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; color:var(--color-primary); }
+.crane-route-arrow i { position:relative; width:46px; height:2px; background:linear-gradient(90deg,rgba(16,185,129,.45),var(--color-primary),rgba(244,63,94,.55)); }
+.crane-route-arrow i::after { content:""; position:absolute; right:-1px; top:50%; width:7px; height:7px; border-top:2px solid currentColor; border-right:2px solid currentColor; transform:translateY(-50%) rotate(45deg); }
+.crane-route-arrow span { font-size:8.5px; white-space:nowrap; }
+.crane-task-action { display:flex; padding:13px; flex-direction:column; justify-content:space-between; gap:10px; background:linear-gradient(155deg,rgba(99,102,241,.055),rgba(139,92,246,.025)); }
+.crane-task-meta-title { display:flex; margin-bottom:8px; align-items:center; justify-content:space-between; gap:8px; }
+.crane-task-meta-title b { color:var(--color-text); font-size:10.5px; }
+.crane-task-meta-title span { color:var(--color-text-muted); font-size:8px; }
+.crane-task-meta-grid { display:grid; grid-template-columns:1.25fr repeat(3,1fr); gap:7px; }
+.crane-execute-btn {
+    display:flex; width:100%; min-height:47px; padding:8px 14px; align-items:center; justify-content:space-between; gap:12px;
+    border:0; border-radius:10px; color:#fff; background:var(--gradient-btn); box-shadow:0 6px 16px rgba(99,102,241,.20); cursor:pointer;
+}
+.crane-execute-btn:hover { background:var(--gradient-btn-hover); transform:translateY(-1px); }
+.crane-execute-btn span { font-size:12px; font-weight:750; }
+.crane-execute-btn small { color:rgba(255,255,255,.72); font-size:8.5px; }
+.crane-execute-btn.danger { background:linear-gradient(135deg,#ef4444,#dc2626); box-shadow:0 6px 16px rgba(239,68,68,.18); }
+.crane-clear-task { display:flex; min-height:188px; padding:20px 24px; align-items:center; justify-content:space-between; gap:24px; background:linear-gradient(145deg,rgba(254,242,242,.75),rgba(255,255,255,.82)); }
+.crane-clear-copy { display:flex; align-items:center; gap:12px; }
+.crane-clear-copy > span { display:grid; width:38px; height:38px; place-items:center; border-radius:10px; color:#dc2626; background:rgba(239,68,68,.10); font-weight:800; }
+.crane-clear-copy > div { display:flex; flex-direction:column; gap:4px; }
+.crane-clear-copy b { color:#991b1b; font-size:12px; }
+.crane-clear-copy small { color:#9f6b6b; font-size:9.5px; }
+.crane-clear-action { display:grid; width:min(100%,420px); grid-template-columns:1fr 1.2fr; align-items:end; gap:12px; }
+.crane-command-deck {
+    grid-column:1 / -1; overflow:hidden; padding:12px; border:1px solid rgba(56,189,248,.16); border-radius:13px;
+    background:
+        linear-gradient(rgba(56,189,248,.025) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(56,189,248,.025) 1px,transparent 1px),
+        linear-gradient(160deg,#0c172c,#081020);
+    background-size:20px 20px,20px 20px,auto; box-shadow:0 12px 28px rgba(8,16,32,.16);
+}
+.crane-command-deck .crane-task-head { margin-bottom:9px; }
+.crane-command-deck-title { display:flex !important; flex-direction:row !important; align-items:center; gap:9px !important; }
+.crane-command-deck-title > div { display:flex; flex-direction:column; gap:2px; }
+.crane-command-deck-title b { color:#e0f2fe; font-size:11px; }
+.crane-command-deck-title span:not(.crane-console-code) { color:rgba(148,163,184,.58); font-size:8.5px; }
+.crane-console-code {
+    padding:4px 7px; border:1px solid rgba(56,189,248,.18); border-radius:5px;
+    color:#67e8f9; background:rgba(34,211,238,.08); font:650 7px var(--font-mono); letter-spacing:.08em;
+}
+.crane-command-deck .ql-tabs { border-color:rgba(56,189,248,.13); background:rgba(8,16,32,.70); }
+.crane-command-deck .ql-tab { color:rgba(186,230,253,.66); }
+.crane-command-deck .ql-tab:hover { color:#e0f2fe; background:rgba(56,189,248,.09); }
+.crane-command-deck .ql-tab.active { color:#fff; background:linear-gradient(135deg,#0891b2,#4f46e5); box-shadow:0 3px 12px rgba(56,189,248,.20); }
+.crane-command-deck .ql-tab.crane-clear-tab { color:#fca5a5; }
+.crane-command-deck .ql-tab.crane-clear-tab.active { color:#fff; background:linear-gradient(135deg,#ef4444,#b91c1c); }
+.crane-command-deck .crane-command-form { border-color:rgba(56,189,248,.14); background:rgba(8,16,32,.72); box-shadow:0 12px 30px rgba(0,0,0,.16) inset; }
+.crane-command-deck .crane-task-route { border-right-color:rgba(56,189,248,.11); }
+.crane-command-deck .crane-task-type span { color:rgba(148,163,184,.60); }
+.crane-command-deck .crane-task-type b { color:#67e8f9; text-shadow:0 0 12px rgba(34,211,238,.18); }
+.crane-command-deck .crane-position-block {
+    border-color:rgba(56,189,248,.14); background:linear-gradient(145deg,rgba(30,58,95,.50),rgba(15,23,42,.72));
+}
+.crane-command-deck .crane-position-title { border-bottom-color:rgba(56,189,248,.10); }
+.crane-command-deck .crane-position-title span { color:#e0f2fe; }
+.crane-command-deck .crane-position-title small,.crane-command-deck .crane-number-field > span { color:rgba(148,163,184,.64); }
+.crane-command-deck .crane-number-field input {
+    border-color:rgba(56,189,248,.18); color:#e0f2fe; background:rgba(8,16,32,.70);
+}
+.crane-command-deck .crane-number-field input:focus { border-color:#38bdf8; box-shadow:0 0 0 3px rgba(56,189,248,.10); }
+.crane-command-deck .crane-number-field em { color:#64748b; }
+.crane-command-deck .crane-route-arrow { color:#67e8f9; }
+.crane-command-deck .crane-task-action { border-left:1px solid rgba(56,189,248,.10); background:linear-gradient(155deg,rgba(14,116,144,.08),rgba(79,70,229,.07)); }
+.crane-command-deck .crane-task-meta-title b { color:#e0f2fe; }
+.crane-command-deck .crane-task-meta-title span { color:rgba(148,163,184,.56); }
+.crane-command-deck .crane-clear-task { background:linear-gradient(145deg,rgba(69,10,10,.34),rgba(8,16,32,.82)); }
+.crane-command-deck .crane-clear-copy b { color:#fecaca; }
+.crane-command-deck .crane-clear-copy small { color:rgba(252,165,165,.64); }
+.crane-detail-panel { align-self:start; }
+@keyframes craneLivePulse { 50% { box-shadow:0 0 0 7px rgba(34,197,94,.04),0 0 14px rgba(34,197,94,.35); } }
+@keyframes craneAlarmPulse { 50% { transform:scale(.92); opacity:.72; } }
+@keyframes craneForkMove { 50% { transform:scaleX(1.18); } }
+@keyframes craneTravelSweep { from { left:5%; opacity:.2; } to { left:77%; opacity:1; } }
+@keyframes craneTravelSweepReverse { from { left:77%; opacity:.2; } to { left:5%; opacity:1; } }
+@keyframes craneMastForward {
+    0% { transform:translateX(calc(-50% - 13px)); }
+    65% { transform:translateX(calc(-50% + 10px)); }
+    100% { transform:translateX(-50%); }
+}
+@keyframes craneMastReverse {
+    0% { transform:translateX(calc(-50% + 13px)); }
+    65% { transform:translateX(calc(-50% - 10px)); }
+    100% { transform:translateX(-50%); }
+}
+@keyframes craneCarriageUp {
+    0% { transform:translate(-50%,calc(-50% + 18px)); }
+    70% { transform:translate(-50%,calc(-50% - 8px)); }
+    100% { transform:translate(-50%,-50%); }
+}
+@keyframes craneCarriageDown {
+    0% { transform:translate(-50%,calc(-50% - 18px)); }
+    70% { transform:translate(-50%,calc(-50% + 8px)); }
+    100% { transform:translate(-50%,-50%); }
+}
+@media (prefers-reduced-motion:reduce) {
+    .crane-live-mark i,.crane-alarm-banner.active .crane-alarm-icon,.crane-fork-beam.active i,
+    .crane-machine-view::after,.crane-machine-view .crane-mast,.crane-machine-view .crane-carriage { animation:none; }
+}
+@media (max-width:1200px) {
+    .crane-status-ribbon { grid-template-columns:repeat(3,1fr); }
+    .crane-console-body { grid-template-columns:1fr; }
+    .crane-detail-panel { min-height:230px; }
+    .crane-result-block { display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
+    .crane-machine-layout { grid-template-columns:180px minmax(260px,1fr) 180px; }
+    .crane-task-layout { grid-template-columns:1fr; }
+    .crane-task-route { border-right:0; border-bottom:1px solid rgba(99,102,241,.10); }
+    .crane-command-deck .crane-task-route { border-bottom-color:rgba(56,189,248,.10); }
+    .crane-command-deck .crane-task-action { border-left:0; }
+}
+@media (max-width:760px) {
+    .crane-status-ribbon { grid-template-columns:repeat(2,1fr); }
+    .crane-console-body { padding:8px; }
+    .crane-axis-values { display:none; }
+    .crane-machine-layout { display:flex; flex-direction:column; }
+    .crane-machine-view { min-height:300px; border-right:0; border-left:0; border-top:1px solid rgba(56,189,248,.10); border-bottom:1px solid rgba(56,189,248,.10); }
+    .crane-fork-monitor-data { display:grid; grid-template-columns:repeat(2,1fr); gap:0 12px; }
+    .crane-rack { width:34%; }
+    .crane-forks { grid-template-columns:1fr; padding:0 8px 8px; }
+    .crane-fork-data { grid-template-columns:repeat(2,1fr); }
+    .crane-task-head { align-items:flex-start; flex-direction:column; }
+    .crane-position-flow,.crane-position-flow.single { grid-template-columns:1fr; }
+    .crane-route-arrow { padding:2px 0; }
+    .crane-route-arrow i { width:2px; height:22px; background:linear-gradient(rgba(16,185,129,.45),var(--color-primary),rgba(244,63,94,.55)); }
+    .crane-route-arrow i::after { right:auto; left:50%; top:auto; bottom:-1px; transform:translateX(-50%) rotate(135deg); }
+    .crane-task-meta-grid { grid-template-columns:repeat(2,1fr); }
+    .crane-clear-task { align-items:stretch; flex-direction:column; }
+    .crane-clear-action { width:100%; }
+}
 @media (min-width: 1101px) { .ql-content-bottom:not(.is-collapsed) { max-height: 330px; } }
 @media (max-width: 1100px) { .ql-map-workspace { height: calc(100vh - 350px); min-height: 500px; } }
 </style>
@@ -732,6 +1220,10 @@ body { background: var(--bg-gradient); background-attachment: fixed; color: var(
 <div class="ql-main">
     <aside class="ql-sider" id="deviceTree">
         <div class="ql-sider-head"><span class="ql-sider-title">设备列表</span><span class="ql-sider-total" id="deviceTotal">0 台</span></div>
+        <div class="ql-site-block">
+            <div class="ql-site-head"><span class="ql-site-label">调试现场</span><button class="ql-site-manage" onclick="openSiteManager()">管理现场</button></div>
+            <div class="ql-site-tabs" id="siteTabs"><div class="ql-site-tab"><strong>加载中…</strong></div></div>
+        </div>
         <div class="ql-search"><input class="glass-input" aria-label="搜索设备" type="text" placeholder="搜索设备名称或编号" id="devSearch" oninput="filterDevices()"></div>
         <div class="ql-btns">
             <button class="glass-btn-outline" onclick="openDeviceDialog()">＋ 添加</button>
@@ -752,7 +1244,10 @@ body { background: var(--bg-gradient); background-attachment: fixed; color: var(
 
 <script>
 const API = '/api/v1/ql-tool';
-const state = { devices: [], current: null, settings: { pollIntervalMs: 1000 }, pollTimer: null, opsPanelOpen: false };
+const state = {
+    devices: [], deviceGroups: [], sites: [], activeSite: localStorage.getItem('ql_active_site') || '',
+    current: null, settings: { pollIntervalMs: 1000 }, pollTimer: null, opsPanelOpen: false
+};
 
 function toast(msg, ok = true) {
     const t = document.getElementById('toast');
@@ -779,22 +1274,55 @@ function qlConfirm(title, desc) {
 // ===== 设备树 =====
 async function loadDeviceTree() {
     try {
-        const groups = await api('/devices');
+        const [groups, sites] = await Promise.all([api('/devices'), api('/sites')]);
+        state.deviceGroups = groups || [];
+        state.sites = sites || [];
         state.devices = groups.flatMap(g => g.devices);
-        const total = document.getElementById('deviceTotal');
-        if (total) total.textContent = state.devices.length + ' 台';
-        renderTree(groups);
+        if (!state.sites.some(site => site.siteName === state.activeSite)) {
+            state.activeSite = state.sites.length ? state.sites[0].siteName : '';
+        }
+        if (state.activeSite) localStorage.setItem('ql_active_site', state.activeSite);
+        renderSiteTabs();
+        renderTree(state.deviceGroups);
     } catch (e) { document.getElementById('deviceTreeContent').innerHTML = `<div class="empty-hint">${e.message}</div>`; }
+}
+function renderSiteTabs() {
+    const root = document.getElementById('siteTabs');
+    if (!root) return;
+    root.innerHTML = state.sites.map(site => {
+        const encoded = encodeURIComponent(site.siteName);
+        return `<button class="ql-site-tab ${site.siteName===state.activeSite?'active':''}" onclick="setActiveSite(decodeURIComponent('${encoded}'))"><strong>${site.siteName}</strong><small>${site.stackerCount} 台堆垛机 · ${site.conveyorCount} 台输送线</small></button>`;
+    }).join('') + `<button class="ql-site-tab ql-site-add" onclick="openSiteManager(true)" title="新建现场">＋</button>`;
+}
+function setActiveSite(siteName) {
+    if (!siteName || siteName === state.activeSite) return;
+    state.activeSite = siteName;
+    localStorage.setItem('ql_active_site', siteName);
+    if (state.current && state.current.siteName !== siteName) {
+        stopPolling();
+        state.current = null;
+        updateConnBadge();
+        document.getElementById('deviceContent').innerHTML = '<div class="ql-content-top" style="display:flex;align-items:center;justify-content:center;"><div class="ql-empty-state"><div class="ql-empty-icon">⌁</div><div class="ql-empty-title">请选择当前现场的设备</div><div class="ql-empty-desc">设备已经按现场隔离展示。</div></div></div>';
+    }
+    renderSiteTabs();
+    renderTree(state.deviceGroups);
 }
 function renderTree(groups) {
     const ico = { STACKER_CRANE: '📦', CONVEYOR_LINE: '🛤️' };
-    document.getElementById('deviceTreeContent').innerHTML = groups.map(g => `
+    const siteGroups = (groups || []).map(group => ({
+        ...group,
+        devices: (group.devices || []).filter(device => device.siteName === state.activeSite)
+    })).filter(group => group.devices.length);
+    const siteDeviceCount = siteGroups.reduce((sum, group) => sum + group.devices.length, 0);
+    const total = document.getElementById('deviceTotal');
+    if (total) total.textContent = siteDeviceCount + ' 台';
+    document.getElementById('deviceTreeContent').innerHTML = siteGroups.map(g => `
         <div class="ql-group"><div class="ql-group-title" onclick="this.parentElement.classList.toggle('collapsed')"><span class="arrow">▼</span>${ico[g.groupType]||'🔧'} ${g.groupName} <span style="margin-left:auto;font-size:10px;opacity:.5;">${g.devices.length}</span></div>
-        <div class="ql-group-items">${g.devices.map(d => `<div class="ql-device" data-id="${d.deviceId}" data-name="${d.deviceName}" onclick="selectDevice('${d.deviceId}')"><span class="dev-dot ${d.connected?'on':''}"></span>${d.deviceName}</div>`).join('')}</div></div>`).join('') || '<div class="empty-hint">暂无设备</div>';
+        <div class="ql-group-items">${g.devices.map(d => `<div class="ql-device" data-id="${d.deviceId}" data-name="${d.deviceName}" data-address="${d.ip}:${d.port}" onclick="selectDevice('${d.deviceId}')" title="${d.deviceName} · ${d.ip}:${d.port}"><span class="dev-dot ${d.connected?'on':''}"></span><span class="ql-device-copy"><span class="ql-device-name">${d.deviceName}</span><span class="ql-device-address">${d.ip}:${d.port}</span></span></div>`).join('')}</div></div>`).join('') || '<div class="empty-hint">当前现场暂无设备<br><button class="glass-btn-outline" style="margin-top:10px" onclick="openDeviceDialog()">＋ 添加设备</button></div>';
 }
 function filterDevices() {
     const q = document.getElementById('devSearch').value.trim().toLowerCase();
-    document.querySelectorAll('.ql-device').forEach(el => { el.style.display = (!q || (el.dataset.name||'').toLowerCase().includes(q) || (el.dataset.id||'').toLowerCase().includes(q)) ? '' : 'none'; });
+    document.querySelectorAll('.ql-device').forEach(el => { el.style.display = (!q || (el.dataset.name||'').toLowerCase().includes(q) || (el.dataset.id||'').toLowerCase().includes(q) || (el.dataset.address||'').toLowerCase().includes(q)) ? '' : 'none'; });
 }
 function selectDevice(deviceId) {
     state.current = state.devices.find(d => d.deviceId === deviceId);
@@ -812,7 +1340,8 @@ function updateConnBadge() {
 window.qlPanels = window.qlPanels || {};
 function renderDeviceHeader(d) {
     const online = !!d.connected;
-    return `<div class="ql-dev-header"><div class="ql-dev-identity"><div class="ql-dev-icon">${d.deviceType==='STACKER_CRANE'?'▦':'⌁'}</div><div><div class="ql-dev-title-line"><h2 class="ql-dev-title">${d.deviceName}</h2><span class="ql-dev-state ${online?'online':''}" id="deviceStateText">${online?'在线':'离线'}</span></div><div class="ql-dev-meta"><span>${d.connectionType||'S7'}</span><span>${d.protocol||'-'}</span><span>${d.ip}:${d.port}</span></div></div></div><div class="ql-dev-actions"><button class="glass-btn-outline ql-task-toggle" id="taskToggle" onclick="toggleOpsPanel()">收起任务面板</button><button class="glass-btn btn-connect" id="btnConnect" onclick="doConnect()">连接设备</button><button class="glass-btn btn-disconnect" id="btnDisconnect" onclick="doDisconnect()">断开</button></div></div>`;
+    const taskToggle = d.deviceType === 'STACKER_CRANE' ? '' : '<button class="glass-btn-outline ql-task-toggle" id="taskToggle" onclick="toggleOpsPanel()">收起任务面板</button>';
+    return `<div class="ql-dev-header"><div class="ql-dev-identity"><div class="ql-dev-icon">${d.deviceType==='STACKER_CRANE'?'▦':'⌁'}</div><div><div class="ql-dev-title-line"><h2 class="ql-dev-title">${d.deviceName}</h2><span class="ql-dev-state ${online?'online':''}" id="deviceStateText">${online?'在线':'离线'}</span></div><div class="ql-dev-meta"><span>${d.connectionType||'S7'}</span><span>${d.protocol||'-'}</span><span>${d.ip}:${d.port}</span></div></div></div><div class="ql-dev-actions">${taskToggle}<button class="glass-btn btn-connect" id="btnConnect" onclick="doConnect()">连接设备</button><button class="glass-btn btn-disconnect" id="btnDisconnect" onclick="doDisconnect()">断开</button></div></div>`;
 }
 function renderPanel(d) {
     const content = document.getElementById('deviceContent');
@@ -824,6 +1353,7 @@ function renderPanel(d) {
     updateConnState(d.connected);
     if (handler.init) handler.init(d);
     if (d.connected && handler.onConnected) handler.onConnected(d);
+    if (!d.connected && handler.onDisconnected) handler.onDisconnected(d);
 }
 function updateConnState(connected) {
     const c = document.getElementById('btnConnect'), dc = document.getElementById('btnDisconnect');
@@ -844,7 +1374,29 @@ function toggleOpsPanel() {
 }
 async function doConnect() {
     if (!state.current) return;
-    try { const item = await api(`/${state.current.deviceId}/connect`, {method:'POST'}); state.current.connected = item.connected; updateConnState(true); updateConnBadge(); toast('已连接'); const h = window.qlPanels[state.current.deviceType]; if(h&&h.onConnected) h.onConnected(state.current); } catch(e){ toast('连接失败：'+e.message, false); }
+    try {
+        const item = await api(`/${state.current.deviceId}/connect`, {method:'POST'});
+        state.current.connected = !!item.connected;
+        updateConnState(state.current.connected);
+        updateConnBadge();
+        const h = window.qlPanels[state.current.deviceType];
+        if (state.current.connected) {
+            toast('已连接');
+            if (h && h.onConnected) h.onConnected(state.current);
+        } else {
+            stopPolling();
+            if (h && h.onDisconnected) h.onDisconnected(state.current);
+            toast('连接失败：设备未建立连接', false);
+        }
+    } catch(e) {
+        state.current.connected = false;
+        updateConnState(false);
+        updateConnBadge();
+        stopPolling();
+        const h = window.qlPanels[state.current.deviceType];
+        if (h && h.onDisconnected) h.onDisconnected(state.current);
+        toast('连接失败：'+e.message, false);
+    }
 }
 async function doDisconnect() {
     if (!state.current) return;
@@ -857,6 +1409,8 @@ async function doDisconnect() {
     current.connected = false;
     updateConnState(false);
     updateConnBadge();
+    const handler = window.qlPanels[current.deviceType];
+    if (handler && handler.onDisconnected) handler.onDisconnected(current);
     const button = document.getElementById('btnDisconnect');
     if (button) button.textContent = '正在断开…';
     try {
@@ -871,7 +1425,7 @@ async function doDisconnect() {
 async function doDisconnectLegacy() {
     if (!state.current) return;
     const ok = await qlConfirm('断开连接','确认断开「'+state.current.deviceName+'」？'); if(!ok) return;
-    try { await api(`/${state.current.deviceId}/disconnect`, {method:'POST'}); state.current.connected=false; updateConnState(false); updateConnBadge(); stopPolling(); toast('已断开'); } catch(e){ toast(e.message, false); }
+    try { await api(`/${state.current.deviceId}/disconnect`, {method:'POST'}); state.current.connected=false; updateConnState(false); updateConnBadge(); stopPolling(); const h=window.qlPanels[state.current.deviceType]; if(h&&h.onDisconnected) h.onDisconnected(state.current); toast('已断开'); } catch(e){ toast(e.message, false); }
 }
 
 // ===== 轮询 =====
@@ -884,7 +1438,10 @@ document.addEventListener('visibilitychange', () => { if(document.hidden){if(sta
 function openDeviceDialog(ed) {
     const isEdit = !!ed; const d = ed || {};
     const root = document.getElementById('confirmRoot');
+    const selectedSite = d.siteName || state.activeSite || (state.sites[0] && state.sites[0].siteName) || '';
+    const siteOptions = state.sites.map(site => `<option value="${site.siteName}" ${site.siteName===selectedSite?'selected':''}>${site.siteName}</option>`).join('');
     root.innerHTML = `<div class="ql-modal-overlay" onclick="closeDeviceDialog()"><div class="ql-modal" onclick="event.stopPropagation()"><span class="ql-modal-close" onclick="closeDeviceDialog()">&times;</span><h3>${isEdit?'编辑设备':'添加设备'}</h3><div class="ql-modal-form">
+        <div class="full"><label>所属现场 *</label><select class="glass-input" id="dm_site">${siteOptions}</select></div>
         <div class="full"><label>设备名称 *</label><input class="glass-input" id="dm_name" value="${d.deviceName||''}" placeholder="恒申堆垛机001"></div>
         <div><label>设备类型 *</label><select class="glass-input" id="dm_type"><option value="STACKER_CRANE" ${d.deviceType==='STACKER_CRANE'?'selected':''}>堆垛机</option><option value="CONVEYOR_LINE" ${d.deviceType==='CONVEYOR_LINE'?'selected':''}>输送线</option></select></div>
         <div><label>协议</label><select class="glass-input" id="dm_protocol"><option value="AIMS_V3" ${d.protocol==='AIMS_V3'?'selected':''}>AIMS_V3</option><option value="AIMS_V2" ${d.protocol==='AIMS_V2'?'selected':''}>AIMS_V2</option></select></div>
@@ -898,9 +1455,9 @@ function openDeviceDialog(ed) {
 }
 function closeDeviceDialog() { document.getElementById('confirmRoot').innerHTML = ''; }
 async function submitDeviceForm(editId) {
-    const name=document.getElementById('dm_name').value.trim(), type=document.getElementById('dm_type').value, ip=document.getElementById('dm_ip').value.trim(), port=parseInt(document.getElementById('dm_port').value)||102, rack=parseInt(document.getElementById('dm_rack').value)||0, slot=parseInt(document.getElementById('dm_slot').value)||0, protocol=document.getElementById('dm_protocol').value, connectionType=document.getElementById('dm_conn').value, deviceId=document.getElementById('dm_id').value.trim();
+    const siteName=document.getElementById('dm_site').value, name=document.getElementById('dm_name').value.trim(), type=document.getElementById('dm_type').value, ip=document.getElementById('dm_ip').value.trim(), port=parseInt(document.getElementById('dm_port').value)||102, rack=parseInt(document.getElementById('dm_rack').value)||0, slot=parseInt(document.getElementById('dm_slot').value)||0, protocol=document.getElementById('dm_protocol').value, connectionType=document.getElementById('dm_conn').value, deviceId=document.getElementById('dm_id').value.trim();
     if(!name){toast('请输入设备名称',false);return;} if(!ip){toast('请输入 IP',false);return;}
-    const body={deviceName:name,deviceType:type,ip,port,rack,slot,protocol,connectionType}; if(deviceId&&!editId) body.deviceId=deviceId;
+    const body={siteName,deviceName:name,deviceType:type,ip,port,rack,slot,protocol,connectionType}; if(deviceId&&!editId) body.deviceId=deviceId;
     const editingCurrent = !!(editId && state.current && state.current.deviceId === editId);
     const wasConnected = editingCurrent && state.current.connected;
     if (editingCurrent) stopPolling();
@@ -909,6 +1466,8 @@ async function submitDeviceForm(editId) {
             ? await api(`/devices/${editId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
             : await api('/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         closeDeviceDialog();
+        state.activeSite = siteName;
+        localStorage.setItem('ql_active_site', siteName);
         await loadDeviceTree();
         if (editingCurrent) {
             state.current = state.devices.find(d => d.deviceId === editId) || item;
@@ -925,18 +1484,73 @@ async function submitDeviceForm(editId) {
     }
 }
 async function submitDeviceFormLegacy(editId) {
-    const name=document.getElementById('dm_name').value.trim(), type=document.getElementById('dm_type').value, ip=document.getElementById('dm_ip').value.trim(), port=parseInt(document.getElementById('dm_port').value)||102, rack=parseInt(document.getElementById('dm_rack').value)||0, slot=parseInt(document.getElementById('dm_slot').value)||0, protocol=document.getElementById('dm_protocol').value, connectionType=document.getElementById('dm_conn').value, deviceId=document.getElementById('dm_id').value.trim();
+    const siteName=document.getElementById('dm_site').value, name=document.getElementById('dm_name').value.trim(), type=document.getElementById('dm_type').value, ip=document.getElementById('dm_ip').value.trim(), port=parseInt(document.getElementById('dm_port').value)||102, rack=parseInt(document.getElementById('dm_rack').value)||0, slot=parseInt(document.getElementById('dm_slot').value)||0, protocol=document.getElementById('dm_protocol').value, connectionType=document.getElementById('dm_conn').value, deviceId=document.getElementById('dm_id').value.trim();
     if(!name){toast('请输入设备名称',false);return;} if(!ip){toast('请输入IP',false);return;}
-    const body={deviceName:name,deviceType:type,ip,port,rack,slot,protocol,connectionType}; if(deviceId&&!editId) body.deviceId=deviceId;
+    const body={siteName,deviceName:name,deviceType:type,ip,port,rack,slot,protocol,connectionType}; if(deviceId&&!editId) body.deviceId=deviceId;
     try { if(editId){await api(`/devices/${editId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('已更新');}else{await api('/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('已添加');} closeDeviceDialog(); await loadDeviceTree(); } catch(e){toast(e.message,false);}
 }
 function openDeviceManager() {
     const root = document.getElementById('confirmRoot');
-    const list = state.devices.map(d=>`<div class="ql-dev-list-item"><div class="info"><div class="name">${d.deviceName}</div><div class="meta">${d.deviceTypeLabel} · ${d.ip}:${d.port}</div></div><div class="ops"><a class="edit" onclick="editDeviceFromList('${d.deviceId}')">编辑</a><a class="del" onclick="deleteDeviceFromList('${d.deviceId}','${d.deviceName}')">删除</a></div></div>`).join('');
+    const list = state.devices.map(d=>`<div class="ql-dev-list-item"><div class="info"><div class="name">${d.deviceName}</div><div class="meta">${d.siteName} · ${d.deviceTypeLabel} · ${d.ip}:${d.port}</div></div><div class="ops"><a class="edit" onclick="editDeviceFromList('${d.deviceId}')">编辑</a><a class="del" onclick="deleteDeviceFromList('${d.deviceId}','${d.deviceName}')">删除</a></div></div>`).join('');
     root.innerHTML = `<div class="ql-modal-overlay" onclick="closeDeviceDialog()"><div class="ql-modal" onclick="event.stopPropagation()"><span class="ql-modal-close" onclick="closeDeviceDialog()">&times;</span><h3>设备管理</h3>${list||'<div class="empty-hint">暂无</div>'}<div class="ql-modal-actions"><button class="glass-btn btn-connect" onclick="closeDeviceDialog();openDeviceDialog();">＋ 添加</button></div></div></div>`;
 }
 function editDeviceFromList(id){const d=state.devices.find(x=>x.deviceId===id);if(d){closeDeviceDialog();openDeviceDialog(d);}}
 async function deleteDeviceFromList(id,name){closeDeviceDialog();const ok=await qlConfirm('删除设备','永久删除「'+name+'」？');if(!ok){openDeviceManager();return;}try{await api(`/devices/${id}`,{method:'DELETE'});toast('已删除');if(state.current&&state.current.deviceId===id){state.current=null;stopPolling();document.getElementById('deviceContent').innerHTML='<div class="ql-content-top" style="display:flex;align-items:center;justify-content:center;"><div class="empty-hint">🐉 请选择设备</div></div>';}await loadDeviceTree();}catch(e){toast(e.message,false);}}
+
+// ===== 现场管理 =====
+function openSiteManager(focusNew) {
+    const root = document.getElementById('confirmRoot');
+    const rows = state.sites.map((site, index) => {
+        const encoded = encodeURIComponent(site.siteName);
+        return `<div class="ql-site-list-row"><input class="glass-input" id="sm_site_${index}" value="${site.siteName}"><span class="site-count">${site.deviceCount} 台设备</span><button class="glass-btn-outline" onclick="renameSite(decodeURIComponent('${encoded}'),${index})">保存</button><button class="glass-btn-outline" style="color:#dc5968" onclick="deleteSite(decodeURIComponent('${encoded}'))">删除</button></div>`;
+    }).join('');
+    root.innerHTML = `<div class="ql-modal-overlay" onclick="closeDeviceDialog()"><div class="ql-modal" onclick="event.stopPropagation()"><span class="ql-modal-close" onclick="closeDeviceDialog()">&times;</span><h3>现场管理</h3><div style="display:flex;gap:8px;margin-bottom:12px"><input class="glass-input" id="sm_new" placeholder="例如：比图美欣达" style="flex:1"><button class="glass-btn btn-connect" onclick="addSite()">＋ 新建现场</button></div>${rows||'<div class="empty-hint">暂无现场</div>'}<div class="ql-modal-actions"><button class="glass-btn-outline" onclick="closeDeviceDialog()">完成</button></div></div></div>`;
+    if (focusNew) setTimeout(() => document.getElementById('sm_new')?.focus(), 0);
+}
+async function addSite() {
+    const input = document.getElementById('sm_new');
+    const siteName = input ? input.value.trim() : '';
+    if (!siteName) { toast('请输入现场名称', false); return; }
+    try {
+        await api('/sites', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({siteName})});
+        state.activeSite = siteName;
+        localStorage.setItem('ql_active_site', siteName);
+        closeDeviceDialog();
+        await loadDeviceTree();
+        toast('现场已创建');
+    } catch (e) { toast(e.message, false); }
+}
+async function renameSite(oldName, index) {
+    const input = document.getElementById('sm_site_' + index);
+    const siteName = input ? input.value.trim() : '';
+    if (!siteName) { toast('现场名称不能为空', false); return; }
+    try {
+        await api('/sites/' + encodeURIComponent(oldName), {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({siteName})});
+        if (state.activeSite === oldName) {
+            state.activeSite = siteName;
+            localStorage.setItem('ql_active_site', siteName);
+        }
+        closeDeviceDialog();
+        await loadDeviceTree();
+        openSiteManager();
+        toast('现场名称已更新');
+    } catch (e) { toast(e.message, false); }
+}
+async function deleteSite(siteName) {
+    closeDeviceDialog();
+    const ok = await qlConfirm('删除现场', `确认删除“${siteName}”？现场下有设备时不能删除。`);
+    if (!ok) { openSiteManager(); return; }
+    try {
+        await api('/sites/' + encodeURIComponent(siteName), {method:'DELETE'});
+        if (state.activeSite === siteName) state.activeSite = '';
+        await loadDeviceTree();
+        openSiteManager();
+        toast('现场已删除');
+    } catch (e) {
+        toast(e.message, false);
+        openSiteManager();
+    }
+}
 
 // ===== 时钟 + 启动 =====
 setInterval(()=>{const el=document.getElementById('clock');if(el)el.textContent=new Date().toLocaleString('zh-CN');},1000);
@@ -944,8 +1558,8 @@ setInterval(()=>{const el=document.getElementById('clock');if(el)el.textContent=
 </script>
 
 <script src="xlsx.full.min.js"></script>
-<script src="ql-tool-map.js?_=20260722b"></script>
-<script src="ql-tool-crane.js?_=20260716c"></script>
-<script src="ql-tool-conveyor.js?_=20260722a"></script>
+<script src="ql-tool-map.js?_=20260728h"></script>
+<script src="ql-tool-crane.js?_=20260729g"></script>
+<script src="ql-tool-conveyor.js?_=20260728b"></script>
 </body>
 </html>

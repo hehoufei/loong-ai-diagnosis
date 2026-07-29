@@ -6,6 +6,7 @@ import cn.aimstek.loong.aidiag.qltool.config.QlToolProperties;
 import cn.aimstek.loong.aidiag.qltool.config.QlToolProperties.DeviceConfig;
 import cn.aimstek.loong.aidiag.qltool.dto.DeviceItem;
 import cn.aimstek.loong.aidiag.qltool.dto.DeviceTreeGroup;
+import cn.aimstek.loong.aidiag.qltool.dto.SiteItem;
 import cn.aimstek.loong.aidiag.qltool.service.DeviceSessionManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,39 @@ public class QlToolController {
     @GetMapping("/devices")
     public Response<List<DeviceTreeGroup>> devices() {
         return BaseResponse.success(manager.getDeviceTree());
+    }
+
+    @GetMapping("/sites")
+    public Response<List<SiteItem>> sites() {
+        return BaseResponse.success(manager.getSites());
+    }
+
+    @PostMapping("/sites")
+    public Response<SiteItem> addSite(@RequestBody Map<String, String> body) {
+        try {
+            return BaseResponse.success(manager.addSite(body.get("siteName")));
+        } catch (IllegalArgumentException e) {
+            return BaseResponse.failure("INVALID_SITE", e.getMessage());
+        }
+    }
+
+    @PutMapping("/sites/{siteName}")
+    public Response<SiteItem> renameSite(@PathVariable String siteName, @RequestBody Map<String, String> body) {
+        try {
+            return BaseResponse.success(manager.renameSite(siteName, body.get("siteName")));
+        } catch (IllegalArgumentException e) {
+            return BaseResponse.failure("INVALID_SITE", e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/sites/{siteName}")
+    public Response<Void> removeSite(@PathVariable String siteName) {
+        try {
+            manager.removeSite(siteName);
+            return BaseResponse.success(null);
+        } catch (IllegalArgumentException e) {
+            return BaseResponse.failure("INVALID_SITE", e.getMessage());
+        }
     }
 
     /** 单设备信息 */

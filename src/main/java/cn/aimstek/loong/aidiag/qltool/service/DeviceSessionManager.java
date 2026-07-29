@@ -5,13 +5,13 @@ import cn.aimstek.loong.aidiag.qltool.config.QlToolProperties.DeviceConfig;
 import cn.aimstek.loong.aidiag.qltool.device.DeviceType;
 import cn.aimstek.loong.aidiag.qltool.dto.DeviceItem;
 import cn.aimstek.loong.aidiag.qltool.dto.DeviceTreeGroup;
+import cn.aimstek.loong.aidiag.qltool.dto.SiteItem;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -21,43 +21,77 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 设备会话管理：从配置 + 持久化 JSON 文件加载设备清单，支持运行时动态增删改。
  *
- * <p>设备来源优先级：application.yml（只读基线） + ql-tool-devices.json（运行时可写）。
+ * <p>首次启动从 application.yml 初始化；之后以用户目录中的 devices.json 完整快照为准。
  * <p>模块自持有会话，不与现有功能共享任何状态；所有 S7 连接均懒加载。
  */
 @Slf4j
 @Service
 public class DeviceSessionManager {
 
+    public static final String DEFAULT_SITE_NAME = "恒申美达";
+
     private final QlToolProperties properties;
+    private final QlToolDataStore dataStore;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** deviceId -> 配置（合并 yml + json） */
     private final Map<String, DeviceConfig> configMap = new LinkedHashMap<>();
+    /** 按创建顺序保存现场；允许现场暂时没有设备。 */
+    private final Set<String> sites = new LinkedHashSet<>();
     /** deviceId -> 会话（懒创建） */
     private final Map<String, DeviceSession> sessions = new ConcurrentHashMap<>();
     /** Prevent an in-flight polling request from recreating an explicitly retired session. */
     private final Set<String> disconnectedDevices = ConcurrentHashMap.newKeySet();
 
-    /** 运行时持久化文件路径（与 jar 同目录） */
-    private Path persistFile;
-
-    public DeviceSessionManager(QlToolProperties properties) {
+    public DeviceSessionManager(QlToolProperties properties, QlToolDataStore dataStore) {
         this.properties = properties;
+        this.dataStore = dataStore;
     }
 
     @PostConstruct
     public void init() {
-        // 1. 从 yml 加载基线设备
+        configMap.clear();
+        sites.clear();
+        QlToolDataStore.SiteSnapshot siteSnapshot = dataStore.loadSites();
+        if (siteSnapshot.exists()) {
+            siteSnapshot.sites().stream()
+                    .map(this::normalizeSiteName)
+                    .forEach(sites::add);
+        }
+        QlToolDataStore.DeviceSnapshot snapshot = dataStore.loadDevices();
+        if (snapshot.exists()) {
+            for (DeviceConfig d : snapshot.devices()) {
+                if (d.getDeviceId() != null && !d.getDeviceId().isBlank()) {
+                    d.setSiteName(normalizeSiteName(d.getSiteName()));
+                    sites.add(d.getSiteName());
+                    configMap.put(d.getDeviceId(), copyConfig(d));
+                }
+            }
+            ensureDefaultSite();
+            saveSites();
+            log.info("[青龙调试工具] 从固定数据目录恢复设备 {} 台", configMap.size());
+            return;
+        }
+
+        // 首次运行以 yml 为初始值。
         for (DeviceConfig d : properties.getDevices()) {
             if (d.getDeviceId() != null) {
-                // Keep the immutable YAML baseline separate so edits can be detected and persisted.
+                d.setSiteName(normalizeSiteName(d.getSiteName()));
+                sites.add(d.getSiteName());
                 configMap.put(d.getDeviceId(), copyConfig(d));
             }
         }
-        // 2. 从 JSON 文件加载运行时追加的设备
-        persistFile = resolvePersistFile();
-        loadFromFile();
-        log.info("[青龙调试工具] 载入设备 {} 台（yml + 持久化）", configMap.size());
+
+        // 兼容旧版本相对路径 data/ql-tool-devices.json，迁移后统一保存完整快照。
+        int migrated = loadLegacyOverrides();
+        configMap.values().forEach(d -> {
+            d.setSiteName(normalizeSiteName(d.getSiteName()));
+            sites.add(d.getSiteName());
+        });
+        ensureDefaultSite();
+        saveToFile();
+        saveSites();
+        log.info("[青龙调试工具] 初始化设备 {} 台（其中旧文件迁移 {} 台）", configMap.size(), migrated);
     }
 
     // ==================== 设备 CRUD ====================
@@ -70,8 +104,11 @@ public class DeviceSessionManager {
         if (configMap.containsKey(config.getDeviceId())) {
             throw new IllegalArgumentException("设备ID已存在: " + config.getDeviceId());
         }
+        config.setSiteName(normalizeSiteName(config.getSiteName()));
+        sites.add(config.getSiteName());
         configMap.put(config.getDeviceId(), config);
         saveToFile();
+        saveSites();
         return toItem(config);
     }
 
@@ -86,6 +123,10 @@ public class DeviceSessionManager {
         }
         // 更新字段
         if (updated.getDeviceName() != null) existing.setDeviceName(updated.getDeviceName());
+        if (updated.getSiteName() != null) {
+            existing.setSiteName(normalizeSiteName(updated.getSiteName()));
+            sites.add(existing.getSiteName());
+        }
         if (updated.getDeviceType() != null) existing.setDeviceType(updated.getDeviceType());
         if (updated.getIp() != null) existing.setIp(updated.getIp());
         if (updated.getPort() > 0) existing.setPort(updated.getPort());
@@ -94,6 +135,7 @@ public class DeviceSessionManager {
         if (updated.getProtocol() != null) existing.setProtocol(updated.getProtocol());
         if (updated.getConnectionType() != null) existing.setConnectionType(updated.getConnectionType());
         saveToFile();
+        saveSites();
         return toItem(existing);
     }
 
@@ -127,6 +169,59 @@ public class DeviceSessionManager {
             group.getDevices().add(toItem(d));
         }
         return new ArrayList<>(groups.values());
+    }
+
+    public synchronized List<SiteItem> getSites() {
+        ensureDefaultSite();
+        return sites.stream().map(site -> {
+            int stackers = 0;
+            int conveyors = 0;
+            for (DeviceConfig device : configMap.values()) {
+                if (!site.equals(normalizeSiteName(device.getSiteName()))) continue;
+                DeviceType type = DeviceType.from(device.getDeviceType());
+                if (type == DeviceType.STACKER_CRANE) stackers++;
+                if (type == DeviceType.CONVEYOR_LINE) conveyors++;
+            }
+            return new SiteItem(site, stackers + conveyors, stackers, conveyors);
+        }).toList();
+    }
+
+    public synchronized SiteItem addSite(String siteName) {
+        String normalized = requireSiteName(siteName);
+        if (!sites.add(normalized)) {
+            throw new IllegalArgumentException("现场已存在: " + normalized);
+        }
+        saveSites();
+        return getSites().stream().filter(site -> site.getSiteName().equals(normalized)).findFirst().orElseThrow();
+    }
+
+    public synchronized SiteItem renameSite(String oldName, String newName) {
+        String oldNormalized = requireSiteName(oldName);
+        String newNormalized = requireSiteName(newName);
+        if (!sites.contains(oldNormalized)) throw new IllegalArgumentException("现场不存在: " + oldNormalized);
+        if (!oldNormalized.equals(newNormalized) && sites.contains(newNormalized)) {
+            throw new IllegalArgumentException("现场已存在: " + newNormalized);
+        }
+        LinkedHashSet<String> renamed = new LinkedHashSet<>();
+        sites.forEach(site -> renamed.add(site.equals(oldNormalized) ? newNormalized : site));
+        sites.clear();
+        sites.addAll(renamed);
+        configMap.values().stream()
+                .filter(device -> oldNormalized.equals(normalizeSiteName(device.getSiteName())))
+                .forEach(device -> device.setSiteName(newNormalized));
+        saveToFile();
+        saveSites();
+        return getSites().stream().filter(site -> site.getSiteName().equals(newNormalized)).findFirst().orElseThrow();
+    }
+
+    public synchronized void removeSite(String siteName) {
+        String normalized = requireSiteName(siteName);
+        boolean hasDevice = configMap.values().stream()
+                .anyMatch(device -> normalized.equals(normalizeSiteName(device.getSiteName())));
+        if (hasDevice) throw new IllegalArgumentException("现场下仍有设备，请先移动或删除设备");
+        if (!sites.remove(normalized)) throw new IllegalArgumentException("现场不存在: " + normalized);
+        ensureDefaultSite();
+        saveSites();
     }
 
     /** 单设备信息 */
@@ -184,6 +279,7 @@ public class DeviceSessionManager {
         DeviceItem item = new DeviceItem();
         item.setDeviceId(d.getDeviceId());
         item.setDeviceName(d.getDeviceName());
+        item.setSiteName(normalizeSiteName(d.getSiteName()));
         item.setDeviceType(type.name());
         item.setDeviceTypeLabel(type.getLabel());
         item.setIp(d.getIp());
@@ -206,77 +302,56 @@ public class DeviceSessionManager {
 
     // ==================== JSON 持久化 ====================
 
-    private Path resolvePersistFile() {
-        // 优先放到 jar 同目录的 data/ 下；IDE 开发环境则在 working dir
-        Path dataDir = Paths.get("data");
-        try {
-            Files.createDirectories(dataDir);
-        } catch (IOException e) {
-            log.warn("[青龙调试工具] 创建 data 目录失败，持久化将不可用: {}", e.getMessage());
-        }
-        return dataDir.resolve("ql-tool-devices.json");
-    }
-
-    private void loadFromFile() {
-        if (!Files.exists(persistFile)) {
-            return;
-        }
+    private int loadLegacyOverrides() {
+        Path legacyFile = Paths.get("data", "ql-tool-devices.json");
+        if (!Files.exists(legacyFile)) return 0;
         try {
             List<DeviceConfig> list = objectMapper.readValue(
-                    persistFile.toFile(), new TypeReference<List<DeviceConfig>>() {});
+                    legacyFile.toFile(), new TypeReference<List<DeviceConfig>>() {});
             for (DeviceConfig d : list) {
-                if (d.getDeviceId() != null) {
-                    // Persisted runtime values override the YAML baseline.
-                    configMap.put(d.getDeviceId(), d);
+                if (d.getDeviceId() != null && !d.getDeviceId().isBlank()) {
+                    configMap.put(d.getDeviceId(), copyConfig(d));
                 }
             }
-            log.info("[青龙调试工具] 从持久化文件加载 {} 台运行时设备", list.size());
-        } catch (IOException e) {
-            log.warn("[青龙调试工具] 读取持久化文件失败: {}", e.getMessage());
+            log.info("[青龙调试工具] 已迁移旧设备文件 {}，共 {} 台", legacyFile.toAbsolutePath(), list.size());
+            return list.size();
+        } catch (Exception e) {
+            log.warn("[青龙调试工具] 读取旧设备文件失败，将使用 yml 初始值: {}", e.getMessage());
+            return 0;
         }
     }
 
     private void saveToFile() {
-        // 只保存非 yml 来源的设备（与 yml 基线取差集）
-        Set<String> ymlIds = new HashSet<>();
-        for (DeviceConfig d : properties.getDevices()) {
-            if (d.getDeviceId() != null) ymlIds.add(d.getDeviceId());
-        }
-        List<DeviceConfig> runtimeDevices = new ArrayList<>();
-        for (Map.Entry<String, DeviceConfig> e : configMap.entrySet()) {
-            if (!ymlIds.contains(e.getKey())) {
-                runtimeDevices.add(e.getValue());
-            } else {
-                // yml 设备如果被修改了也保存（覆盖）
-                DeviceConfig original = properties.getDevices().stream()
-                        .filter(d -> e.getKey().equals(d.getDeviceId())).findFirst().orElse(null);
-                if (original != null && !configEquals(original, e.getValue())) {
-                    runtimeDevices.add(e.getValue());
-                }
-            }
-        }
-        try {
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(persistFile.toFile(), runtimeDevices);
-        } catch (IOException ex) {
-            log.warn("[青龙调试工具] 保存持久化文件失败: {}", ex.getMessage());
-        }
+        List<DeviceConfig> devices = configMap.values().stream()
+                .map(this::copyConfig)
+                .toList();
+        dataStore.saveDevices(devices);
     }
 
-    private boolean configEquals(DeviceConfig a, DeviceConfig b) {
-        return Objects.equals(a.getDeviceName(), b.getDeviceName())
-                && Objects.equals(a.getDeviceType(), b.getDeviceType())
-                && Objects.equals(a.getIp(), b.getIp())
-                && a.getPort() == b.getPort()
-                && a.getRack() == b.getRack()
-                && a.getSlot() == b.getSlot()
-                && Objects.equals(a.getProtocol(), b.getProtocol())
-                && Objects.equals(a.getConnectionType(), b.getConnectionType());
+    private void saveSites() {
+        dataStore.saveSites(new ArrayList<>(sites));
+    }
+
+    private void ensureDefaultSite() {
+        if (sites.isEmpty()) sites.add(DEFAULT_SITE_NAME);
+    }
+
+    private String normalizeSiteName(String siteName) {
+        return siteName == null || siteName.isBlank() ? DEFAULT_SITE_NAME : siteName.trim();
+    }
+
+    private String requireSiteName(String siteName) {
+        String normalized = siteName == null ? "" : siteName.trim();
+        if (normalized.isEmpty()) throw new IllegalArgumentException("现场名称不能为空");
+        if (normalized.length() > 40) throw new IllegalArgumentException("现场名称不能超过40个字符");
+        return normalized;
     }
 
     private DeviceConfig copyConfig(DeviceConfig source) {
         DeviceConfig copy = new DeviceConfig();
         copy.setDeviceId(source.getDeviceId());
         copy.setDeviceName(source.getDeviceName());
+        copy.setSiteName(normalizeSiteName(source.getSiteName()));
         copy.setDeviceType(source.getDeviceType());
         copy.setIp(source.getIp());
         copy.setPort(source.getPort());

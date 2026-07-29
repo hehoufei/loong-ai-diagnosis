@@ -30,7 +30,13 @@
             ['index', '索引'], ['pointCode', '货位号'], ['state', '请求状态'], ['source', '请求来源'], ['data', '请求数据'] ] },
         { key: 'shape-states', label: '外形检测', cols: [
             ['index', '索引'], ['pointCode', '货位号'], ['detectState', '检测结果'],
-            ['detectionResultX', 'X'], ['detectionResultY', 'Y'], ['detectionResultZ', 'Z'], ['detectionData', '数据'] ] }
+            ['detectionResultX', 'X'], ['detectionResultY', 'Y'], ['detectionResultZ', 'Z'], ['detectionData', '数据'] ] },
+        { key: 'delete-history', label: '删除记录', history: true, offline: true, static: true, cols: [
+            ['deletedAt', '时间', v => String(v || '').replace('T', ' ').replace(/\.\d+(?=[+Z-])/, '')],
+            ['taskNo', '任务号'], ['pointCode', '点位'],
+            ['source', '来源', v => ({ MAP: '点位图', TASK_TABLE: '输送任务表', TASK_FORM: '任务面板' }[v] || v || '-')],
+            ['action', '动作', v => v === 'CLEAR' ? '清理槽位' : '删除指令'],
+            ['result', '结果', v => v === 'SUCCESS' ? '成功' : '失败'], ['message', '说明'] ] }
     ];
 
     // 地图是现场调试的主视图；任务和明细表作为辅助信息按需切换。
@@ -39,6 +45,7 @@
     let lastRows = [];
     let taskPointPickTarget = null;
     let taskRouteOptions = [];
+    const layoutSaveTimers = new Map();
 
     // ---------- 布局持久化 ----------
     const LAYOUT_SCHEMA = '4';
@@ -54,6 +61,53 @@
     function autoKey(deviceId) { return 'ql_autolink_' + deviceId; }
     function loadAuto(deviceId) { const v = localStorage.getItem(autoKey(deviceId)); return v === null ? true : v === '1'; }
     function saveAuto(deviceId, on) { localStorage.setItem(autoKey(deviceId), on ? '1' : '0'); }
+
+    function scheduleServerLayoutSave(deviceId, layout) {
+        clearTimeout(layoutSaveTimers.get(deviceId));
+        layoutSaveTimers.set(deviceId, setTimeout(() => {
+            persistLayout(deviceId, layout);
+            layoutSaveTimers.delete(deviceId);
+        }, 300));
+    }
+
+    async function persistLayout(deviceId, layout) {
+        try {
+            await api(`/conveyor/${deviceId}/layout`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(layout || [])
+            });
+            return true;
+        } catch (e) {
+            toast('布局已保存在当前浏览器，但服务器保存失败：' + e.message, false);
+            return false;
+        }
+    }
+
+    async function syncLayoutFromServer(deviceId) {
+        try {
+            const snapshot = await api(`/conveyor/${deviceId}/layout`);
+            if (!snapshot) return;
+            if (!state.current || state.current.deviceId !== deviceId || activeView !== 'map') return;
+            if (snapshot.exists) {
+                const serverLayout = Array.isArray(snapshot.layout) ? snapshot.layout : [];
+                saveLayout(deviceId, serverLayout);
+                markCurrentLayout(deviceId);
+                if (window.qlMap) window.qlMap.setLayout(serverLayout);
+                const empty = document.getElementById('cv_map_empty');
+                if (empty) empty.hidden = serverLayout.length > 0;
+                refreshMap();
+                return;
+            }
+            const browserLayout = loadLayout(deviceId);
+            if (browserLayout && browserLayout.length) {
+                await persistLayout(deviceId, browserLayout);
+                toast('已将浏览器中的旧布局迁移到服务器');
+            }
+        } catch (e) {
+            console.warn('[ql-tool] 服务器布局加载失败，继续使用浏览器缓存', e);
+        }
+    }
 
     function inferredDirs(p, posSet) {
         const dirs = [];
@@ -78,7 +132,19 @@
             }
         }
         if (!code) return null;
-        return { code: code, dirs: dirs };
+        if (!isImportedPointCode(code)) return { kind: 'label', text: code };
+        return { kind: 'point', code: code, dirs: dirs };
+    }
+
+    function isImportedPointCode(value) {
+        const code = String(value === null || value === undefined ? '' : value).trim();
+        // PLC 点位通常是纯数字或含数字的 ASCII 编码；中文/带空格内容按地图说明文字处理。
+        return /^\d+$/.test(code) || /^(?=.*\d)[A-Za-z0-9_.:-]+$/.test(code);
+    }
+
+    function isLayoutPoint(item) {
+        if (!item || item.kind === 'label') return false;
+        return item.kind === 'point' || isImportedPointCode(item.code);
     }
 
     function parseLayout(text) {
@@ -90,7 +156,9 @@
             const cells = line.split(line.indexOf('\t') >= 0 ? '\t' : ',');
             cells.forEach((cell, c) => {
                 const p = parseCell(cell);
-                if (p) layout.push({ code: p.code, r: r, c: c, dirs: p.dirs });
+                if (!p) return;
+                if (p.kind === 'label') layout.push({ kind: 'label', text: p.text, r: r, c: c });
+                else layout.push({ kind: 'point', code: p.code, r: r, c: c, dirs: p.dirs });
             });
         });
         return layout;
@@ -144,7 +212,7 @@
     }
 
     function pointInp(label, id, target) {
-        return `<div class="ql-ops-item ql-point-pick"><label>${label}</label><div class="ql-point-input"><input class="glass-input" type="text" id="${id}" value="0" oninput="cvTaskPointChanged()"><button type="button" onclick="cvPickTaskPoint('${target}')" title="从地图选择${label}">⌖ 选点</button></div></div>`;
+        return `<div class="ql-ops-item ql-point-pick"><label>${label}</label><div class="ql-point-input"><input class="glass-input" type="text" id="${id}" value="" placeholder="请选择${label}" oninput="cvTaskPointChanged()"><button type="button" onclick="cvPickTaskPoint('${target}')" title="从地图选择${label}">⌖ 选点</button></div></div>`;
     }
 
     // ---------- Tab 切换 ----------
@@ -188,6 +256,7 @@
             `<div class="ql-table-toolbar">
                 <input class="glass-input" type="text" placeholder="搜索（货位号/任务号）…" id="cv_filter" oninput="cvFilter(this.value)">
                 <span class="count" id="cv_count"></span>
+                ${tab.history ? '<button class="glass-btn-outline ql-map-delete" onclick="cvClearDeleteHistory()">清空删除记录</button>' : ''}
             </div>
             <div class="ql-table-wrap"><table class="glass-table" id="cv_table"><thead><tr>${
                 tab.cols.map(c => `<th>${c[1]}</th>`).join('') + (tab.ops ? '<th>操作</th>' : '')
@@ -275,11 +344,7 @@
                 <span class="ql-map-live" id="cv_mapstat">等待连接设备</span>
             </div>
             <div class="ql-map-toolbar">
-                <div class="ql-map-toolgroup ql-map-mode-tools" aria-label="地图操作模式">
-                    <button class="glass-btn-outline ql-map-action is-active" id="btn_map_select" onclick="cvMapSelect()">浏览选择</button>
-                    <button class="glass-btn-outline ql-map-action" id="btn_editmap" onclick="cvToggleEdit()">移动点位</button>
-                    <button class="glass-btn-outline ql-map-action" id="btn_linkmap" onclick="cvToggleLink()">连接轨道</button>
-                </div>
+                <div class="ql-map-direct-hint">拖动点位移动 <span>·</span> Shift＋拖动点位连线 <span>·</span> 双击修改编码 <span>·</span> 右键删除</div>
                 <div class="ql-map-toolgroup ql-map-file-tools">
                     <button class="glass-btn-outline" onclick="document.getElementById('cv_layout_file').click()">导入布局</button>
                     <button class="glass-btn-outline" onclick="cvRepairLinks()">自动补线</button>
@@ -300,7 +365,7 @@
                     <div class="ql-map-inspector-title">状态图例</div>
                     <div class="ql-map-legend"><span class="ql-legend-item"><i class="ql-legend-dot ql-legend-idle"></i>空闲</span><span class="ql-legend-item"><i class="ql-legend-dot ql-legend-load"></i>有货</span><span class="ql-legend-item"><i class="ql-legend-dot ql-legend-task"></i>任务中</span><span class="ql-legend-item"><i class="ql-legend-dot ql-legend-alarm"></i>报警</span></div>
                     <div class="ql-map-inspector-divider"></div>
-                    <div class="ql-map-tips"><b>操作提示</b><span>滚轮缩放画布</span><span>拖拽空白区域平移</span><span>Delete 删除选中轨道</span></div>
+                    <div class="ql-map-tips"><b>操作提示</b><span>任务号旁 × 可直接删除任务</span><span>滚轮缩放画布</span><span>拖拽空白区域平移</span><span>Delete 删除选中轨道</span></div>
                 </aside>
             </div>`;
 
@@ -310,11 +375,16 @@
         window.qlMap.onChanged(newLayout => {
             saveLayout(d.deviceId, newLayout);
             markCurrentLayout(d.deviceId);
+            scheduleServerLayoutSave(d.deviceId, newLayout);
             const empty = document.getElementById('cv_map_empty');
             if (empty) empty.hidden = newLayout.length > 0;
         });
         window.qlMap.onSelectionChanged(updateMapSelection);
         window.qlMap.onViewChanged(updateMapZoom);
+        window.qlMap.onTaskDelete(task => {
+            if (task && task.taskNo > 0) window.cvMapRemoveTask(task.taskNo, task.pointCode);
+        });
+        window.qlMap.onNodeClick(handleTaskPointPick);
         if (layout && layout.length > 0) {
             const migrateLegacy = loadLayoutSchema(d.deviceId) !== LAYOUT_SCHEMA;
             window.qlMap.setLayout(layout, {
@@ -328,6 +398,7 @@
         updateMapToolbar();
         updateMapZoom(window.qlMap.getZoom());
         updateTaskPointNotice();
+        syncLayoutFromServer(d.deviceId);
     }
 
     function renderMapGrid() {
@@ -342,19 +413,25 @@
         grid.forEach((row, r) => {
             (row || []).forEach((cell, c) => {
                 const point = parseCell(cell);
-                if (point) layout.push({ code: point.code, r: r, c: c, dirs: point.dirs });
+                if (!point) return;
+                if (point.kind === 'label') layout.push({ kind: 'label', text: point.text, r: r, c: c });
+                else layout.push({ kind: 'point', code: point.code, r: r, c: c, dirs: point.dirs });
             });
         });
         return layout;
     }
 
-    function applyLayout(layout) {
+    async function applyLayout(layout) {
         if (!layout || layout.length === 0) { toast('未解析到有效货位号', false); return; }
         resetLayoutSchema(state.current.deviceId);
         saveLayout(state.current.deviceId, layout);
+        markCurrentLayout(state.current.deviceId);
+        await persistLayout(state.current.deviceId, layout);
         renderMapShell();
         refreshMap();
-        toast('已导入 ' + layout.length + ' 个点位，并生成可编辑拓扑');
+        const pointCount = layout.filter(isLayoutPoint).length;
+        const labelCount = layout.length - pointCount;
+        toast('已导入 ' + pointCount + ' 个点位' + (labelCount ? '、' + labelCount + ' 条文字说明' : '') + '，并生成可编辑拓扑');
     }
 
     window.cvImportLayout = function (ev) {
@@ -380,7 +457,15 @@
         ev.target.value = '';
     };
 
-    window.cvClearLayout = function () {
+    window.cvClearLayout = async function () {
+        const ok = await qlConfirm('确认清空布局', '将清空当前设备保存在服务器和浏览器中的点位布局，是否继续？');
+        if (!ok) return;
+        try {
+            await api(`/conveyor/${state.current.deviceId}/layout`, { method: 'DELETE' });
+        } catch (e) {
+            toast('服务器布局清理失败：' + e.message, false);
+            return;
+        }
         localStorage.removeItem(layoutKey(state.current.deviceId));
         resetLayoutSchema(state.current.deviceId);
         renderMapShell();
@@ -406,6 +491,10 @@
         taskPointPickTarget = target === 'end' ? 'end' : 'start';
         if (activeView !== 'map') window.cvTab('map');
         if (window.qlMap) window.qlMap.setMode('view');
+        if (window.qlMap) window.qlMap.clearSelection();
+        const input = document.getElementById(taskPointPickTarget === 'start' ? 'cv_t_start' : 'cv_t_end');
+        if (input) input.value = '';
+        window.cvTaskPointChanged();
         updateMapToolbar();
         updateTaskPointNotice();
         toast('请在地图中点击一个点位作为' + (taskPointPickTarget === 'start' ? '起点' : '终点'));
@@ -420,6 +509,21 @@
         if (!notice) return;
         notice.hidden = !taskPointPickTarget;
         notice.textContent = taskPointPickTarget ? '点击点位选择' + (taskPointPickTarget === 'start' ? '起点' : '终点') : '';
+    }
+
+    function handleTaskPointPick(selection) {
+        if (!taskPointPickTarget || !selection || !selection.node) return;
+        const pickedTarget = taskPointPickTarget;
+        const input = document.getElementById(pickedTarget === 'start' ? 'cv_t_start' : 'cv_t_end');
+        if (input) input.value = selection.node;
+        taskPointPickTarget = null;
+        updateTaskPointNotice();
+        window.cvTaskPointChanged();
+        toast('已选择' + (pickedTarget === 'start' ? '起点' : '终点') + '：' + selection.node);
+        setTimeout(() => {
+            const panel = document.querySelector('.ql-content-bottom');
+            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 180);
     }
 
     window.cvTaskPointChanged = function () {
@@ -499,27 +603,26 @@
         if (!detail) return;
         if (selection.node) {
             const pointState = selection.nodeState || {};
+            if (pointState.offline) {
+                detail.className = 'ql-map-selection has-selection';
+                detail.innerHTML = `<span class="ql-map-selection-icon">▦</span><small>点位</small><b>${selection.node}</b><div class="ql-map-state-grid"><span>● 设备离线</span></div><em>实时状态已清空，连接设备后自动恢复</em>`;
+                return;
+            }
+            const taskHtml = pointState.taskNo
+                ? `<button type="button" class="ql-map-task-delete" title="删除输送任务 ${pointState.taskNo}"><span>任务 ${pointState.taskNo}</span><b>删除</b></button>`
+                : '<span class="task-state">无任务</span>';
             detail.className = 'ql-map-selection has-selection';
-            detail.innerHTML = `<span class="ql-map-selection-icon">▦</span><small>点位</small><b>${selection.node}</b><div class="ql-map-state-grid"><span class="${pointState.occupied?'is-occupied':''}">${pointState.occupied?'● 已占位':'○ 空位'}</span><span class="task-state ${pointState.taskNo?'is-task':''}">${pointState.taskNo?'任务 '+pointState.taskNo:'无任务'}</span><span class="${pointState.alarm?'is-alarm':'is-normal'}">${pointState.alarm?'⚠ 有报警':'✓ 无报警'}</span></div><em>双击可修改点位编号</em>`;
+            detail.innerHTML = `<span class="ql-map-selection-icon">▦</span><small>点位</small><b>${selection.node}</b><div class="ql-map-state-grid"><span class="${pointState.occupied?'is-occupied':''}">${pointState.occupied?'● 已占位':'○ 空位'}</span>${taskHtml}<span class="${pointState.alarm?'is-alarm':'is-normal'}">${pointState.alarm?'⚠ 有报警':'✓ 无报警'}</span></div><em>${pointState.taskNo?'点击任务右侧“删除”可直接删除输送任务':'双击可修改点位编号'}</em>`;
+            const taskDeleteButton = detail.querySelector('.ql-map-task-delete');
+            if (taskDeleteButton) {
+                taskDeleteButton.onclick = () => window.cvMapRemoveTask(Number(pointState.taskNo), String(selection.node));
+            }
         } else if (selection.link) {
             detail.className = 'ql-map-selection has-selection';
             detail.innerHTML = `<span class="ql-map-selection-icon">→</span><small>输送轨道</small><b>${selection.link.from} → ${selection.link.to}</b><em>按 Delete 可快速删除</em>`;
         } else {
             detail.className = 'ql-map-selection';
             detail.innerHTML = '<span class="ql-map-selection-icon">⌖</span><b>未选择对象</b><small>点击点位或轨道查看详情</small>';
-        }
-        if (selection.node && taskPointPickTarget) {
-            const pickedTarget = taskPointPickTarget;
-            const input = document.getElementById(pickedTarget === 'start' ? 'cv_t_start' : 'cv_t_end');
-            if (input) input.value = selection.node;
-            taskPointPickTarget = null;
-            updateTaskPointNotice();
-            window.cvTaskPointChanged();
-            toast('已选择' + (pickedTarget === 'start' ? '起点' : '终点') + '：' + selection.node);
-            setTimeout(() => {
-                const panel = document.querySelector('.ql-content-bottom');
-                if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }, 180);
         }
     }
 
@@ -552,15 +655,19 @@
         if (!d || !d.connected || activeView !== 'map') return;
         let nodes;
         try { nodes = await api(`/conveyor/${d.deviceId}/node-states`); } catch (e) { return; }
+        // 断开时可能仍有一个已发出的读取请求在返回；不能让迟到响应恢复旧状态。
+        if (!d.connected || state.current !== d || activeView !== 'map') return;
+        window.qlMap.setConnectionState(true);
         window.qlMap.updateStates(nodes || []);
         const statEl = document.getElementById('cv_mapstat');
         if (statEl && nodes) {
             const layout = loadLayout(d.deviceId) || [];
-            const matched = nodes.filter(node => layout.some(point => normCode(point.code) === normCode(node.pointCode))).length;
+            const pointLayout = layout.filter(isLayoutPoint);
+            const matched = nodes.filter(node => pointLayout.some(point => normCode(point.code) === normCode(node.pointCode))).length;
             const occupied = nodes.filter(node => Number(node.occupancyState) === 1).length;
             const tasks = nodes.filter(node => node.taskNo && Number(node.taskNo) !== 0).length;
             const alarms = nodes.filter(node => node.alarmCode && Number(node.alarmCode) !== 0).length;
-            statEl.textContent = `在线 · 点位 ${matched}/${layout.length} · 任务 ${tasks} · 占位 ${occupied} · 报警 ${alarms}`;
+            statEl.textContent = `在线 · 点位 ${matched}/${pointLayout.length} · 任务 ${tasks} · 占位 ${occupied} · 报警 ${alarms}`;
             statEl.classList.add('online');
         }
     }
@@ -573,11 +680,13 @@
     // ---------- 数据表（含过滤） ----------
     async function refreshTable() {
         const d = state.current;
-        if (!d || !d.connected || activeView === 'map') return;
+        if (!d || activeView === 'map') return;
         const tab = TABS.find(t => t.key === activeView);
         if (!tab) return;
+        if (!d.connected && !tab.offline) return;
         try {
             const rows = await api(`/conveyor/${d.deviceId}/${tab.key}`) || [];
+            if (state.current !== d || activeView !== tab.key || (!d.connected && !tab.offline)) return;
             // 数据完整性检查：如果返回数据缺字段，跳过本次更新
             if (rows.length > 0) {
                 const firstRow = rows[0];
@@ -630,28 +739,61 @@
         const d = state.current; if (!d) return;
         const taskNo = num('cv_t_no');
         if (taskNo <= 0) { toast('请输入要删除的任务号', false); return; }
-        const ok = await qlConfirm('确认删除输送任务', `将删除任务号 ${taskNo}，是否确认？`);
-        if (!ok) return;
-        await delTask(d.deviceId, taskNo, false);
+        await confirmDeleteTransTask(taskNo, '', 'TASK_FORM');
     };
 
     window.cvRowRemove = async function (taskNo) {
-        const ok = await qlConfirm('确认删除', `删除输送任务 #${taskNo}？`);
-        if (!ok) return;
-        delTask(state.current.deviceId, taskNo, false);
+        await confirmDeleteTransTask(taskNo, '', 'TASK_TABLE');
+    };
+    window.cvMapRemoveTask = async function (taskNo, pointCode) {
+        await confirmDeleteTransTask(taskNo, pointCode, 'MAP');
     };
     window.cvRowClear = async function (taskNo) {
         const ok = await qlConfirm('确认清理', `清理输送任务 #${taskNo}（清零任务槽+轨迹槽）？`);
         if (!ok) return;
-        delTask(state.current.deviceId, taskNo, true);
+        delTask(state.current.deviceId, taskNo, true, { source: 'TASK_TABLE' });
     };
 
-    async function delTask(deviceId, taskNo, clear) {
+    async function delTask(deviceId, taskNo, clear, meta) {
         try {
-            await api(`/conveyor/${deviceId}/trans-task/${taskNo}${clear ? '/clear' : ''}`, { method: 'DELETE' });
-            toast(clear ? '已清理任务 #' + taskNo : '已删除任务 #' + taskNo); refreshActive();
+            const params = new URLSearchParams();
+            params.set('source', meta && meta.source ? meta.source : 'TRANSPORT_TASK');
+            if (meta && meta.pointCode) params.set('pointCode', meta.pointCode);
+            await api(`/conveyor/${deviceId}/trans-task/${taskNo}${clear ? '/clear' : ''}?${params}`, { method: 'DELETE' });
+            toast(clear ? '已清理任务数据 #' + taskNo : '已下发删除指令 #' + taskNo);
+            refreshActive();
         } catch (e) { toast('操作失败：' + e.message, false); }
     }
+
+    async function confirmDeleteTransTask(taskNo, pointCode, source) {
+        const d = state.current;
+        const normalizedTaskNo = Number(taskNo);
+        if (!d || !Number.isFinite(normalizedTaskNo) || normalizedTaskNo <= 0) {
+            toast('未获取到有效的输送任务号', false);
+            return;
+        }
+        const pointText = pointCode ? `\n所在点位：${pointCode}` : '';
+        const ok = await qlConfirm('确认删除输送任务', `将删除任务号 ${normalizedTaskNo}${pointText}，是否确认？`);
+        if (!ok) return;
+        await delTask(d.deviceId, normalizedTaskNo, false, {
+            source: source || 'TRANSPORT_TASK',
+            pointCode: pointCode || ''
+        });
+    }
+
+    window.cvClearDeleteHistory = async function () {
+        const d = state.current;
+        if (!d) return;
+        const ok = await qlConfirm('确认清空删除记录', '只清理本工具保存的 JSON 审计记录，不会再次操作 PLC。是否继续？');
+        if (!ok) return;
+        try {
+            const count = await api(`/conveyor/${d.deviceId}/delete-history`, { method: 'DELETE' });
+            toast('已清空 ' + (count || 0) + ' 条删除记录');
+            refreshTable();
+        } catch (e) {
+            toast('清空记录失败：' + e.message, false);
+        }
+    };
 
     window.cvSubmitStand = async function () {
         const d = state.current; if (!d) return;
@@ -671,7 +813,12 @@
     };
 
     function refreshActive() {
-        if (activeView === 'map') refreshMap(); else refreshTable();
+        if (activeView === 'map') {
+            refreshMap();
+            return;
+        }
+        const tab = TABS.find(t => t.key === activeView);
+        if (!tab || !tab.static) refreshTable();
     }
 
     async function loadCaps(d) {
@@ -684,17 +831,58 @@
         } catch (e) { /* 忽略 */ }
     }
 
+    function clearRuntimeState() {
+        taskPointPickTarget = null;
+        taskRouteOptions = [];
+        if (window.qlMap) window.qlMap.setConnectionState(false);
+
+        const statEl = document.getElementById('cv_mapstat');
+        if (statEl) {
+            statEl.textContent = '设备已离线 · 实时状态已清空';
+            statEl.classList.remove('online');
+        }
+        const caps = document.getElementById('cv_caps');
+        if (caps) {
+            caps.innerHTML = '<span class="ql-cap"><span class="k">能力表</span><span class="v">连接后加载</span></span>';
+        }
+
+        const tab = TABS.find(t => t.key === activeView);
+        if (activeView !== 'map' && tab && !tab.offline) {
+            lastRows = [];
+            renderFullTable(tab, []);
+            const tbody = document.getElementById('cv_tbody');
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="${tab.cols.length + (tab.ops ? 1 : 0)}" style="text-align:center;color:var(--color-text-muted);padding:24px;">设备未连接，暂无实时数据</td></tr>`;
+            }
+        }
+    }
+
     window.qlPanels[TYPE] = {
         render: render,
-        init: function () {
+        init: function (d) {
             if (activeView === 'map') { renderMapShell(); renderMapGrid(); }
-            else { const tab = TABS.find(t => t.key === activeView); if (tab) buildTableSkeleton(tab); }
+            else {
+                const tab = TABS.find(t => t.key === activeView);
+                if (tab) { buildTableSkeleton(tab); refreshTable(); }
+            }
+            if (window.qlMap) window.qlMap.setConnectionState(!!(d && d.connected));
+            if (!d || !d.connected) clearRuntimeState();
         },
         onConnected: function (d) {
             loadCaps(d);
-            if (activeView === 'map') { renderMapShell(); renderMapGrid(); }
-            else { const tab = TABS.find(t => t.key === activeView); if (tab) buildTableSkeleton(tab); }
+            if (activeView === 'map') {
+                renderMapShell();
+                renderMapGrid();
+                if (window.qlMap) window.qlMap.setConnectionState(true);
+            }
+            else {
+                const tab = TABS.find(t => t.key === activeView);
+                if (tab) { buildTableSkeleton(tab); refreshTable(); }
+            }
             startPolling(async () => { refreshActive(); });
+        },
+        onDisconnected: function () {
+            clearRuntimeState();
         }
     };
 })();
