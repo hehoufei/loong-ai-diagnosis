@@ -43,6 +43,7 @@
     let activeView = 'map';
     let tableFilter = '';
     let lastRows = [];
+    let lastMapStats = null;
     let taskPointPickTarget = null;
     let taskRouteOptions = [];
     const layoutSaveTimers = new Map();
@@ -240,6 +241,20 @@
         if (tab) renderFullTable(tab, getFilteredRows());
     };
 
+    // 带任务类型的表：新增类型排最前，其它真实类型其次，未知/空排最后（稳定排序）
+    function sortRows(tab, rows) {
+        if (!Array.isArray(rows) || !tab.cols.some(c => c[0] === 'taskTypeLabel')) return rows || [];
+        const rank = r => {
+            const t = String(r && r.taskTypeLabel || '').trim();
+            if (/新增/.test(t)) return 0;
+            if (t && t !== '未知' && t !== '无' && t !== '-') return 1;
+            return 2;
+        };
+        return rows.map((r, i) => ({ r, i }))
+            .sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i)
+            .map(x => x.r);
+    }
+
     function getFilteredRows() {
         if (!tableFilter) return lastRows;
         return lastRows.filter(r => {
@@ -279,15 +294,45 @@
                 const val = r[c[0]];
                 const fmt = c[2];
                 const display = fmt ? fmt(val) : (val === null || val === undefined || val === '' ? '' : String(val));
-                return `<td data-ri="${ri}" data-ci="${ci}">${display}</td>`;
+                const cls = cvCellClass(c[0], display);
+                return `<td class="${cls}" data-ri="${ri}" data-ci="${ci}">${display}</td>`;
             }).join('');
             const ops = tab.ops
                 ? `<td style="white-space:nowrap;">
-                    <a href="javascript:;" style="color:#dc2626;font-size:12.5px;" onclick="cvRowRemove(${r.taskNo})">删除</a>
-                    <a href="javascript:;" style="color:#059669;font-size:12.5px;margin-left:8px;" onclick="cvRowClear(${r.taskNo})">清理</a></td>`
+                    <a href="javascript:;" style="color:#fb7185;font-size:12.5px;" onclick="cvRowRemove(${r.taskNo})">删除</a>
+                    <a href="javascript:;" style="color:#34d399;font-size:12.5px;margin-left:8px;" onclick="cvRowClear(${r.taskNo})">清理</a></td>`
                 : '';
-            return `<tr data-row="${ri}">${tds}${ops}</tr>`;
+            return `<tr class="${cvRowClass(r)}" data-row="${ri}">${tds}${ops}</tr>`;
         }).join('');
+    }
+
+    // 表格单元格语义着色：基线值（0/无/停止…）压暗，有货/任务/报警等有效值着色跳出
+    function cvCellClass(key, display) {
+        if (key === 'pointCode') return 's-code';
+        if (key === 'index') return '';
+        const v = String(display == null ? '' : display).trim();
+        const baseline = v === '' || v === '0' || v === '无' || v === '-' || v === '停止'
+            || v === '无占位' || v === '无稿件' || v === '无报警' || v === '空闲' || v === '未占位';
+        if (baseline) return 's-muted';
+        switch (key) {
+            case 'pointStateLabel':
+            case 'transStatus':
+            case 'transStatusLabel':
+                if (/报警|故障|异常/.test(v)) return 's-alarm';
+                if (/运行|启动|就绪|在线|输送|正常/.test(v)) return 's-ok';
+                return 's-muted';
+            case 'taskNo': return 's-active';
+            case 'occupancyStateLabel': return /有货|已占位|占用|占位/.test(v) ? 's-ok' : 's-muted';
+            case 'occupancyDataLabel': return /有|检测|到位|稿件/.test(v) && !/^无/.test(v) ? 's-ok' : 's-muted';
+            case 'alarmCodeLabel': return 's-alarm';
+            case 'taskStateLabel': return /完成|成功/.test(v) ? 's-ok' : (/失败|异常|错误/.test(v) ? 's-alarm' : 's-active');
+            default: return '';
+        }
+    }
+    // 报警行整行淡红，便于在长表里快速定位异常
+    function cvRowClass(r) {
+        const alarm = r && r.alarmCodeLabel && !/^(无|0|-|无报警)$/.test(String(r.alarmCodeLabel).trim());
+        return alarm ? 'is-alarm' : '';
     }
 
     // 静默填充：逐格对比，只更新有变化的 cell（不重建 DOM）
@@ -315,8 +360,12 @@
                 const cell = cells[ci];
                 if (cell && cell.textContent !== display) {
                     cell.textContent = display;
+                    const cls = cvCellClass(c[0], display);
+                    if (cell.className !== cls) cell.className = cls;
                 }
             }
+            const rowCls = cvRowClass(r);
+            if (tr.className !== rowCls) tr.className = rowCls;
             // 更新操作列里的 taskNo（以防任务号变了）
             if (tab.ops) {
                 const opsCell = tr.lastElementChild;
@@ -601,6 +650,8 @@
         if (button) button.disabled = !selection.link;
         const detail = document.getElementById('cv_map_selection');
         if (!detail) return;
+        detail.dataset.selected = (selection.node || selection.link) ? '1' : '0';
+        if (!selection.node && !selection.link) { renderSystemOverview(); return; }
         if (selection.node) {
             const pointState = selection.nodeState || {};
             if (pointState.offline) {
@@ -667,9 +718,45 @@
             const occupied = nodes.filter(node => Number(node.occupancyState) === 1).length;
             const tasks = nodes.filter(node => node.taskNo && Number(node.taskNo) !== 0).length;
             const alarms = nodes.filter(node => node.alarmCode && Number(node.alarmCode) !== 0).length;
-            statEl.textContent = `在线 · 点位 ${matched}/${pointLayout.length} · 任务 ${tasks} · 占位 ${occupied} · 报警 ${alarms}`;
+            lastMapStats = { online: true, total: pointLayout.length, matched, occupied, tasks, alarms };
             statEl.classList.add('online');
+            statEl.classList.toggle('has-alarm', alarms > 0);
+            statEl.innerHTML = renderKpiBadges(lastMapStats);
+            renderSystemOverview();
         }
+    }
+
+    // KPI 概览徽章：客户一眼看整线健康度
+    function renderKpiBadges(s) {
+        const badge = (label, val, cls) =>
+            `<span class="cv-kpi ${cls || ''}"><em>${label}</em><b>${val}</b></span>`;
+        return `<span class="cv-kpi cv-kpi-online"><i></i>在线</span>`
+            + badge('点位', `${s.matched}/${s.total}`)
+            + badge('运行', s.tasks, s.tasks ? 'cv-kpi-task' : '')
+            + badge('占位', s.occupied, s.occupied ? 'cv-kpi-occ' : '')
+            + badge('报警', s.alarms, s.alarms ? 'cv-kpi-alarm' : '');
+    }
+
+    // 未选中任何对象时，右侧检查器展示系统概览而非空态
+    function renderSystemOverview() {
+        const detail = document.getElementById('cv_map_selection');
+        if (!detail || detail.dataset.selected === '1') return;
+        const s = lastMapStats;
+        if (!s || !s.online) {
+            detail.className = 'ql-map-selection';
+            detail.innerHTML = '<span class="ql-map-selection-icon">⌖</span><b>未选择对象</b><small>点击点位或轨道查看详情</small>';
+            return;
+        }
+        detail.className = 'ql-map-selection has-overview';
+        detail.innerHTML =
+            `<div class="cv-overview-title">系统概览</div>
+            <div class="cv-overview-grid">
+                <span><em>点位匹配</em><b>${s.matched}/${s.total}</b></span>
+                <span class="${s.tasks ? 'is-task' : ''}"><em>运行任务</em><b>${s.tasks}</b></span>
+                <span class="${s.occupied ? 'is-occ' : ''}"><em>占位</em><b>${s.occupied}</b></span>
+                <span class="${s.alarms ? 'is-alarm' : ''}"><em>报警</em><b>${s.alarms}</b></span>
+            </div>
+            <em class="cv-overview-hint">点击任一点位查看详情</em>`;
     }
 
     function normCode(v) {
@@ -696,7 +783,7 @@
                     return;
                 }
             }
-            lastRows = rows;
+            lastRows = sortRows(tab, rows);
             // 静默填充：只更新变化的 cell，不重建 DOM
             const filtered = getFilteredRows();
             patchTable(tab, filtered);

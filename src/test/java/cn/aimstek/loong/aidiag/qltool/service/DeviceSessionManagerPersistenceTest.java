@@ -75,6 +75,35 @@ class DeviceSessionManagerPersistenceTest {
         }
     }
 
+    @Test
+    void restoresManualDeviceOrderAfterRestart() {
+        String oldUserHome = System.getProperty("user.home");
+        try {
+            System.setProperty("user.home", tempDir.toString());
+            QlToolProperties properties = new QlToolProperties();
+            properties.setDevices(List.of(
+                    device("CR-01", "Stacker 01", "STACKER_CRANE", "10.15.57.17", 102),
+                    device("CR-02", "Stacker 02", "STACKER_CRANE", "10.15.57.32", 102),
+                    device("CV-01", "Conveyor 01", "CONVEYOR_LINE", "10.15.58.80", 102),
+                    device("CR-03", "Stacker 03", "STACKER_CRANE", "10.15.57.47", 102)
+            ));
+
+            DeviceSessionManager first = manager(properties);
+            first.init();
+            String siteName = first.getDeviceItem("CR-01").getSiteName();
+            first.reorderDevices(siteName, "STACKER_CRANE", List.of("CR-03", "CR-01", "CR-02"));
+
+            assertThat(stackerIds(first)).containsExactly("CR-03", "CR-01", "CR-02");
+
+            DeviceSessionManager restarted = manager(properties);
+            restarted.init();
+            assertThat(stackerIds(restarted)).containsExactly("CR-03", "CR-01", "CR-02");
+        } finally {
+            if (oldUserHome == null) System.clearProperty("user.home");
+            else System.setProperty("user.home", oldUserHome);
+        }
+    }
+
     private DeviceSessionManager manager(QlToolProperties properties) {
         QlToolDataStore store = new QlToolDataStore(new ObjectMapper().findAndRegisterModules());
         store.init();
@@ -101,6 +130,15 @@ class DeviceSessionManagerPersistenceTest {
         device.setIp(ip);
         device.setPort(port);
         return device;
+    }
+
+    private List<String> stackerIds(DeviceSessionManager manager) {
+        return manager.getDeviceTree().stream()
+                .filter(group -> "STACKER_CRANE".equals(group.getGroupType()))
+                .findFirst().orElseThrow()
+                .getDevices().stream()
+                .map(item -> item.getDeviceId())
+                .toList();
     }
 
     private void assertThatThrownByMissing(DeviceSessionManager manager, String deviceId) {

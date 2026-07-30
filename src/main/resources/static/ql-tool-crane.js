@@ -35,8 +35,8 @@
                     <div class="crane-panel-heading">
                         <div><b>巷道运行视图</b><small>位置、载货台及双货叉状态</small></div>
                         <div class="crane-axis-values">
-                            <span id="c_h_motion"><i></i>行走脉冲 <b id="c_hPulse">--</b><em id="c_h_motion_text">停止</em></span>
-                            <span id="c_v_motion"><i></i>提升脉冲 <b id="c_vPulse">--</b><em id="c_v_motion_text">停止</em></span>
+                            <span id="c_h_motion"><i></i>行走 <canvas class="crane-spark" id="c_h_spark" width="54" height="16"></canvas><b id="c_hPulse">--</b><em id="c_h_motion_text">停止</em></span>
+                            <span id="c_v_motion"><i></i>提升 <canvas class="crane-spark" id="c_v_spark" width="54" height="16"></canvas><b id="c_vPulse">--</b><em id="c_v_motion_text">停止</em></span>
                         </div>
                     </div>
                     <div class="crane-status-ribbon crane-machine-status" aria-label="堆垛机实时状态">
@@ -46,6 +46,13 @@
                         ${fld('当前层','c_rowStation')}
                         ${fld('载货台','c_dockState')}
                         ${fld('报警状态','c_alarm','crane-alarm-state')}
+                    </div>
+                    <div class="crane-phase-track" id="c_phase_track" aria-label="任务阶段进度">
+                        <div class="crane-phase-step" data-phase="idle"><i></i><span>待命</span></div>
+                        <div class="crane-phase-step" data-phase="pickup"><i></i><span>取货</span></div>
+                        <div class="crane-phase-step" data-phase="travel"><i></i><span>行走</span></div>
+                        <div class="crane-phase-step" data-phase="dropoff"><i></i><span>放货</span></div>
+                        <div class="crane-phase-step" data-phase="done"><i></i><span>完成</span></div>
                     </div>
                     <div class="crane-machine-layout">
                         <section class="crane-fork-monitor" id="c_fork_card_1">
@@ -206,6 +213,38 @@
     };
 
     function setText(id,val){const e=document.getElementById(id);if(e) e.textContent=(val===null||val===undefined||val==='')?'--':val;}
+
+    // 微交互：数值变化时闪一下
+    function flash(el){ if(!el) return; el.classList.remove('crane-flash-anim'); void el.offsetWidth; el.classList.add('crane-flash-anim'); }
+    // 微交互：整数平滑滚动（count-up）
+    function animateNum(el, from, to, dur){
+        if(el._numRaf) cancelAnimationFrame(el._numRaf);
+        const start=performance.now(), span=to-from;
+        const step=now=>{
+            const t=Math.min(1,(now-start)/dur);
+            const eased=1-Math.pow(1-t,3);
+            el.textContent=Math.round(from+span*eased);
+            if(t<1) el._numRaf=requestAnimationFrame(step); else el._numRaf=null;
+        };
+        el._numRaf=requestAnimationFrame(step);
+    }
+    // 关键数值：数字则滚动+闪烁，文本则直接换+闪烁
+    function setSmartNum(id,val){
+        const el=document.getElementById(id); if(!el) return;
+        const empty=val===null||val===undefined||val==='';
+        const newNum=Number(val);
+        if(!empty && Number.isFinite(newNum)){
+            const oldNum=Number(el.dataset.num);
+            if(el.dataset.num!==undefined && Number.isFinite(oldNum) && oldNum!==newNum){
+                flash(el); animateNum(el, oldNum, newNum, 500);
+            } else { el.textContent=newNum; }
+            el.dataset.num=String(newNum);
+        } else {
+            const txt=empty?'--':String(val);
+            if(el.textContent!==txt && el.textContent!=='--' && txt!=='--') flash(el);
+            el.textContent=txt; delete el.dataset.num;
+        }
+    }
     function setField(id,val,cls){setText(id,val);const w=document.getElementById('wrap_'+id);if(w){w.classList.remove('alarm','success','warn');if(cls)w.classList.add(cls);}}
     function setClass(id, className, on) {
         const e = document.getElementById(id);
@@ -305,9 +344,9 @@
         const currentLevel = validCoordinate(s.rowStation);
         const currentCol = validCoordinate(f1.colStation) || validCoordinate(f2.colStation);
         const side = coordinateSide(f1, f2);
-        setText('c_viz_line', side.label);
-        setText('c_viz_col', currentCol || '--');
-        setText('c_viz_row', currentLevel || '--');
+        setSmartNum('c_viz_line', side.label);
+        setSmartNum('c_viz_col', currentCol || '--');
+        setSmartNum('c_viz_row', currentLevel || '--');
         updateRackCoordinates('left', currentCol, currentLevel, side.key);
         updateRackCoordinates('right', currentCol, currentLevel, side.key);
 
@@ -318,18 +357,85 @@
         }
     }
 
+    const sparkData = { h:[], v:[] };
+    let lastSparkPulse = { h:null, v:null };
+    function pushSpark(key, value) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return;
+        const prev = lastSparkPulse[key];
+        lastSparkPulse[key] = num;
+        if (prev !== null) {
+            const buf = sparkData[key];
+            buf.push(Math.min(999999, Math.abs(num - prev)));
+            if (buf.length > 30) buf.shift();
+        }
+        drawSpark(key);
+    }
+    function drawSpark(key) {
+        const cv = document.getElementById('c_' + key + '_spark');
+        if (!cv || !cv.getContext) return;
+        const ctx = cv.getContext('2d'), w = cv.width, h = cv.height;
+        ctx.clearRect(0, 0, w, h);
+        const data = sparkData[key];
+        if (data.length < 2) return;
+        const max = Math.max(1, ...data);
+        const color = key === 'h' ? '#38bdf8' : '#a78bfa';
+        const pts = data.map((d, i) => [i / (data.length - 1) * (w - 2) + 1, h - 1 - (d / max) * (h - 4)]);
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, key === 'h' ? 'rgba(56,189,248,.34)' : 'rgba(167,139,250,.34)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.beginPath(); ctx.moveTo(pts[0][0], h);
+        pts.forEach(p => ctx.lineTo(p[0], p[1]));
+        ctx.lineTo(pts[pts.length - 1][0], h); ctx.closePath();
+        ctx.fillStyle = grad; ctx.fill();
+        ctx.beginPath();
+        pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+        ctx.strokeStyle = color; ctx.lineWidth = 1.4; ctx.lineJoin = 'round'; ctx.stroke();
+    }
+    function clearSpark() {
+        sparkData.h.length = 0; sparkData.v.length = 0;
+        lastSparkPulse = { h:null, v:null };
+        drawSpark('h'); drawSpark('v');
+    }
+
+    // 任务阶段进度（按 taskStatusLabel 关键字 + 任务号推断，coarse-grained）
+    const PHASES = ['idle', 'pickup', 'travel', 'dropoff', 'done'];
+    function resolvePhase(s) {
+        const label = String(s.taskStatusLabel || '');
+        const taskNo = s.taskNo;
+        const hasTask = taskNo && taskNo !== 0 && taskNo !== '0' && taskNo !== '--';
+        if (s.taskStatus === 5 || /完成|成功/.test(label)) return 'done';
+        if (!hasTask) return 'idle';
+        if (/放货|卸货|卸料/.test(label)) return 'dropoff';
+        if (/取货|取料|叉取|拣货/.test(label)) return 'pickup';
+        if (/行走|搬运|移动|运行|前往|运输/.test(label)) return 'travel';
+        return 'idle';
+    }
+    function updatePhaseTrack(s) {
+        const track = document.getElementById('c_phase_track');
+        if (!track) return;
+        const idx = PHASES.indexOf(resolvePhase(s));
+        track.querySelectorAll('.crane-phase-step').forEach(step => {
+            const i = PHASES.indexOf(step.dataset.phase);
+            step.classList.toggle('is-active', i === idx);
+            step.classList.toggle('is-done', i < idx);
+        });
+    }
+
     function updateStatus(s) {
         setText('c_refresh', s.refreshTime||'');
         const running = s.workMode === 3;
         const standby = s.workMode === 2;
         const modeAlarm = s.workMode === 4 || s.workMode === 5 || s.workMode === 7;
         setField('c_workMode',s.workModeLabel,modeAlarm?'alarm':running?'success':standby?'warn':'');
-        setText('c_taskNo',s.taskNo || '--');
+        setSmartNum('c_taskNo',s.taskNo || '--');
         setField('c_taskStatus',s.taskStatusLabel,s.taskStatus===4||s.taskStatus===6||s.taskStatus===7?'warn':s.taskStatus===5?'success':'');
-        setText('c_rowStation',s.rowStation);
+        setSmartNum('c_rowStation',s.rowStation);
         setField('c_dockState',s.dockStateLabel,s.dockState===2||s.dockState===3?'success':'warn');
         setText('c_hPulse',s.dockHorizontalPulse); setText('c_vPulse',s.dockVerticalPulse);
         updateMotion(s);
+        pushSpark('h', s.dockHorizontalPulse); pushSpark('v', s.dockVerticalPulse);
+        updatePhaseTrack(s);
         const hasAlarm=s.alarmMessage&&s.alarmMessage!=='无'&&s.alarmMessage!=='0';
         setField('c_alarm',hasAlarm?s.alarmMessage:'无',hasAlarm?'alarm':'');
         const f1=s.fork1||{},f2=s.fork2||{},r=s.result||{};
@@ -339,7 +445,7 @@
         setText('c_f1_back',f1.colBackLabel);setField('c_f1_load',f1.hasLoadLabel,f1Loaded?'success':'');setField('c_f1_active',f1.activeLabel,f1Active?'warn':'');
         setText('c_f2_pulse',f2.pulse);setText('c_f2_col',f2.colStation);setField('c_f2_valid',f2.colValidLabel,f2.colValid===2?'success':'warn');
         setText('c_f2_back',f2.colBackLabel);setField('c_f2_load',f2.hasLoadLabel,f2Loaded?'success':'');setField('c_f2_active',f2.activeLabel,f2Active?'warn':'');
-        setText('c_r_cmd',r.commandType);setText('c_r_taskNo',r.taskNo);
+        setText('c_r_cmd',r.commandType);setSmartNum('c_r_taskNo',r.taskNo);
         const resultText=String(r.resultType||'').toUpperCase();
         setField('c_r_type',r.resultType,/SUCCESS|完成|成功/.test(resultText)?'success':/FAIL|ERROR|失败|异常/.test(resultText)?'alarm':'');
         setField('c_r_code',r.resultCode,r.resultCode&&r.resultCode!==0?'alarm':'');
@@ -366,12 +472,14 @@
         render, init(){window.craneTab('carry');},
         onConnected(d){
             lastMotion=null;
+            clearSpark();
             startPolling(async()=>{const s=await api(`/crane/${d.deviceId}/status`);updateStatus(s);});
         },
         onDisconnected(){
             lastMotion=null;
             clearTimeout(motionTimer);
             clearMotionClasses();
+            clearSpark();
             updateCoordinateView({rowStation:0},{},{});
             setText('c_refresh','等待连接');
         }

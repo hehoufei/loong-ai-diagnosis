@@ -140,6 +140,20 @@ public class QlToolController {
         }
     }
 
+    /** 保存同一现场、同一设备类型下的手动排序。 */
+    @PutMapping("/devices/order")
+    public Response<Void> reorderDevices(@RequestBody DeviceOrderRequest request) {
+        try {
+            manager.reorderDevices(request.siteName(), request.deviceType(), request.deviceIds());
+            return BaseResponse.success(null);
+        } catch (IllegalArgumentException e) {
+            return BaseResponse.failure("INVALID_ORDER", e.getMessage());
+        } catch (Exception e) {
+            log.warn("[青龙调试工具] 保存设备排序失败: {}", e.getMessage());
+            return BaseResponse.failure("ORDER_ERROR", e.getMessage());
+        }
+    }
+
     /** 更新设备配置 */
     @PutMapping("/devices/{deviceId}")
     public Response<DeviceItem> updateDevice(@PathVariable String deviceId, @RequestBody DeviceConfig config) {
@@ -167,4 +181,6 @@ public class QlToolController {
             return BaseResponse.failure("DELETE_ERROR", e.getMessage());
         }
     }
+
+    public record DeviceOrderRequest(String siteName, String deviceType, List<String> deviceIds) {}
 }

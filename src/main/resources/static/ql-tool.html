@@ -358,6 +358,16 @@ body {
 }
 .ql-device .dev-dot { width: 7px; height: 7px; background: #b7c1be; box-shadow: 0 0 0 3px #edf1f0; }
 .ql-device .dev-dot.on { background: #12a879; box-shadow: 0 0 0 3px #d9f2ea; }
+.ql-device[draggable="true"] { user-select:none; }
+.ql-device-drag {
+    display:flex; width:18px; height:30px; margin-left:auto; flex:0 0 auto; align-items:center; justify-content:center;
+    border-radius:6px; color:#8b9b96; cursor:grab; font:700 14px/1 var(--font-mono); letter-spacing:-4px; opacity:.42;
+}
+.ql-device:hover .ql-device-drag { opacity:.9; }
+.ql-device-drag:active { cursor:grabbing; }
+.ql-device.dragging { opacity:.28; }
+.ql-group-items.device-sorting .ql-device:not(.dragging) { transition:transform .12s,background .12s; }
+.ql-device.active::after { display:none; }
 
 .ql-content { background: transparent; }
 .ql-content-top { padding: 20px 24px 14px; }
@@ -1271,6 +1281,318 @@ body { background: var(--bg-gradient); background-attachment: fixed; color: var(
 }
 @media (min-width: 1101px) { .ql-content-bottom:not(.is-collapsed) { max-height: 330px; } }
 @media (max-width: 1100px) { .ql-map-workspace { height: calc(100vh - 350px); min-height: 500px; } }
+
+/* ============================================================
+   阶段一 · 统一深色控制室主题（仅重着色，不改布局/结构）
+   通过覆盖设计变量 + 浅色表面，把"浅玻璃外壳 + 深色内панel"
+   统一成一套深空蓝控制台视觉。
+   ============================================================ */
+:root {
+    --color-text:#e9f0ff;
+    --color-text-secondary:#aab8d6;
+    --color-text-muted:#6c7c9e;
+    --color-primary:#38bdf8;
+    --color-primary-light:#7dd3fc;
+    --color-primary-dark:#0ea5e9;
+    --glass-bg:rgba(18,28,50,.62);
+    --glass-bg-hover:rgba(26,38,66,.76);
+    --glass-border:1px solid rgba(96,165,250,.16);
+    --glass-blur:blur(18px) saturate(140%);
+    --glass-shadow:0 10px 30px rgba(0,0,0,.38),0 1px 0 rgba(255,255,255,.04) inset;
+    --glass-shadow-hover:0 16px 40px rgba(0,0,0,.46),0 1px 0 rgba(255,255,255,.05) inset;
+    /* 同步重定向 2026 主题令牌，兜底残留的浅色引用 */
+    --ql-ink:#e9f0ff; --ql-muted:#8595b5; --ql-line:rgba(56,189,248,.12);
+    --ql-panel:rgba(18,28,50,.55); --ql-bg:transparent;
+    --ql-brand:#22d3ee; --ql-brand-dark:#0ea5e9; --ql-brand-soft:rgba(56,189,248,.12);
+}
+body {
+    color:var(--color-text);
+    background:
+        radial-gradient(1200px 620px at 10% -12%, rgba(56,189,248,.12), transparent 60%),
+        radial-gradient(1100px 720px at 112% 8%, rgba(99,102,241,.14), transparent 55%),
+        radial-gradient(900px 900px at 50% 120%, rgba(14,165,233,.08), transparent 60%),
+        linear-gradient(180deg,#070c18 0%,#0a1122 55%,#080e1c 100%);
+    background-attachment:fixed;
+}
+
+/* 顶栏 */
+.glass-topbar, .ql-topbar {
+    background:rgba(10,17,34,.72); backdrop-filter:blur(20px) saturate(160%);
+    border-bottom:1px solid rgba(56,189,248,.12); box-shadow:0 1px 0 rgba(255,255,255,.03) inset;
+}
+.ql-brand-sub { color:var(--color-text-muted); }
+.ql-conn-badge { background:rgba(56,189,248,.08); color:var(--color-text-muted); }
+.ql-conn-badge.online { background:rgba(16,185,129,.14); color:#34d399; }
+.ql-clock { color:var(--color-text-secondary); }
+.ql-home-link { color:var(--color-text-muted); }
+.ql-home-link:hover { color:var(--color-primary-light); }
+
+/* 左侧设备栏 */
+.ql-sider { background:rgba(12,19,38,.6); backdrop-filter:blur(14px); border-right:1px solid rgba(56,189,248,.10); }
+.ql-group-title { color:var(--color-text-secondary); }
+.ql-group-title:hover { background:rgba(56,189,248,.06); }
+.ql-device { color:var(--color-text-secondary); }
+.ql-device:hover { background:rgba(56,189,248,.08); }
+.ql-device.active { background:rgba(56,189,248,.14); color:var(--color-primary-light); }
+.ql-device .dev-dot { background:#3b4a68; }
+.ql-device .dev-dot.on { background:#34d399; box-shadow:0 0 8px rgba(52,211,153,.6); }
+.ql-device-drag { color:#64748b; }
+.ql-device:hover .ql-device-drag { color:#7dd3fc; background:rgba(56,189,248,.08); }
+
+/* 内容分割区 */
+.ql-content-bottom { background:rgba(12,19,38,.72); backdrop-filter:blur(10px); border-top:1px solid rgba(56,189,248,.10); }
+
+/* 设备头部 */
+.ql-dev-meta { color:var(--color-text-muted); }
+
+/* 通用输入 / 次级按钮 翻深色 */
+.glass-input { background:rgba(10,18,36,.7); border:1.5px solid rgba(56,189,248,.18); color:var(--color-text); }
+.glass-input::placeholder { color:var(--color-text-muted); }
+.glass-input:hover { border-color:rgba(56,189,248,.32); }
+.glass-input:focus { background:rgba(10,18,36,.92); border-color:var(--color-primary); box-shadow:0 0 0 3px rgba(56,189,248,.16); }
+.glass-btn-outline { background:rgba(56,189,248,.08); color:var(--color-primary-light); border:1.5px solid rgba(56,189,248,.28); }
+.glass-btn-outline:hover { background:rgba(56,189,248,.16); border-color:var(--color-primary); color:#bae6fd; }
+
+/* 通用字段卡 / 表格 翻深色（供非堆垛机设备类型页面复用） */
+.ql-field { background:rgba(18,28,50,.5); border:1px solid rgba(56,189,248,.1); }
+.ql-field .k { color:var(--color-text-secondary); }
+.ql-field .v { color:var(--color-text); }
+.ql-table-wrap { border:1px solid rgba(56,189,248,.1); background:rgba(11,18,35,.66) !important; backdrop-filter:none !important; box-shadow:none !important; }
+.ql-table-wrap th { background:rgba(15,23,42,.96); color:var(--color-text-secondary); border-bottom:1px solid rgba(56,189,248,.12); }
+.ql-table-wrap td { color:var(--color-text); border-bottom:1px solid rgba(56,189,248,.06); }
+.ql-table-wrap tr:nth-child(even) td { background:rgba(255,255,255,.02); }
+.ql-table-wrap tr:hover td { background:rgba(56,189,248,.06); }
+/* Tab 采用 indigo 胶囊样式，只把容器底翻深，激活态渐变保留 */
+.ql-tabs { border:1px solid rgba(56,189,248,.12); background:rgba(12,19,38,.6); }
+.ql-tab { color:var(--color-text-muted); }
+.ql-tab:hover { color:var(--color-primary-light); background:rgba(56,189,248,.08); }
+.empty-hint { background:rgba(18,28,50,.4); border:1px dashed rgba(56,189,248,.2); color:var(--color-text-muted); }
+
+/* 补全：设备头 / 面板卡 / 下方任务卡 / 能力条 / 工具栏 / 侧栏输入按钮 等硬编码白底翻深 */
+.ql-dev-header, .ql-panel-card, .ql-content-bottom > div:first-child > div {
+    border-color:rgba(56,189,248,.12);
+    background:linear-gradient(160deg,rgba(16,25,46,.72),rgba(11,18,35,.78));
+    backdrop-filter:blur(18px) saturate(140%); box-shadow:0 10px 28px rgba(0,0,0,.32);
+}
+.ql-dev-title { color:var(--color-text); }
+.ql-dev-icon { color:var(--color-primary-light); background:rgba(56,189,248,.12); }
+.ql-dev-state { background:rgba(56,189,248,.1); color:var(--color-text-secondary); }
+.ql-dev-state.online { background:rgba(16,185,129,.16); color:#34d399; }
+.ql-dev-meta span { border-right-color:rgba(56,189,248,.12); }
+.ql-task-toggle { border-color:rgba(56,189,248,.24); color:var(--color-primary-light); background:rgba(56,189,248,.08); }
+.ql-cap { border-color:rgba(56,189,248,.12); background:rgba(18,28,50,.5); }
+.ql-cap .v { color:var(--color-primary-light); }
+.ql-sider-title { color:var(--color-text); }
+.ql-sider-total, .ql-site-label, .ql-site-tab small { color:var(--color-text-muted); }
+.ql-sider .ql-search input, .ql-map-search input { border-color:rgba(56,189,248,.18); background:rgba(10,18,36,.7); color:var(--color-text); }
+.ql-sider .ql-search input:focus { border-color:var(--color-primary); box-shadow:0 0 0 3px rgba(56,189,248,.14); }
+.ql-sider .ql-btns button { border-color:rgba(56,189,248,.24); color:var(--color-primary-light); background:rgba(56,189,248,.06); }
+.ql-site-tab { border-color:rgba(56,189,248,.16); color:var(--color-text-secondary); background:rgba(18,28,50,.5); box-shadow:none; }
+.ql-site-add { color:var(--color-primary-light); background:rgba(56,189,248,.06); }
+.ql-table-toolbar { border-bottom-color:rgba(56,189,248,.12); background:rgba(12,19,38,.7); }
+.ql-table-toolbar input { border-color:rgba(56,189,248,.14); background:rgba(10,18,36,.66); color:var(--color-text); }
+.ql-table-toolbar .count { background:rgba(56,189,248,.08); color:var(--color-primary-light); }
+.ql-ops-title { color:var(--color-text); }
+.ql-ops-item input { border-color:rgba(56,189,248,.14); background:rgba(10,18,36,.68); color:var(--color-text); }
+.ql-ops-item input:focus { border-color:var(--color-primary); box-shadow:0 0 0 3px rgba(56,189,248,.12); }
+.ql-route-preview { color:#9db2ff; background:rgba(56,189,248,.06); }
+.ql-route-picker { border-color:rgba(56,189,248,.14); background:rgba(56,189,248,.045); }
+
+/* 弹窗 / 确认框 翻深色，避免深色页面上跳出白色卡片 */
+.ql-confirm-box, .ql-modal, .glass-modal { background:rgba(16,24,44,.96); color:var(--color-text); border:1px solid rgba(56,189,248,.14); box-shadow:0 24px 64px rgba(0,0,0,.55); }
+.ql-confirm-box p, .ql-modal p { color:var(--color-text-secondary); }
+
+/* —— 核心：堆垛机操作台外壳翻深色，消除浅玻璃外壳与深色内panel的割裂 —— */
+.crane-console {
+    border:1px solid rgba(56,189,248,.18);
+    background:linear-gradient(160deg,rgba(13,21,42,.86),rgba(8,14,28,.9));
+    box-shadow:0 18px 44px rgba(0,0,0,.4),0 0 0 1px rgba(56,189,248,.05) inset;
+    backdrop-filter:blur(18px) saturate(140%);
+}
+.crane-console-head {
+    border-bottom:1px solid rgba(56,189,248,.12);
+    background:linear-gradient(90deg,rgba(56,189,248,.09),rgba(99,102,241,.04));
+}
+.crane-console-title b { color:#e9f0ff; }
+.crane-console-title small { color:var(--color-text-muted); }
+.crane-console-refresh span { color:var(--color-text-muted); }
+.crane-console-refresh b { color:var(--color-text-secondary); }
+
+/* ============================================================
+   阶段二 · 数据可视化：任务阶段进度带 / 脉冲趋势线 / 货叉状态灯
+   ============================================================ */
+/* 任务阶段进度带 */
+.crane-phase-track {
+    display:flex; align-items:center; gap:0; padding:10px 16px;
+    border-bottom:1px solid rgba(56,189,248,.09); background:rgba(8,14,28,.45);
+}
+.crane-phase-step { display:flex; flex:1; align-items:center; gap:7px; color:#5b6b8c; font-size:10.5px; white-space:nowrap; transition:color .3s; }
+.crane-phase-step:last-child { flex:0 0 auto; }
+.crane-phase-step > i {
+    width:10px; height:10px; flex:0 0 auto; border:1.5px solid currentColor; border-radius:50%;
+    background:transparent; transition:background .3s, box-shadow .3s, border-color .3s;
+}
+.crane-phase-step > span { flex:0 0 auto; }
+.crane-phase-step::after { content:""; flex:1; height:1px; min-width:16px; margin:0 9px; background:currentColor; opacity:.22; }
+.crane-phase-step:last-child::after { display:none; }
+.crane-phase-step.is-done { color:#34d399; }
+.crane-phase-step.is-done > i { background:#22c55e; border-color:#22c55e; box-shadow:0 0 8px rgba(34,197,94,.5); }
+.crane-phase-step.is-active { color:#7dd3fc; font-weight:750; }
+.crane-phase-step.is-active > i {
+    background:#38bdf8; border-color:#bae6fd;
+    box-shadow:0 0 0 3px rgba(56,189,248,.18),0 0 12px rgba(56,189,248,.75);
+    animation:cranePhasePulse 1.6s ease-in-out infinite;
+}
+@keyframes cranePhasePulse { 50% { box-shadow:0 0 0 5px rgba(56,189,248,.1),0 0 16px rgba(56,189,248,.95); } }
+
+/* 脉冲趋势线 sparkline */
+.crane-axis-values span { position:relative; }
+.crane-spark { display:block; width:54px; height:16px; opacity:.85; }
+.crane-axis-values span.active .crane-spark { opacity:1; }
+
+/* 货叉状态灯：给已着色的字段值加发光圆点，一眼看状态 */
+.crane-fork-monitor-data .crane-data-item .v { display:inline-flex; align-items:center; }
+.crane-fork-monitor-data .crane-data-item.success .v::before,
+.crane-fork-monitor-data .crane-data-item.warn .v::before,
+.crane-fork-monitor-data .crane-data-item.alarm .v::before {
+    content:""; display:inline-block; width:6px; height:6px; margin-right:6px; border-radius:50%; flex:0 0 auto;
+}
+.crane-fork-monitor-data .crane-data-item.success .v::before { background:#22c55e; box-shadow:0 0 6px rgba(34,197,94,.65); }
+.crane-fork-monitor-data .crane-data-item.warn .v::before { background:#f59e0b; box-shadow:0 0 6px rgba(245,158,11,.55); }
+.crane-fork-monitor-data .crane-data-item.alarm .v::before { background:#ef4444; box-shadow:0 0 6px rgba(239,68,68,.65); }
+
+/* ============================================================
+   阶段三 · 强化主角 + 微交互：数值变化闪烁 / 巷道视图纵深质感
+   ============================================================ */
+/* 数值变化闪烁（count-up 同时触发） */
+.crane-flash-anim { animation:craneValueFlash .6s ease-out; }
+@keyframes craneValueFlash {
+    0% { color:#ffffff; text-shadow:0 0 14px rgba(56,189,248,.95); }
+    100% { text-shadow:0 0 0 rgba(56,189,248,0); }
+}
+
+/* 巷道视图：加深景深、导轨更亮、极淡环境扫描光 */
+.crane-machine-view {
+    box-shadow:inset 0 0 60px rgba(0,0,0,.45), inset 0 0 0 1px rgba(56,189,248,.06);
+}
+.crane-machine-view::before {
+    content:""; position:absolute; inset:0; z-index:1; pointer-events:none;
+    background:linear-gradient(180deg, transparent 0%, rgba(56,189,248,.045) 50%, transparent 100%);
+    background-size:100% 46%;
+    animation:craneAmbientScan 7s linear infinite; opacity:.6;
+}
+.crane-rail { height:4px; background:linear-gradient(90deg,transparent,#3a5a80 6%,#7dd3fc 50%,#3a5a80 94%,transparent); }
+.crane-rail::after { filter:blur(6px); background:linear-gradient(90deg,transparent,rgba(56,189,248,.28),transparent); }
+
+/* 载货台：金属光泽 + 定位后聚光 */
+.crane-carriage {
+    background:linear-gradient(155deg,rgba(41,72,116,.98),rgba(15,23,42,.99) 60%),
+               linear-gradient(0deg,rgba(125,211,252,.06),rgba(125,211,252,.06));
+}
+.crane-carriage.is-positioned {
+    border-color:rgba(125,211,252,.85);
+    box-shadow:0 0 0 1px rgba(56,189,248,.2) inset, 0 0 34px rgba(56,189,248,.34), 0 10px 26px rgba(0,0,0,.45);
+}
+.crane-console.is-running .crane-carriage.is-positioned { border-color:rgba(52,245,176,.7); box-shadow:0 0 0 1px rgba(52,245,176,.18) inset,0 0 34px rgba(34,197,94,.3),0 10px 26px rgba(0,0,0,.45); }
+
+/* 坐标读数：更醒目的玻璃卡 */
+.crane-coordinate-readout, .crane-task-tag { background:rgba(6,12,26,.9); box-shadow:0 6px 18px rgba(0,0,0,.4); }
+
+@keyframes craneAmbientScan { 0% { background-position:0 -46%; } 100% { background-position:0 146%; } }
+@media (prefers-reduced-motion:reduce) { .crane-machine-view::before { animation:none; opacity:0; } }
+
+/* ============================================================
+   输送线地图 · 在深色页面中重建"发光监控屏"的图底关系
+   ============================================================ */
+/* 顶部标题条：明确的屏首，左侧霓虹竖条 */
+.ql-map-head {
+    position:relative; border-radius:14px 14px 0 0;
+    background:linear-gradient(180deg,rgba(17,27,50,.98),rgba(11,18,36,.98));
+    border-color:rgba(56,189,248,.26); border-bottom:0;
+    box-shadow:0 -1px 0 rgba(125,211,252,.12) inset;
+}
+.ql-map-head::before {
+    content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:linear-gradient(180deg,#38bdf8,#6366f1);
+    box-shadow:0 0 12px rgba(56,189,248,.55);
+}
+.ql-map-heading strong { letter-spacing:.01em; }
+
+/* 工具栏：与屏首、画布同属一块屏，左右边框收拢 */
+.ql-map-toolbar { border-left-color:rgba(56,189,248,.26); border-right-color:rgba(56,189,248,.26); }
+
+/* 画布工作区：作为一块嵌入深色台面的发光屏幕 */
+.ql-map-workspace {
+    border:1px solid rgba(56,189,248,.3); border-top:0;
+    box-shadow:
+        0 0 0 1px rgba(56,189,248,.05),
+        0 26px 56px rgba(0,0,0,.55),
+        inset 0 1px 0 rgba(125,211,252,.16),
+        inset 0 0 70px rgba(56,189,248,.05);
+}
+/* 侧栏检查器：清晰的分隔与轻微内发光，读作屏的一部分 */
+.ql-map-inspector {
+    border-left:1px solid rgba(56,189,248,.22);
+    box-shadow:inset 12px 0 24px rgba(0,0,0,.28);
+}
+.ql-map-inspector-title {
+    padding-left:11px; position:relative;
+}
+.ql-map-inspector-title::before {
+    content:""; position:absolute; left:0; top:50%; width:3px; height:11px; transform:translateY(-50%);
+    border-radius:2px; background:#38bdf8; box-shadow:0 0 8px rgba(56,189,248,.6);
+}
+/* 在线状态徽标：连接时发光，强化"实时" */
+.ql-map-live.online { box-shadow:0 0 0 1px rgba(16,185,129,.3),0 0 14px rgba(16,185,129,.22); }
+/* 当前选择的点位详情卡：更明确的卡片 + 任务信息高亮 */
+.ql-map-selection.has-selection { box-shadow:0 8px 22px rgba(0,0,0,.32); }
+.ql-map-state-grid .is-task, .ql-map-task-delete { font-weight:750; }
+
+/* 图例与新语义分级对齐：空闲退为暗灰蓝，任务/报警才亮 */
+.ql-legend-idle { background:#3a4a66 !important; box-shadow:none !important; }
+.ql-legend-load { background:#10b981 !important; box-shadow:0 0 6px rgba(16,185,129,.5) !important; }
+.ql-legend-task { background:#f59e0b !important; box-shadow:0 0 7px rgba(245,158,11,.6) !important; }
+.ql-legend-alarm { background:#fb4f64 !important; box-shadow:0 0 7px rgba(251,79,100,.6) !important; }
+
+/* KPI 概览徽章（地图头右侧）：客户一眼看整线健康度 */
+.ql-map-live { display:flex; align-items:center; gap:6px; padding:0 !important; background:transparent !important; border:0 !important; box-shadow:none !important; }
+.cv-kpi { display:inline-flex; align-items:center; gap:5px; padding:4px 9px; border:1px solid rgba(56,189,248,.18); border-radius:8px; background:rgba(56,189,248,.06); color:var(--color-text-secondary); font-size:10.5px; white-space:nowrap; }
+.cv-kpi em { color:rgba(148,163,184,.7); font-style:normal; }
+.cv-kpi b { color:#e0f2fe; font:700 12px var(--font-mono); }
+.cv-kpi-online { color:#6ee7b7; border-color:rgba(16,185,129,.3); background:rgba(16,185,129,.1); }
+.cv-kpi-online i { width:7px; height:7px; border-radius:50%; background:#34d399; box-shadow:0 0 8px rgba(52,211,153,.7); }
+.cv-kpi-task { border-color:rgba(245,158,11,.42); background:rgba(245,158,11,.13); }
+.cv-kpi-task b { color:#fde68a; }
+.cv-kpi-occ { border-color:rgba(16,185,129,.3); background:rgba(16,185,129,.1); }
+.cv-kpi-occ b { color:#6ee7b7; }
+.cv-kpi-alarm { border-color:rgba(251,79,100,.48); background:rgba(251,79,100,.15); animation:cvKpiAlarm 1.3s ease-in-out infinite; }
+.cv-kpi-alarm b { color:#fecdd3; }
+@keyframes cvKpiAlarm { 50% { box-shadow:0 0 0 3px rgba(251,79,100,.12); } }
+
+/* 系统概览（未选中点位时的检查器内容） */
+.ql-map-selection.has-overview { align-items:stretch; border-style:solid; border-color:rgba(56,189,248,.22); background:rgba(15,23,42,.6); text-align:left; }
+.cv-overview-title { color:rgba(186,230,253,.7); font-size:10px; font-weight:750; letter-spacing:.06em; margin-bottom:8px; }
+.cv-overview-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; width:100%; }
+.cv-overview-grid > span { display:flex; flex-direction:column; gap:3px; padding:8px 9px; border:1px solid rgba(56,189,248,.14); border-radius:8px; background:rgba(56,189,248,.05); }
+.cv-overview-grid em { color:rgba(148,163,184,.72); font-size:9px; font-style:normal; }
+.cv-overview-grid b { color:#e0f2fe; font:750 17px var(--font-mono); }
+.cv-overview-grid .is-task { border-color:rgba(245,158,11,.42); background:rgba(245,158,11,.1); }
+.cv-overview-grid .is-task b { color:#fde68a; }
+.cv-overview-grid .is-occ { border-color:rgba(16,185,129,.3); background:rgba(16,185,129,.09); }
+.cv-overview-grid .is-occ b { color:#6ee7b7; }
+.cv-overview-grid .is-alarm { border-color:rgba(251,79,100,.45); background:rgba(251,79,100,.13); }
+.cv-overview-grid .is-alarm b { color:#fecdd3; }
+.cv-overview-hint { display:block; margin-top:9px; color:rgba(148,163,184,.55); font-size:9.5px; font-style:normal; }
+
+/* 点位状态表：语义着色——基线值压暗，有货/任务/报警跳出，报警整行泛红 */
+.ql-table-wrap td.s-code { color:#e0f2fe; font-weight:700; }
+.ql-table-wrap td.s-ok { color:#34d399; }
+.ql-table-wrap td.s-warn { color:#fbbf24; }
+.ql-table-wrap td.s-alarm { color:#fb7185; font-weight:700; }
+.ql-table-wrap td.s-active { color:#fcd34d; font-weight:700; }
+.ql-table-wrap td.s-muted { color:rgba(160,176,205,.72); }
+.ql-table-wrap tr.is-alarm td { background:rgba(251,79,100,.09); }
+.ql-table-wrap tr.is-alarm:hover td { background:rgba(251,79,100,.15); }
 </style>
 
 <script>if (sessionStorage.getItem('wcs_logged_in') !== 'true') window.location.replace('login.html');</script>
@@ -1389,7 +1711,58 @@ function renderTree(groups) {
     if (total) total.textContent = siteDeviceCount + ' 台';
     document.getElementById('deviceTreeContent').innerHTML = siteGroups.map(g => `
         <div class="ql-group"><div class="ql-group-title" onclick="this.parentElement.classList.toggle('collapsed')"><span class="arrow">▼</span>${ico[g.groupType]||'🔧'} ${g.groupName} <span style="margin-left:auto;font-size:10px;opacity:.5;">${g.devices.length}</span></div>
-        <div class="ql-group-items">${g.devices.map(d => `<div class="ql-device" data-id="${d.deviceId}" data-name="${d.deviceName}" data-address="${d.ip}:${d.port}" onclick="selectDevice('${d.deviceId}')" title="${d.deviceName} · ${d.ip}:${d.port}"><span class="dev-dot ${d.connected?'on':''}"></span><span class="ql-device-copy"><span class="ql-device-name">${d.deviceName}</span><span class="ql-device-address">${d.ip}:${d.port}</span></span></div>`).join('')}</div></div>`).join('') || '<div class="empty-hint">当前现场暂无设备<br><button class="glass-btn-outline" style="margin-top:10px" onclick="openDeviceDialog()">＋ 添加设备</button></div>';
+        <div class="ql-group-items" data-device-group="${g.groupType}" ondragover="deviceDragOver(event)" ondrop="deviceDrop(event)">
+            ${g.devices.map(d => `<div class="ql-device ${state.current&&state.current.deviceId===d.deviceId?'active':''}" draggable="true" data-id="${d.deviceId}" data-name="${d.deviceName}" data-address="${d.ip}:${d.port}" data-group="${g.groupType}" onclick="selectDevice('${d.deviceId}')" ondragstart="deviceDragStart(event)" ondragend="deviceDragEnd(event)" title="${d.deviceName} · ${d.ip}:${d.port}"><span class="dev-dot ${d.connected?'on':''}"></span><span class="ql-device-copy"><span class="ql-device-name">${d.deviceName}</span><span class="ql-device-address">${d.ip}:${d.port}</span></span><span class="ql-device-drag" title="拖动调整顺序">⋮⋮</span></div>`).join('')}
+        </div></div>`).join('') || '<div class="empty-hint">当前现场暂无设备<br><button class="glass-btn-outline" style="margin-top:10px" onclick="openDeviceDialog()">＋ 添加设备</button></div>';
+}
+
+let deviceDrag = null;
+let deviceDropCommitted = false;
+function deviceDragStart(event) {
+    const item = event.currentTarget;
+    deviceDrag = { id:item.dataset.id, groupType:item.dataset.group };
+    deviceDropCommitted = false;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', item.dataset.id);
+    requestAnimationFrame(() => {
+        item.classList.add('dragging');
+        item.parentElement?.classList.add('device-sorting');
+    });
+}
+function deviceDragOver(event) {
+    if (!deviceDrag || event.currentTarget.dataset.deviceGroup !== deviceDrag.groupType) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    const dragging = event.currentTarget.querySelector(`.ql-device[data-id="${deviceDrag.id}"]`);
+    const target = event.target.closest('.ql-device');
+    if (!dragging || !target || target === dragging || target.parentElement !== event.currentTarget) return;
+    const before = event.clientY < target.getBoundingClientRect().top + target.offsetHeight / 2;
+    event.currentTarget.insertBefore(dragging, before ? target : target.nextSibling);
+}
+async function deviceDrop(event) {
+    if (!deviceDrag || event.currentTarget.dataset.deviceGroup !== deviceDrag.groupType) return;
+    event.preventDefault();
+    deviceDropCommitted = true;
+    const order = [...event.currentTarget.querySelectorAll('.ql-device')].map(item => item.dataset.id);
+    const request = { siteName:state.activeSite, deviceType:deviceDrag.groupType, deviceIds:order };
+    event.currentTarget.classList.remove('device-sorting');
+    event.currentTarget.querySelectorAll('.ql-device').forEach(item => item.classList.remove('dragging'));
+    try {
+        await api('/devices/order',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
+        await loadDeviceTree();
+        toast('设备顺序已保存');
+    } catch (e) {
+        renderTree(state.deviceGroups);
+        toast('保存排序失败：'+e.message,false);
+    } finally {
+        deviceDrag = null;
+    }
+}
+function deviceDragEnd(event) {
+    event.currentTarget.classList.remove('dragging');
+    event.currentTarget.parentElement?.classList.remove('device-sorting');
+    if (!deviceDropCommitted) renderTree(state.deviceGroups);
+    if (!deviceDropCommitted) deviceDrag = null;
 }
 function filterDevices() {
     const q = document.getElementById('devSearch').value.trim().toLowerCase();

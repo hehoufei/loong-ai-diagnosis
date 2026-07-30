@@ -153,6 +153,45 @@ public class DeviceSessionManager {
         saveToFile();
     }
 
+    /**
+     * 调整同一现场、同一设备类型下的显示顺序。
+     * 顺序直接写回 devices.json 的数组顺序，重启服务和替换程序包后仍然保留。
+     */
+    public synchronized void reorderDevices(String siteName, String deviceType, List<String> deviceIds) {
+        String normalizedSite = normalizeSiteName(siteName);
+        DeviceType normalizedType = DeviceType.from(deviceType);
+        List<String> expectedIds = configMap.values().stream()
+                .filter(device -> normalizedSite.equals(normalizeSiteName(device.getSiteName())))
+                .filter(device -> DeviceType.from(device.getDeviceType()) == normalizedType)
+                .map(DeviceConfig::getDeviceId)
+                .toList();
+        List<String> requestedIds = deviceIds == null ? List.of() : deviceIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (expectedIds.size() != requestedIds.size()
+                || !new HashSet<>(expectedIds).equals(new HashSet<>(requestedIds))) {
+            throw new IllegalArgumentException("设备排序列表与当前现场设备不一致，请刷新页面后重试");
+        }
+
+        Iterator<String> orderedIds = requestedIds.iterator();
+        Map<String, DeviceConfig> reordered = new LinkedHashMap<>();
+        for (Map.Entry<String, DeviceConfig> entry : configMap.entrySet()) {
+            DeviceConfig device = entry.getValue();
+            boolean targetGroup = normalizedSite.equals(normalizeSiteName(device.getSiteName()))
+                    && DeviceType.from(device.getDeviceType()) == normalizedType;
+            if (targetGroup) {
+                String nextId = orderedIds.next();
+                reordered.put(nextId, configMap.get(nextId));
+            } else {
+                reordered.put(entry.getKey(), device);
+            }
+        }
+        configMap.clear();
+        configMap.putAll(reordered);
+        saveToFile();
+    }
+
     // ==================== 查询 ====================
 
     /** 设备树（按类型分组） */

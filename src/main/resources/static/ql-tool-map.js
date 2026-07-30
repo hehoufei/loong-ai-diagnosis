@@ -43,6 +43,11 @@
     let dragStart = { x: 0, y: 0 }, dragNodeStart = { x: 0, y: 0 }, panStart = { x: 0, y: 0 };
     let hoverNode = null, hoverLink = -1, selectedNode = null, selectedLink = -1, linkDraft = null;
     let onLayoutChanged = null, onSelectionChanged = null, onViewChanged = null, onTaskDelete = null, onNodeClick = null;
+    // 阶段二：轨道流动动画（按点位实时状态推断货物流向，仅在有货流动时运行）
+    let animRaf = null, animPhase = 0, hasActiveFlow = false, activeLinkSet = new Set(), lastFrameTs = 0;
+    function prefersReducedMotion() {
+        return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
 
     window.qlMap = {
         init,
@@ -94,10 +99,15 @@
         canvas.addEventListener('dblclick', onDblClick);
         canvas.addEventListener('keydown', onKeyDown);
         window.addEventListener('resize', resize);
+        document.addEventListener('visibilitychange', onVisibility);
         draw();
     }
 
     function destroy() {
+        stopAnim();
+        hasActiveFlow = false;
+        activeLinkSet = new Set();
+        document.removeEventListener('visibilitychange', onVisibility);
         if (canvas) {
             window.removeEventListener('resize', resize);
             canvas.remove();
@@ -187,6 +197,7 @@
             });
         }
         autoReadableView();
+        recomputeActiveLinks();
         draw();
     }
 
@@ -216,6 +227,7 @@
         nodeStates = {};
         (states || []).forEach(state => { nodeStates[normCode(state.pointCode)] = state; });
         if (selectedNode) notifySelection();
+        recomputeActiveLinks();
         draw();
     }
 
@@ -225,6 +237,9 @@
             nodeStates = {};
             hideTooltip();
             clearSelection(false);
+            activeLinkSet = new Set();
+            hasActiveFlow = false;
+            stopAnim();
         }
         draw();
     }
@@ -257,13 +272,108 @@
         drawModeHint(width, height);
     }
 
+    // ---------- 阶段二：按点位实时状态推断货物流向 ----------
+    // 规则：某轨道 A→B（沿输送方向），若 A 占位且有任务、B 也有任务，
+    // 说明货正从 A 往下一个点位 B 走，该轨道流动。方向即轨道自身方向 A→B。
+    function isActiveLink(link) {
+        const from = getFullState(link.from);
+        const to = getFullState(link.to);
+        return !!(from && from.occupied && from.hasTask && to && to.hasTask);
+    }
+    function recomputeActiveLinks() {
+        activeLinkSet = new Set();
+        if (deviceConnected) {
+            links.forEach((link, index) => { if (isActiveLink(link)) activeLinkSet.add(index); });
+        }
+        hasActiveFlow = activeLinkSet.size > 0;
+        ensureAnim();
+    }
+    function ensureAnim() {
+        if (hasActiveFlow && !animRaf && !prefersReducedMotion() && !document.hidden) {
+            animRaf = requestAnimationFrame(tick);
+        }
+    }
+    function stopAnim() {
+        if (animRaf) { cancelAnimationFrame(animRaf); animRaf = null; }
+    }
+    // 30fps 上限，肉眼无差别但重绘开销减半
+    function tick(ts) {
+        if (!hasActiveFlow) { animRaf = null; return; }
+        animRaf = requestAnimationFrame(tick);
+        if (ts - lastFrameTs < 33) return;
+        lastFrameTs = ts;
+        animPhase = performance.now() / 1000;
+        draw();
+    }
+    function onVisibility() {
+        if (document.hidden) stopAnim(); else ensureAnim();
+    }
+    // 沿轨道方向（A→B）的流动光带
+    function drawFlow(route) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(251,191,36,.95)';
+        ctx.lineWidth = Math.max(2.2, 1.8 / transform.scale);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = 'rgba(245,158,11,.7)';
+        ctx.shadowBlur = 6;
+        ctx.setLineDash([9, 13]);
+        ctx.lineDashOffset = -((animPhase * 34) % 22);
+        ctx.beginPath();
+        ctx.moveTo(route[0].x, route[0].y);
+        for (let i = 1; i < route.length; i++) ctx.lineTo(route[i].x, route[i].y);
+        ctx.stroke();
+        ctx.restore();
+    }
+    // 沿轨道 A→B 移动的发光货点
+    function drawFlowDot(route) {
+        let total = 0;
+        const segs = [];
+        for (let i = 1; i < route.length; i++) {
+            const a = route[i - 1], b = route[i];
+            const len = Math.hypot(b.x - a.x, b.y - a.y);
+            segs.push({ a, b, len });
+            total += len;
+        }
+        if (total < 1) return;
+        const pos = (animPhase * 58) % total;
+        let acc = 0, point = route[route.length - 1];
+        for (const seg of segs) {
+            if (pos <= acc + seg.len) {
+                const t = seg.len ? (pos - acc) / seg.len : 0;
+                point = { x: seg.a.x + (seg.b.x - seg.a.x) * t, y: seg.a.y + (seg.b.y - seg.a.y) * t };
+                break;
+            }
+            acc += seg.len;
+        }
+        ctx.save();
+        ctx.fillStyle = '#fde68a';
+        ctx.shadowColor = 'rgba(245,158,11,.95)';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, Math.max(2.8, 2.2 / transform.scale), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+
     function drawGrid(width, height) {
         const minX = Math.floor(-transform.x / transform.scale / CFG.grid) * CFG.grid - CFG.grid;
         const minY = Math.floor(-transform.y / transform.scale / CFG.grid) * CFG.grid - CFG.grid;
         const maxX = Math.ceil((width - transform.x) / transform.scale / CFG.grid) * CFG.grid + CFG.grid;
         const maxY = Math.ceil((height - transform.y) / transform.scale / CFG.grid) * CFG.grid + CFG.grid;
         ctx.save();
-        ctx.fillStyle = 'rgba(99,130,246,.16)';
+        // 主网格线（每 4 格一条），营造工程坐标纸的空间参照
+        const major = CFG.grid * 4;
+        const majMinX = Math.floor(minX / major) * major;
+        const majMinY = Math.floor(minY / major) * major;
+        ctx.strokeStyle = 'rgba(56,189,248,.06)';
+        ctx.lineWidth = Math.max(.6, 1 / transform.scale);
+        ctx.beginPath();
+        for (let x = majMinX; x <= maxX; x += major) { ctx.moveTo(x, minY); ctx.lineTo(x, maxY); }
+        for (let y = majMinY; y <= maxY; y += major) { ctx.moveTo(minX, y); ctx.lineTo(maxX, y); }
+        ctx.stroke();
+        // 次网格点阵
+        ctx.fillStyle = 'rgba(99,130,246,.18)';
         const radius = Math.max(.65, 1 / transform.scale);
         for (let x = minX; x <= maxX; x += CFG.grid) {
             for (let y = minY; y <= maxY; y += CFG.grid) {
@@ -278,10 +388,22 @@
         if (!route) return;
         const selected = index === selectedLink;
         const hovered = index === hoverLink;
-        const color = selected ? CFG.selected : (hovered ? CFG.hover : CFG.rail);
+        const active = activeLinkSet.has(index);
+        // 空闲轨道退到背景（更暗），有货流向的轨道用橙色打底并叠加流光
+        const baseColor = selected ? CFG.selected
+            : (hovered ? CFG.hover
+                : (active ? 'rgba(245,158,11,.55)' : 'rgba(56,189,248,.42)'));
 
         drawRoute(route, CFG.railUnderlay, Math.max(5, 2.4 / transform.scale));
-        drawRoute(route, color, Math.max(selected || hovered ? 2.8 : 1.5, (selected || hovered ? 2 : 1.2) / transform.scale));
+        drawRoute(route, baseColor, Math.max(selected || hovered ? 2.8 : 1.5, (selected || hovered ? 2 : 1.2) / transform.scale));
+        if (active && !selected) {
+            if (prefersReducedMotion()) {
+                drawRoute(route, 'rgba(251,191,36,.9)', Math.max(2.2, 1.6 / transform.scale));
+            } else {
+                drawFlow(route);
+                drawFlowDot(route);
+            }
+        }
         if (selected) {
             drawRoute(route, 'rgba(255,255,255,.8)', .8);
         }
@@ -350,11 +472,14 @@
         const hovered = node === hoverNode;
         const x = node.x, y = node.y, w = CFG.nodeW, h = CFG.nodeH;
         const unknown = state.colorKey === 'unknown';
-        const pointStatus = getPointStatusVisual(state);
-        const accent = state.alarm ? '#ef4444'
+        const offline = state.offline;
+        // 语义分级：只有"有事"的点位跳出来，空闲点位退到背景
+        const idle = !state.hasTask && !state.alarm && !state.occupied && !offline && !unknown;
+        const emphasized = state.alarm || state.hasTask;
+        const accent = state.alarm ? '#fb4f64'
             : (state.hasTask ? '#f59e0b'
                 : (state.occupied ? '#10b981'
-                    : (state.offline ? '#64748b' : (unknown ? '#8b5cf6' : '#38bdf8'))));
+                    : (offline ? '#3f4a5f' : (unknown ? '#8b5cf6' : '#3a4a66'))));
         const borderColor = selected ? CFG.selected : (hovered ? CFG.hover : accent);
 
         if (transform.scale < 0.4) {
@@ -362,72 +487,97 @@
             return;
         }
 
-        // 监控卡片：中性底色承载信息，仅用语义色表达状态。
+        // 卡片底色：空闲/离线更沉，有事的更实
         ctx.save();
         const background = ctx.createLinearGradient(x, y, x, y + h);
-        background.addColorStop(0, state.offline ? 'rgba(30,41,59,.82)' : 'rgba(24,36,61,.98)');
-        background.addColorStop(1, state.offline ? 'rgba(15,23,42,.82)' : 'rgba(10,18,34,.98)');
+        if (emphasized) {
+            background.addColorStop(0, 'rgba(28,41,68,.98)');
+            background.addColorStop(1, 'rgba(12,20,38,.98)');
+        } else if (state.occupied) {
+            // 有货站位整卡微染绿，扫全线一眼看出货在哪
+            background.addColorStop(0, 'rgba(13,46,43,.96)');
+            background.addColorStop(1, 'rgba(9,26,27,.97)');
+        } else {
+            background.addColorStop(0, 'rgba(18,27,47,.90)');
+            background.addColorStop(1, 'rgba(11,17,32,.92)');
+        }
         ctx.fillStyle = background;
         roundRect(ctx, x + 1, y + 1, w - 2, h - 2, 9);
         ctx.fill();
         ctx.strokeStyle = borderColor;
-        ctx.lineWidth = selected ? 2.6 : Math.max(1.35, 1 / Math.max(transform.scale, .25));
+        ctx.lineWidth = selected ? 2.6 : (emphasized ? 1.9 : Math.max(1, 1 / Math.max(transform.scale, .25)));
         ctx.shadowColor = borderColor;
-        ctx.shadowBlur = selected || hovered || state.alarm || state.hasTask ? 9 : 3;
+        ctx.shadowBlur = selected || hovered ? 9 : (emphasized ? 8 : 0);
         ctx.stroke();
         ctx.shadowBlur = 0;
-        ctx.fillStyle = borderColor;
+        // 左侧 accent 竖条：空闲时很淡
+        ctx.fillStyle = idle ? 'rgba(90,110,150,.32)' : borderColor;
         roundRect(ctx, x + 1, y + 9, 4, h - 18, 2);
         ctx.fill();
         ctx.restore();
 
-        // 顶部：点位编码 + 点位运行状态。
+        // 顶部：点位编码（空闲降为中等亮度，不刷白全屏）+ 状态 pill（空闲不显示，降噪）
         ctx.save();
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#f8fafc';
+        ctx.fillStyle = idle ? '#9fb2d0' : '#f8fafc';
         ctx.font = `850 ${readableFontSize(12.5, 10, 20)}px ${CFG.fontFamily}`;
         ctx.textAlign = 'left';
         ctx.fillText(ellipsis(node.code, 11), x + 10, y + 15);
-        const statusLabel = ellipsis(state.statusLabel, 5);
-        ctx.font = `800 ${readableFontSize(8.5, 7, 14)}px ${CFG.fontFamily}`;
-        const statusWidth = Math.min(55, Math.max(34, ctx.measureText(statusLabel).width + 18));
-        drawMonitorPill(x + w - statusWidth - 7, y + 7, statusWidth, 17, '● ' + statusLabel, pointStatus);
+        if (!idle && !offline) {
+            const pointStatus = getPointStatusVisual(state);
+            const statusLabel = ellipsis(state.statusLabel, 5);
+            ctx.font = `800 ${readableFontSize(8.5, 7, 14)}px ${CFG.fontFamily}`;
+            const statusWidth = Math.min(55, Math.max(34, ctx.measureText(statusLabel).width + 18));
+            drawMonitorPill(x + w - statusWidth - 7, y + 7, statusWidth, 17, '● ' + statusLabel, pointStatus);
+        }
         ctx.restore();
 
-        // 中间：任务信息始终占据固定区域，有任务时一眼可见。
+        // 中间：有任务时橙色醒目；无任务时极淡一行小字，不抢注意力
         ctx.save();
         const taskX = x + 7, taskY = y + 29, taskW = w - 14, taskH = 22;
-        ctx.fillStyle = state.hasTask ? 'rgba(245,158,11,.24)' : 'rgba(71,85,105,.20)';
-        ctx.strokeStyle = state.hasTask ? 'rgba(251,191,36,.72)' : 'rgba(100,116,139,.30)';
-        ctx.lineWidth = .9;
-        roundRect(ctx, taskX, taskY, taskW, taskH, 6);
-        ctx.fill();
-        ctx.stroke();
-        ctx.font = `850 ${readableFontSize(10, 8, 16)}px ${CFG.fontFamily}`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = state.hasTask ? '#fde68a' : '#94a3b8';
-        ctx.fillText(state.hasTask ? `任务 ${state.taskNo}` : '无任务', x + w / 2 - (state.hasTask ? 8 : 0), taskY + taskH / 2);
+        if (state.hasTask) {
+            ctx.fillStyle = 'rgba(245,158,11,.24)';
+            ctx.strokeStyle = 'rgba(251,191,36,.75)';
+            ctx.lineWidth = 1;
+            roundRect(ctx, taskX, taskY, taskW, taskH, 6);
+            ctx.fill();
+            ctx.stroke();
+            ctx.font = `850 ${readableFontSize(10, 8, 16)}px ${CFG.fontFamily}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#fde68a';
+            ctx.fillText(`任务 ${state.taskNo}`, x + w / 2 - 8, taskY + taskH / 2);
+        } else {
+            ctx.font = `700 ${readableFontSize(9, 7.5, 15)}px ${CFG.fontFamily}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'rgba(148,163,184,.45)';
+            ctx.fillText('无任务', x + w / 2, taskY + taskH / 2);
+        }
         ctx.restore();
 
-        // 底部：占位和报警固定左右展示，避免依赖边框颜色猜状态。
-        const offlineOrUnknown = state.offline || unknown;
+        // 底部：降噪——只在异常/占位/离线时显示，正常空闲不画
         ctx.save();
         ctx.font = `800 ${readableFontSize(8.3, 6.8, 14)}px ${CFG.fontFamily}`;
-        const occupancyVisual = offlineOrUnknown
-            ? monitorVisual('#94a3b8', 'rgba(100,116,139,.13)', 'rgba(148,163,184,.35)')
-            : (state.occupied
-                ? monitorVisual('#a7f3d0', 'rgba(16,185,129,.20)', 'rgba(52,211,153,.60)')
-                : monitorVisual('#7dd3fc', 'rgba(14,165,233,.16)', 'rgba(56,189,248,.52)'));
-        const alarmVisual = offlineOrUnknown
-            ? monitorVisual('#94a3b8', 'rgba(100,116,139,.13)', 'rgba(148,163,184,.35)')
-            : (state.alarm
-                ? monitorVisual('#fecdd3', 'rgba(239,68,68,.23)', 'rgba(251,113,133,.72)')
-                : monitorVisual('#86efac', 'rgba(34,197,94,.17)', 'rgba(74,222,128,.52)'));
-        drawMonitorPill(x + 7, y + h - 23, 52, 17,
-            offlineOrUnknown ? '占位 --' : (state.occupied ? '● 已占位' : '○ 空位'), occupancyVisual);
-        drawMonitorPill(x + w - 59, y + h - 23, 52, 17,
-            offlineOrUnknown ? '报警 --' : (state.alarm ? '● 报警' : '✓ 正常'), alarmVisual);
+        if (offline || unknown) {
+            drawMonitorPill(x + 7, y + h - 23, w - 14, 17,
+                offline ? '● 设备离线' : '待匹配',
+                monitorVisual('#94a3b8', 'rgba(100,116,139,.14)', 'rgba(148,163,184,.4)'));
+        } else {
+            // 占位料位：有货=绿色实心箱子+标签（跳出），空位=暗轮廓（安静）
+            drawOccupancy(x + 15, y + h - 14, state.occupied);
+            if (state.occupied) {
+                ctx.fillStyle = '#6ee7b7';
+                ctx.font = `800 ${readableFontSize(8.3, 6.8, 14)}px ${CFG.fontFamily}`;
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('有货', x + 27, y + h - 13);
+            }
+            if (state.alarm) {
+                drawMonitorPill(x + w - 59, y + h - 23, 52, 17, '● 报警',
+                    monitorVisual('#fecdd3', 'rgba(239,68,68,.26)', 'rgba(251,113,133,.78)'));
+            }
+        }
         ctx.restore();
 
         if (state.hasTask) drawTaskDeleteButton(x + w - 25, y + 31);
@@ -451,42 +601,49 @@
         const codeSize = Math.min(32, Math.max(16, 7.4 * invScale));
         const stateSize = Math.min(23, Math.max(12, 5.2 * invScale));
         const unknown = state.colorKey === 'unknown';
-        const pointStatus = getPointStatusVisual(state);
-        const accent = state.alarm ? '#ef4444'
+        const offline = state.offline;
+        const idle = !state.hasTask && !state.alarm && !state.occupied && !offline && !unknown;
+        const emphasized = state.alarm || state.hasTask;
+        const accent = state.alarm ? '#fb4f64'
             : (state.hasTask ? '#f59e0b'
                 : (state.occupied ? '#10b981'
-                    : (state.offline ? '#64748b' : (unknown ? '#8b5cf6' : '#38bdf8'))));
+                    : (offline ? '#3f4a5f' : (unknown ? '#8b5cf6' : '#3a4a66'))));
         ctx.save();
-        ctx.fillStyle = 'rgba(15,23,42,.94)';
+        // 空闲缩略卡沉入背景，有事的更实、带辉光
+        ctx.fillStyle = emphasized ? 'rgba(20,30,52,.96)' : 'rgba(13,20,38,.86)';
         roundRect(ctx, x + 1, y + 1, w - 2, h - 2, 9);
         ctx.fill();
         ctx.strokeStyle = accent;
-        ctx.lineWidth = Math.max(1.3, 1 / Math.max(transform.scale, .18));
+        ctx.lineWidth = emphasized ? Math.max(2, 1.6 / Math.max(transform.scale, .18)) : Math.max(1, 1 / Math.max(transform.scale, .18));
+        if (emphasized) { ctx.shadowColor = accent; ctx.shadowBlur = 12; }
         ctx.stroke();
+        ctx.shadowBlur = 0;
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#f8fafc';
+        // 空闲：仅居中显示编号（安静）
+        ctx.fillStyle = idle ? '#8ba0c2' : '#f8fafc';
         ctx.font = `850 ${codeSize}px ${CFG.fontFamily}`;
-        ctx.fillText(ellipsis(node.code, 10), x + w / 2, y + 12);
-        ctx.fillStyle = pointStatus.text;
-        ctx.beginPath();
-        ctx.arc(x + w - 10, y + 10, Math.max(3, 1.4 / Math.max(transform.scale, .18)), 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.font = `800 ${stateSize}px ${CFG.fontFamily}`;
-        const taskText = state.hasTask ? `#${state.taskNo}` : '无任务';
-        ctx.fillStyle = state.hasTask ? 'rgba(245,158,11,.28)' : 'rgba(71,85,105,.22)';
-        roundRect(ctx, x + 8, y + 26, w - 16, stateSize + 8, 5);
-        ctx.fill();
-        ctx.fillStyle = state.hasTask ? '#fde68a' : '#94a3b8';
-        ctx.fillText(ellipsis(taskText, 10), x + w / 2, y + 30 + stateSize / 2);
-        ctx.font = `800 ${Math.max(11, stateSize * .82)}px ${CFG.fontFamily}`;
-        ctx.textAlign = 'left';
-        ctx.fillStyle = state.occupied ? '#6ee7b7' : '#bae6fd';
-        ctx.fillText(state.occupied ? '占' : '空', x + 10, y + h - 9);
-        ctx.textAlign = 'right';
-        ctx.fillStyle = state.alarm ? '#fda4af' : '#86efac';
-        ctx.fillText(state.alarm ? '警' : '常', x + w - 10, y + h - 9);
+        ctx.fillText(ellipsis(node.code, 10), x + w / 2, emphasized ? y + 14 : y + h / 2);
+        if (emphasized) {
+            ctx.font = `800 ${stateSize}px ${CFG.fontFamily}`;
+            const taskText = state.alarm ? '⚠ 报警' : `#${state.taskNo}`;
+            ctx.fillStyle = state.alarm ? 'rgba(239,68,68,.28)' : 'rgba(245,158,11,.28)';
+            roundRect(ctx, x + 8, y + h - stateSize - 14, w - 16, stateSize + 8, 5);
+            ctx.fill();
+            ctx.fillStyle = state.alarm ? '#fecdd3' : '#fde68a';
+            ctx.fillText(ellipsis(taskText, 10), x + w / 2, y + h - stateSize / 2 - 10);
+        } else if (state.occupied) {
+            // 占位：右上角一个绿点，安静但可辨
+            ctx.fillStyle = '#34d399';
+            ctx.beginPath();
+            ctx.arc(x + w - 11, y + 12, Math.max(3, 1.6 / Math.max(transform.scale, .18)), 0, Math.PI * 2);
+            ctx.fill();
+        } else if (offline) {
+            ctx.fillStyle = '#64748b';
+            ctx.beginPath();
+            ctx.arc(x + w - 11, y + 12, Math.max(3, 1.4 / Math.max(transform.scale, .18)), 0, Math.PI * 2);
+            ctx.fill();
+        }
         ctx.restore();
     }
 
@@ -502,6 +659,36 @@
         if (/运行|启动|在线|就绪|正常/.test(label)) return monitorVisual('#86efac', 'rgba(34,197,94,.18)', 'rgba(74,222,128,.56)');
         if (/停止|暂停|等待|空闲/.test(label)) return monitorVisual('#fde68a', 'rgba(245,158,11,.20)', 'rgba(251,191,36,.62)');
         return monitorVisual('#7dd3fc', 'rgba(14,165,233,.17)', 'rgba(56,189,248,.54)');
+    }
+
+    // 料位包裹图元：有货=绿色实心箱子（盖线+封箱缝），空位=暗色空轮廓
+    function drawOccupancy(cx, cy, occupied) {
+        const s = 13;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.lineWidth = 1.1;
+        if (occupied) {
+            ctx.fillStyle = 'rgba(16,185,129,.34)';
+            ctx.strokeStyle = '#34d399';
+            ctx.shadowColor = 'rgba(52,211,153,.55)';
+            ctx.shadowBlur = 5;
+        } else {
+            ctx.strokeStyle = 'rgba(90,110,140,.5)';
+        }
+        roundRect(ctx, -s / 2, -s / 2, s, s, s * 0.16);
+        if (occupied) ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        if (occupied) {
+            // 盖线 + 封箱缝，读作纸箱
+            ctx.beginPath();
+            ctx.moveTo(-s / 2, -s * 0.12);
+            ctx.lineTo(s / 2, -s * 0.12);
+            ctx.moveTo(0, -s * 0.12);
+            ctx.lineTo(0, s / 2);
+            ctx.stroke();
+        }
+        ctx.restore();
     }
 
     function drawMonitorPill(x, y, width, height, text, visual) {
