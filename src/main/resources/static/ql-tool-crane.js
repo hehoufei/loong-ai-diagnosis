@@ -44,7 +44,7 @@
                         ${fld('任务号','c_taskNo')}
                         ${fld('任务阶段','c_taskStatus')}
                         ${fld('当前层','c_rowStation')}
-                        ${fld('载货台','c_dockState')}
+                        ${fld('货载状态','c_cargoState')}
                         ${fld('报警状态','c_alarm','crane-alarm-state')}
                     </div>
                     <div class="crane-phase-track" id="c_phase_track" aria-label="任务阶段进度">
@@ -431,16 +431,29 @@
         setSmartNum('c_taskNo',s.taskNo || '--');
         setField('c_taskStatus',s.taskStatusLabel,s.taskStatus===4||s.taskStatus===6||s.taskStatus===7?'warn':s.taskStatus===5?'success':'');
         setSmartNum('c_rowStation',s.rowStation);
-        setField('c_dockState',s.dockStateLabel,s.dockState===2||s.dockState===3?'success':'warn');
         setText('c_hPulse',s.dockHorizontalPulse); setText('c_vPulse',s.dockVerticalPulse);
         updateMotion(s);
         pushSpark('h', s.dockHorizontalPulse); pushSpark('v', s.dockVerticalPulse);
         updatePhaseTrack(s);
-        const hasAlarm=s.alarmMessage&&s.alarmMessage!=='无'&&s.alarmMessage!=='0';
-        setField('c_alarm',hasAlarm?s.alarmMessage:'无',hasAlarm?'alarm':'');
+        const alarmList=Array.isArray(s.alarmList)?s.alarmList.filter(Boolean):[];
+        const hasAlarm=alarmList.length>0||(s.alarmMessage&&s.alarmMessage!=='无'&&s.alarmMessage!=='0');
+        // 状态条空间有限：单条显示全名，多条显示"首条 +N"，完整清单在报警横幅
+        const alarmBrief=alarmList.length>1
+            ? alarmList[0]+' +'+(alarmList.length-1)
+            : (alarmList[0]||s.alarmMessage||'无');
+        setField('c_alarm',hasAlarm?alarmBrief:'无',hasAlarm?'alarm':'');
+        const alarmTitle=document.getElementById('wrap_c_alarm');
+        if(alarmTitle) alarmTitle.title=hasAlarm?alarmList.join('\n')||s.alarmMessage:'';
         const f1=s.fork1||{},f2=s.fork2||{},r=s.result||{};
         const f1Loaded=f1.hasLoad===2,f2Loaded=f2.hasLoad===2;
         const f1Active=f1.active===2||f1.active===3,f2Active=f2.active===2||f2.active===3;
+        // 货载状态：由双货叉载货检测汇总，有货时绿色高亮
+        const anyLoad=f1Loaded||f2Loaded;
+        const cargoText=f1Loaded&&f2Loaded?'双叉有货'
+            :f1Loaded?'货叉1有货'
+            :f2Loaded?'货叉2有货'
+            :((f1.hasLoad||f2.hasLoad)?'无货':'--');
+        setField('c_cargoState',cargoText,anyLoad?'success':'');
         setText('c_f1_pulse',f1.pulse);setText('c_f1_col',f1.colStation);setField('c_f1_valid',f1.colValidLabel,f1.colValid===2?'success':'warn');
         setText('c_f1_back',f1.colBackLabel);setField('c_f1_load',f1.hasLoadLabel,f1Loaded?'success':'');setField('c_f1_active',f1.activeLabel,f1Active?'warn':'');
         setText('c_f2_pulse',f2.pulse);setText('c_f2_col',f2.colStation);setField('c_f2_valid',f2.colValidLabel,f2.colValid===2?'success':'warn');
@@ -453,7 +466,17 @@
         setText('c_viz_dock',s.dockStateLabel);
         updateCoordinateView(s,f1,f2);
         setText('c_viz_task',s.taskNo || '无任务');
-        setText('c_alarm_detail',hasAlarm?s.alarmMessage:'系统正常');
+        // 报警横幅：列出全部报警条目（含位号），方便现场逐条排查
+        const banner=document.getElementById('c_alarm_detail');
+        if(banner){
+            if(hasAlarm&&alarmList.length){
+                const codes=Array.isArray(s.alarmCodes)?s.alarmCodes:[];
+                banner.innerHTML=alarmList.map((m,i)=>
+                    `<span class="crane-alarm-line"><em>${codes[i]!==undefined?codes[i]:'-'}</em>${m}</span>`).join('');
+            } else {
+                banner.textContent=hasAlarm?(s.alarmMessage||'有报警'):'系统正常';
+            }
+        }
         setText('c_f1_summary',(f1.activeLabel||'--')+' · '+(f1.hasLoadLabel||'--'));
         setText('c_f2_summary',(f2.activeLabel||'--')+' · '+(f2.hasLoadLabel||'--'));
         setClass('crane_console','is-running',running);

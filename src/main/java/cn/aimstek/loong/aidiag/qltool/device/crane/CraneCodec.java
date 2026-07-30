@@ -45,7 +45,14 @@ public final class CraneCodec {
         s.setDockState(dockState);
         s.setDockStateLabel(CraneEnums.dockState(dockState));
         byte[] alarmCode = r.bytes(24);
-        s.setAlarmMessage(parseAlarm(alarmCode));
+        java.util.List<Integer> alarmCodes = parseAlarmCodes(alarmCode);
+        java.util.List<String> alarmList = new java.util.ArrayList<>(alarmCodes.size());
+        for (Integer code : alarmCodes) {
+            alarmList.add(CraneAlarmCode.display(code));
+        }
+        s.setAlarmCodes(alarmCodes);
+        s.setAlarmList(alarmList);
+        s.setAlarmMessage(String.join(" | ", alarmList));
         s.setDockHorizontalPulse(r.u4());
         s.setDockVerticalPulse(r.u4());
 
@@ -85,26 +92,24 @@ public final class CraneCodec {
     }
 
     /**
-     * 报警码解析：全 0 无报警；否则取第一个置位的比特位号（对应 .NET AlarmDetails 逻辑）。
+     * 报警位号解析：按字节内低位优先扫描，返回全部置位的位号。
+     *
+     * <p>位序与 iot {@code AbstractDeviceDriver#buildAlarmMsgV2} 一致：位号 = 字节下标 * 8 + 字节内位号。
      */
-    private static String parseAlarm(byte[] alarmCodes) {
-        boolean allZero = true;
-        for (byte b : alarmCodes) {
-            if (b != 0) { allZero = false; break; }
-        }
-        if (allZero) {
-            return "";
-        }
-        // BitArray 语义：按字节内低位优先扫描
+    private static java.util.List<Integer> parseAlarmCodes(byte[] alarmCodes) {
+        java.util.List<Integer> codes = new java.util.ArrayList<>();
         for (int i = 0; i < alarmCodes.length; i++) {
             int b = alarmCodes[i] & 0xFF;
+            if (b == 0) {
+                continue;
+            }
             for (int bit = 0; bit < 8; bit++) {
                 if ((b & (1 << bit)) != 0) {
-                    return "报警位:" + (i * 8 + bit);
+                    codes.add(i * 8 + bit);
                 }
             }
         }
-        return "";
+        return codes;
     }
 
     // ===== 货载类型（对应 GetCargoType）=====

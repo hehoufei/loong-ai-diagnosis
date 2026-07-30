@@ -17,7 +17,12 @@ public class CraneStatusDto {
     private int rowStation;
     private int dockState;
     private String dockStateLabel;
+    /** 全部报警描述拼接（多条以 " | " 分隔），无报警为空串 */
     private String alarmMessage;
+    /** 全部置位的报警位号 */
+    private java.util.List<Integer> alarmCodes;
+    /** 全部报警描述，逐条 */
+    private java.util.List<String> alarmList;
     private long dockHorizontalPulse;
     private long dockVerticalPulse;
 
