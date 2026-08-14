@@ -331,35 +331,168 @@
     .modal-table tr:hover td { background: rgba(99,102,241,0.05); }
     .modal-table .row-num { color: var(--color-text-muted); font-variant-numeric: tabular-nums; width: 56px; }
 </style>
+<style>
+    /* ========== Storage Test · Industrial Control Redesign ========== */
+    body {
+        color: #17223d;
+        background:
+            radial-gradient(circle at 12% 4%, rgba(45,212,191,.07), transparent 28rem),
+            radial-gradient(circle at 85% 8%, rgba(99,102,241,.11), transparent 34rem),
+            linear-gradient(145deg,#f7f9fc,#f3f5fa 58%,#f2f7f8);
+    }
+    .storage-topbar {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        height: 72px;
+        padding: 0 max(28px,calc((100vw - 1500px)/2));
+        color: #dce5f3;
+        background: radial-gradient(circle at 22% -90%,rgba(20,184,166,.20),transparent 25rem),linear-gradient(90deg,#0b172b,#121c37);
+        border-bottom: 1px solid rgba(45,212,191,.18);
+        box-shadow: 0 10px 32px rgba(13,24,48,.18);
+    }
+    .storage-topbar::after { content:''; position:absolute; inset:auto 0 -1px; height:1px; background:linear-gradient(90deg,transparent,rgba(45,212,191,.46),rgba(99,102,241,.35),transparent); }
+    .storage-topbar .topbar-logo { color:#fff; gap:12px; text-decoration:none; }
+    .storage-brand-mark { width:38px; height:38px; display:grid; place-items:center; border-radius:11px; color:#d9fffb; background:linear-gradient(145deg,#0f9f91,#2563c9 65%,#6554d9); border:1px solid rgba(94,234,212,.25); box-shadow:0 8px 24px rgba(13,148,136,.25),inset 0 1px rgba(255,255,255,.2); }
+    .storage-brand-mark svg { width:21px; height:21px; }
+    .storage-brand-name { display:block; font-size:14px; font-weight:720; letter-spacing:.02em; }
+    .storage-brand-sub { display:block; margin-top:2px; color:#8290a7; font:600 9px/1 var(--font-mono); letter-spacing:.14em; }
+    .storage-topbar .topbar-right { gap:7px; }
+    .storage-topbar .topbar-link { min-height:38px; padding:0 11px; gap:7px; color:#acb8cb; background:rgba(255,255,255,.035); border:1px solid rgba(255,255,255,.07); border-radius:9px; font-size:11.5px; }
+    .storage-topbar .topbar-link:hover { color:#fff; background:rgba(255,255,255,.075); border-color:rgba(94,234,212,.18); }
+    .storage-topbar .topbar-link.active { color:#b7fff5; background:linear-gradient(135deg,rgba(20,184,166,.15),rgba(59,130,246,.09)); border-color:rgba(45,212,191,.28); box-shadow:inset 0 0 16px rgba(45,212,191,.035); }
+    .storage-topbar .topbar-link svg { width:15px; height:15px; }
+
+    .container.storage-shell { max-width:1500px; padding:34px 24px 50px; }
+    .overview-console {
+        position:relative;
+        overflow:hidden;
+        padding:0 0 18px;
+        border:1px solid rgba(45,212,191,.15);
+        border-radius:17px;
+        color:#fff;
+        background:
+            linear-gradient(rgba(103,232,249,.025) 1px,transparent 1px),
+            linear-gradient(90deg,rgba(103,232,249,.025) 1px,transparent 1px),
+            radial-gradient(circle at 92% 5%,rgba(45,212,191,.16),transparent 24rem),
+            linear-gradient(145deg,#0b172b,#14213e 60%,#1e244a);
+        background-size:26px 26px,26px 26px,auto,auto;
+        box-shadow:0 24px 60px rgba(20,30,62,.16);
+    }
+    .overview-console:hover {
+        transform:none;
+        background:
+            linear-gradient(rgba(103,232,249,.025) 1px,transparent 1px),
+            linear-gradient(90deg,rgba(103,232,249,.025) 1px,transparent 1px),
+            radial-gradient(circle at 92% 5%,rgba(45,212,191,.16),transparent 24rem),
+            linear-gradient(145deg,#0b172b,#14213e 60%,#1e244a);
+        background-size:26px 26px,26px 26px,auto,auto;
+        box-shadow:0 24px 60px rgba(20,30,62,.16);
+    }
+    .overview-console::after { content:''; position:absolute; right:-100px; bottom:-155px; width:280px; height:280px; border:1px solid rgba(94,234,212,.09); border-radius:50%; box-shadow:0 0 0 38px rgba(94,234,212,.022),0 0 0 78px rgba(129,140,248,.016); pointer-events:none; }
+    .overview-console .section-header { position:relative; z-index:1; min-height:62px; margin:0; padding:0 20px; border-bottom:1px solid rgba(148,163,184,.12); background:rgba(5,13,29,.32); }
+    .section-heading { display:flex; align-items:center; gap:12px; }
+    .section-heading-icon { width:34px; height:34px; display:grid; place-items:center; border-radius:9px; color:#69e5dc; background:rgba(45,212,191,.09); border:1px solid rgba(45,212,191,.15); }
+    .section-heading-icon svg { width:18px; height:18px; }
+    .section-heading-text strong { display:block; color:#eff7ff; font-size:15px; }
+    .section-heading-text small { display:block; margin-top:3px; color:#71839f; font:600 8px/1 var(--font-mono); letter-spacing:.12em; }
+    .aisle-add-control { display:flex; align-items:center; gap:7px; }
+    .aisle-add-control label { color:#8392aa; font:600 9px/1 var(--font-mono); letter-spacing:.08em; }
+    .aisle-add-control input { width:62px; height:32px; padding:0 9px; color:#e8f1fc; background:rgba(255,255,255,.055); border:1px solid rgba(148,163,184,.18); border-radius:7px; outline:none; }
+    .aisle-add-control input:focus { border-color:#2dd4bf; box-shadow:0 0 0 3px rgba(45,212,191,.09); }
+    .aisle-add-control .glass-btn-outline { height:32px; padding:0 12px!important; color:#9df5e9; background:rgba(20,184,166,.10); border-color:rgba(45,212,191,.22); }
+    #aisleOverviewGrid { position:relative; z-index:1; grid-template-columns:repeat(4,minmax(0,1fr))!important; gap:11px; padding:18px 18px 0; }
+    .aisle-monitor-card { --status:#7b8799; position:relative; min-height:154px; padding:15px; display:flex; flex-direction:column; color:#eaf1fb; background:linear-gradient(145deg,rgba(255,255,255,.06),rgba(255,255,255,.026)); border:1px solid rgba(148,163,184,.12); border-radius:11px; cursor:pointer; box-shadow:inset 0 1px rgba(255,255,255,.035); transition:transform .22s,border-color .22s,background .22s; }
+    .aisle-monitor-card:hover { transform:translateY(-3px); border-color:color-mix(in srgb,var(--status) 45%,rgba(148,163,184,.16)); background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.035)); }
+    .aisle-monitor-card.status-RUNNING { --status:#2dd4bf; }
+    .aisle-monitor-card.status-PAUSED { --status:#f59e0b; }
+    .aisle-monitor-card.status-ERROR { --status:#f05252; }
+    .aisle-monitor-card.status-FINISHED { --status:#8b7cf6; }
+    .aisle-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+    .aisle-id small { display:block; color:#647791; font:600 8px/1 var(--font-mono); letter-spacing:.12em; }
+    .aisle-id strong { display:block; margin-top:5px; color:#f3f7fd; font-size:14px; }
+    .aisle-state { display:inline-flex; align-items:center; gap:6px; color:var(--status); font:650 9px/1 var(--font-mono); }
+    .aisle-state::before { content:''; width:6px; height:6px; border-radius:50%; background:var(--status); box-shadow:0 0 8px var(--status); }
+    .aisle-card-body { margin-top:13px; display:grid; grid-template-columns:62px 1fr; align-items:center; gap:13px; }
+    .aisle-progress-ring { --progress:0; width:60px; height:60px; display:grid; place-items:center; border-radius:50%; background:conic-gradient(var(--status) calc(var(--progress)*1%),rgba(148,163,184,.12) 0); position:relative; }
+    .aisle-progress-ring::after { content:''; position:absolute; inset:5px; border-radius:50%; background:#17213c; }
+    .aisle-progress-ring span { position:relative; z-index:1; color:#f5f7ff; font-size:13px; font-weight:750; }
+    .aisle-metrics { display:grid; gap:7px; }
+    .aisle-metric { display:flex; justify-content:space-between; gap:8px; color:#7587a2; font-size:10px; }
+    .aisle-metric b { color:#c8d4e5; font:600 10px/1 var(--font-mono); }
+    .aisle-error { margin-top:10px; padding:6px 8px; color:#fecaca; background:rgba(239,68,68,.09); border:1px solid rgba(239,68,68,.15); border-radius:6px; font-size:9.5px; }
+    #aisleTabs { position:relative; z-index:1; padding:0 18px; margin-top:13px!important; }
+    #aisleTabs .aisle-tab { min-width:68px; padding:6px 12px!important; color:#7f90aa; background:rgba(255,255,255,.025); border:1px solid rgba(148,163,184,.12)!important; border-radius:7px; font-size:10px!important; }
+    #aisleTabs .aisle-tab.active { color:#b9fff7!important; background:rgba(20,184,166,.11)!important; border-color:rgba(45,212,191,.30)!important; box-shadow:inset 0 0 12px rgba(45,212,191,.04); }
+
+    .control-console { padding:0 20px 20px; border:1px solid rgba(99,102,241,.12); border-radius:17px; background:rgba(255,255,255,.86); box-shadow:0 16px 45px rgba(31,43,78,.07); }
+    .control-console .section-header { min-height:70px; margin:0 -2px 15px; padding:0 2px; border-bottom:1px solid #e8ecf3; }
+    .control-title { display:flex; align-items:center; gap:11px; }
+    .control-title-label small { display:block; color:#9aa4b5; font:600 8px/1 var(--font-mono); letter-spacing:.11em; margin-bottom:4px; }
+    .control-title-label strong { color:#17223d; font-size:15px; }
+    .control-console .status-badge { padding:5px 10px; border-radius:7px; font-size:10px; }
+    .control-console .actions-row { justify-content:flex-end; gap:6px; }
+    .control-console .actions-row .glass-btn,
+    .control-console .actions-row .glass-btn-outline { height:34px; padding:0 11px; border-radius:7px; font-size:10.5px; box-shadow:none; }
+    .control-console .actions-row .glass-btn { background:linear-gradient(100deg,#0f9f91,#3569dc); box-shadow:0 7px 18px rgba(15,159,145,.18); }
+    .control-console .actions-row .glass-btn-outline { color:#637087; background:#f8fafc; border:1px solid #e0e5ee; }
+    .control-console .actions-row .glass-btn-outline:hover { color:#3157e6; border-color:#bac7e8; background:#fff; }
+    #runMetrics { grid-template-columns:repeat(8,minmax(0,1fr)); gap:9px; }
+    #runMetrics .stat-card { position:relative; min-height:122px; padding:17px 11px 13px; display:flex; flex-direction:column; justify-content:center; border:1px solid #e5e9f1; border-radius:11px; background:linear-gradient(180deg,#fff,#fafbfe); box-shadow:0 6px 18px rgba(31,43,78,.035); }
+    #runMetrics .stat-card::before { content:''; position:absolute; inset:0 auto 0 0; width:3px; border-radius:11px 0 0 11px; background:#6478e8; opacity:.75; }
+    #runMetrics .stat-card:nth-child(3)::before,
+    #runMetrics .stat-card:nth-child(5)::before { background:#16a77c; }
+    #runMetrics .stat-card:nth-child(7)::before,
+    #runMetrics .stat-card:nth-child(8)::before { background:#ef6262; }
+    #runMetrics .stat-value { font-size:20px; background:linear-gradient(135deg,#334fcb,#7756df); -webkit-background-clip:text; background-clip:text; }
+    #runMetrics .stat-label { line-height:1.55; }
+
+    @media (max-width:1200px) {
+        .storage-topbar { padding:0 20px; }
+        #aisleOverviewGrid { grid-template-columns:repeat(2,minmax(0,1fr))!important; }
+        #runMetrics { grid-template-columns:repeat(4,minmax(0,1fr)); }
+    }
+    @media (max-width:720px) {
+        .storage-brand-sub,.storage-topbar .topbar-link span { display:none; }
+        .container.storage-shell { padding:20px 14px 36px; }
+        #aisleOverviewGrid { grid-template-columns:1fr!important; }
+        .overview-console .section-header,.control-console .section-header { align-items:flex-start; flex-direction:column; padding-top:14px; padding-bottom:14px; }
+        .control-console .actions-row { justify-content:flex-start; }
+        #runMetrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+</style>
 </head>
 <body>
 
 <!-- ========== Top Bar ========== -->
-<nav class="glass-topbar">
-    <div class="topbar-logo">
-        <span class="icon">🏗️</span>
-        <span>立库循环测试</span>
-    </div>
+<nav class="glass-topbar storage-topbar">
+    <a class="topbar-logo" href="home.html">
+        <span class="storage-brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M5 21V8l7-4 7 4v13M8 11h2m4 0h2M8 15h2m4 0h2M10 21v-3h4v3"/></svg></span>
+        <span><span class="storage-brand-name">立库循环测试</span><span class="storage-brand-sub">AS/RS CYCLE CONTROL</span></span>
+    </a>
     <div class="topbar-right">
-        <a href="home.html"         class="topbar-link">🏠 首页</a>
-        <a href="storage-task.html" class="topbar-link active">🏗️ 立库测试</a>
-        <a href="daily-report.html" class="topbar-link">📊 每日报告</a>
+        <a href="home.html" class="topbar-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m3 11 9-8 9 8M5 10v10h14V10M9 20v-6h6v6"/></svg><span>工作台</span></a>
+        <a href="storage-task.html" class="topbar-link active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 20h16M6 20V7h12v13M9 10h2m2 0h2M9 14h2m2 0h2"/></svg><span>立库测试</span></a>
+        <a href="daily-report.html" class="topbar-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19V9m5 10V5m5 14v-7m5 7V3"/></svg><span>每日数据</span></a>
     </div>
 </nav>
 
 <div class="toast-stack" id="toastStack"></div>
 
 
-<div class="container">
+<div class="container storage-shell">
 
     <!-- ========== 巷道总览 + Tab ========== -->
-    <div class="glass-card section-card" id="aisleOverviewCard">
+    <div class="glass-card section-card overview-console" id="aisleOverviewCard">
         <div class="section-header">
-            <div class="section-title">📊 巷道总览</div>
-            <div class="actions-row">
-                <label style="font-size:12.5px;color:var(--color-text-secondary);">新增巷道
-                    <input type="number" id="newAisleInput" min="1" max="99" style="width:60px;height:30px;border:1.5px solid rgba(99,102,241,0.15);border-radius:8px;padding:0 8px;font-size:12px;background:rgba(255,255,255,0.7);outline:none;">
-                </label>
+            <div class="section-heading">
+                <span class="section-heading-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18M5 21V8l7-4 7 4v13M8 11h2m4 0h2M8 15h2m4 0h2"/></svg></span>
+                <span class="section-heading-text"><strong>巷道运行总览</strong><small>AISLE OPERATION MONITOR</small></span>
+            </div>
+            <div class="aisle-overview-summary" id="aisleOverviewSummary" aria-label="巷道状态汇总"></div>
+            <div class="actions-row aisle-add-control">
+                <label for="newAisleInput">ADD AISLE</label>
+                <input type="number" id="newAisleInput" min="1" max="99" aria-label="新增巷道编号">
                 <button class="glass-btn-outline" id="btnAddAisle" style="padding:5px 12px;font-size:12px;">+ 添加</button>
             </div>
         </div>
@@ -368,10 +501,10 @@
     </div>
 
     <!-- ========== 状态 + 控制 ========== -->
-    <div class="glass-card section-card">
+    <div class="glass-card section-card control-console">
         <div class="section-header">
-            <div class="section-title">
-                <span>状态</span>
+            <div class="control-title">
+                <span class="control-title-label"><small>CYCLE EXECUTION</small><strong>循环任务控制</strong></span>
                 <span id="statusBadge" class="status-badge status-IDLE">
                     <span class="status-dot"></span>
                     <span id="statusText">IDLE</span>
@@ -390,7 +523,7 @@
             </div>
         </div>
         <div id="errorBanner" class="error-banner"></div>
-        <div class="stats-overview">
+        <div class="stats-overview" id="runMetrics">
             <div class="glass-card stat-card clickable" id="statValidCard" title="点击查看全部有效库位">
                 <div class="stat-value" id="statValid">-</div>
                 <div class="stat-label">
@@ -716,32 +849,32 @@ function renderOverview(list) {
 
     for (const o of list) {
         // 总览卡片
-        const statusColor = o.status === 'RUNNING' ? 'var(--color-success)'
-            : o.status === 'PAUSED' ? 'var(--color-warning)'
-            : o.status === 'ERROR' ? 'var(--color-error)'
-            : 'var(--color-text-muted)';
         const card = document.createElement('div');
-        card.className = 'glass-card stat-card clickable';
-        card.style.cursor = 'pointer';
+        card.className = 'aisle-monitor-card status-' + (o.status || 'IDLE');
         card.onclick = () => switchAisle(o.aisle);
         const errorTagMap = {
-            'NO_OCCUPANCY': '📍 无占位',
-            'OCCUPANCY_CHECK_FAILED': '📍 占位查询失败',
-            'ADD_FAILED': '❌ 下发失败',
-            'TASK_FAILED': '❌ 任务失败',
-            'CRANE_ALARM': '🚨 堆垛机报警',
-            'ERROR': '⚠ 异常'
+            'NO_OCCUPANCY': '无占位数据',
+            'OCCUPANCY_CHECK_FAILED': '占位查询失败',
+            'ADD_FAILED': '任务下发失败',
+            'TASK_FAILED': '任务执行失败',
+            'CRANE_ALARM': '堆垛机报警',
+            'ERROR': '运行异常'
         };
-        const tagText = o.errorTag ? (errorTagMap[o.errorTag] || '⚠ ' + o.errorTag) : '';
+        const tagText = o.errorTag ? (errorTagMap[o.errorTag] || o.errorTag) : '';
+        const aisleCode = String(o.aisle).padStart(2, '0');
         card.innerHTML = `
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-                <span style="font-size:14px;font-weight:700;">${o.aisle} 巷道</span>
-                <span style="width:8px;height:8px;border-radius:50%;background:${statusColor};"></span>
-                <span style="font-size:11px;color:${statusColor};">${o.status}</span>
+            <div class="aisle-card-head">
+                <div class="aisle-id"><small>AISLE / A-${aisleCode}</small><strong>${o.aisle} 巷道</strong></div>
+                <span class="aisle-state">${o.status}</span>
             </div>
-            <div class="stat-value" style="font-size:18px;">${o.progress}%</div>
-            <div class="stat-label">已访问 ${o.visitedCodes} / ${o.totalCodes} · 第${o.currentRound}轮</div>
-            ${tagText ? `<div style="font-size:11px;color:var(--color-error);margin-top:6px;line-height:1.3;" title="${(o.errorMessage||'').replace(/"/g,'&quot;')}">${tagText}</div>` : ''}
+            <div class="aisle-card-body">
+                <div class="aisle-progress-ring" style="--progress:${o.progress}"><span>${o.progress}%</span></div>
+                <div class="aisle-metrics">
+                    <div class="aisle-metric"><span>访问库位</span><b>${o.visitedCodes} / ${o.totalCodes}</b></div>
+                    <div class="aisle-metric"><span>当前轮次</span><b>ROUND ${o.currentRound}</b></div>
+                </div>
+            </div>
+            ${tagText ? `<div class="aisle-error" title="${(o.errorMessage||'').replace(/"/g,'&quot;')}">ALARM · ${tagText}</div>` : ''}
         `;
         grid.appendChild(card);
 
